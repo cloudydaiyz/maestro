@@ -1,5 +1,6 @@
 <svg width="102" height="102" viewBox="0 0 102 102" fill="none" xmlns="http://www.w3.org/2000/svg">
 <rect width="102" height="102" fill="#1E1E1E"/>
+<rect width="128" height="128" transform="translate(-13 -13)" fill="#AC2121" fill-opacity="0.25"/>
 <path d="M3 55H96V42H2L3 55Z" fill="white" stroke="black"/>
 <path d="M6.5 15L95.5 40L100 27.5L10 2L6.5 15Z" fill="white" stroke="black"/>
 <mask id="path-3-outside-1_0_1" maskUnits="userSpaceOnUse" x="0" y="0" width="102" height="102" fill="black">
