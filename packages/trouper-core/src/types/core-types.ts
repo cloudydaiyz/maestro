@@ -1,53 +1,4 @@
-/**
- * == DASHBOARD ==
- * - Upcoming birthdays (month, sorted)
- * - Total number of members
- * - Total number of events
- * - Average number of points per event
- * - Average number of attendees per event
- * - Average number of attendees per event type
- * - Average percentage of attendees per event type 
- * 
- * == ENTITIES ==
- * Group
- * - Group Name
- * - Log Sheet URI
- * - Origin Event ID
- * - Members
- * - Member Properties
- * - Events
- * - Event Types
- * - Point Data
- * - Refresh Lock
- * 
- * Member
- * - Properties
- *   - Member Property => Value
- * - Events Attended (Array of Event IDs)
- * - Points
- * 
- * Event Type
- * - ID
- * - Title
- * - Value (in Points) | Worth (in %; higher # = greater worth, used for dynamic valuation)
- * - Source Folder URIs
- * 
- * Event
- * - Event Title
- * - Event Type | Value (in Points) | Worth (in %; higher # = greater worth, used for dynamic valuation)
- * - Event Date | [ Event Start Date && Event End Date ]
- * - URI (full or shortened google sheets / google forms link)
- * - Source Type (Google Forms / Google Sheets)
- * - FieldToPropertyMapping
- */
-
-// Modifiers: ? = optional, ! = required
-type MemberPropertyType = "string" | "number" | "boolean" | "date";
-
-export interface PointData {
-    startDate: Date,
-    endDate: Date,
-}
+// Data schema for the core data types
 
 export interface GroupSchema {
     lastUpdated: Date, // last time the group was updated
@@ -69,12 +20,24 @@ export interface GroupSchema {
     // demoActionsLeft: number, // number of demo actions left
 }
 
+// Modifiers: ? = optional, ! = required
+type MemberPropertyType = "string?" | "string!" 
+    | "number?" | "number!"
+    | "boolean?" | "boolean!"
+    | "date?" | "date!";
+
+export interface PointData {
+    startDate: Date,
+    endDate: Date,
+}
+
 export interface BaseMemberProperties {
-    "First Name": "string",
-    "Last Name": "string",
-    "Member ID": "string",
-    "Email": "string",
-    "Birthday": "date",
+    "First Name": "string!",
+    "Middle Name": "string?",
+    "Last Name": "string!",
+    "Member ID": "string!",
+    "Email": "string!",
+    "Birthday": "date!",
 }
 
 export interface BasePointTypes {
@@ -115,4 +78,44 @@ export interface MemberSchema {
     points: { // points for each type specified in the group schema
         [key: string]: number,
     },
+}
+
+export interface EventsAttendedBucketSchema {
+    lastUpdated: Date, // last time the bucket was updated
+    events: {
+        [eventId: string]: {
+            title: string,
+            date: Date,
+            points: number,
+        },
+    },
+}
+
+export interface GroupDashboardSchema {
+    lastUpdated: Date, // last time the dashboard was updated
+    nextMonthsBirthdays: { // upcoming birthdays
+        frequency: BirthdayUpdateFrequency,
+        desiredFrequency: BirthdayUpdateFrequency,
+        members: {
+            id: string,
+            firstName: string,
+            lastName: string,
+            data: number,
+        }[],
+    },
+    totalMembers: number,
+    totalEvents: number,
+    avgPointsPerEvent: number,
+    avgAttendeesPerEvent: number,
+    avgAttendeesPerEventType: EventTypeStatistic[],
+    attendeePercentageByEventType: EventTypeStatistic[],
+    eventPercentageByEventType: EventTypeStatistic[],
+}
+
+type BirthdayUpdateFrequency = "daily" | "weekly" | "monthly";
+
+export interface EventTypeStatistic {
+    id: string,
+    title: string,
+    data: number,
 }
