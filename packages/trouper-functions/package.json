@@ -1,0 +1,12 @@
+{
+  "name": "trouper-functions",
+  "description": "Cloud functions for the Trouper project",
+  "author": "Kylan Duncan",
+  "license": "ISC",
+  "keywords": ["trouper"],
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}

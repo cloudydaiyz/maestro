@@ -1,2 +1,2 @@
-const MAX_BUCKET_SIZE = 25;
 const MAX_EVENT_TYPES = 10;
+const MAX_BUCKET_SIZE = 30;

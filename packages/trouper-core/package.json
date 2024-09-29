@@ -1,12 +1,24 @@
 {
   "name": "trouper-core",
+  "description": "Main package for the Trouper project",
+  "author": "Kylan Duncan",
+  "license": "ISC",
+  "keywords": ["trouper"],
   "version": "1.0.0",
-  "main": "index.js",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/core-types.d.ts"
+    },
+    "./types/api": {
+      "types": "./dist/types/api-types.d.ts"
+    }
+  },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": ""
+  }
 }
