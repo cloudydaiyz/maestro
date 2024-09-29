@@ -1,5 +1,5 @@
 <p align="center">
-<img alt="App logo (clapperboard)" width="200" height="200" src="./assets/film-2.svg" />
+<img alt="App logo (film)" width="200" height="200" src="./assets/film-2.svg" />
 </p>
 
 <h1 align="center">
