@@ -3,7 +3,6 @@
 import { ObjectId } from "mongodb";
 
 export interface TroupeSchema {
-    _id: ObjectId,
     lastUpdated: Date, // last time the troupe was updated
     name: string, // name of the troupe
     logSheetUri: string, // spreadsheet URI to post log data to
@@ -109,14 +108,14 @@ export interface EventsAttendedBucketSchema {
 export interface TroupeDashboardSchema {
     troupeId: string, // ID of the troupe the dashboard belongs to
     lastUpdated: Date, // last time the dashboard was updated
-    nextMonthsBirthdays: { // upcoming birthdays
+    upcomingBirthdays: { // upcoming birthdays
         frequency: BirthdayUpdateFrequency,
         desiredFrequency: BirthdayUpdateFrequency,
         members: {
             id: string,
             firstName: string,
             lastName: string,
-            data: number,
+            birthday: Date,
         }[],
     },
     totalMembers: number,
@@ -128,7 +127,7 @@ export interface TroupeDashboardSchema {
     eventPercentageByEventType: EventTypeStatistic[],
 }
 
-type BirthdayUpdateFrequency = "daily" | "weekly" | "monthly";
+type BirthdayUpdateFrequency = "weekly" | "monthly";
 
 export interface EventTypeStatistic {
     id: string,

@@ -1,6 +1,9 @@
-import { Collection, MongoClient } from "mongodb";
+import { Collection, MongoClient, ObjectId } from "mongodb";
 import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
+import { DB_NAME } from "./util/constants";
 import { EventSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
+import assert from "assert";
+import { CreateTroupeSchema } from "./types/api-types";
 
 // To help catch and relay client-based errors
 export class MyTroupeClientError extends Error {
@@ -11,9 +14,10 @@ export class MyTroupeClientError extends Error {
 }
 
 // Implementation for client-facing controller methods
-class MyTroupeCore {
+export class MyTroupeCore {
     client: MongoClient;
-    troupeColl: Collection<TroupeSchema | TroupeDashboardSchema>;
+    troupeColl: Collection<TroupeSchema>;
+    dashboardColl: Collection<TroupeDashboardSchema>;
     audienceColl: Collection<MemberSchema>;
     eventColl: Collection<EventSchema>;
     connection: Promise<MongoClient>;
@@ -21,16 +25,19 @@ class MyTroupeCore {
     constructor() {
         this.client = new MongoClient(MONGODB_URI, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
         this.troupeColl = this.client.db(DB_NAME).collection("troupes");
+        this.dashboardColl = this.client.db(DB_NAME).collection("dashboards");
         this.audienceColl = this.client.db(DB_NAME).collection("audience");
         this.eventColl = this.client.db(DB_NAME).collection("events");
         this.connection = this.client.connect();
     }
 
-    async initiateRefresh() {
+    // Turns on refresh lock and places troupe into the refresh queue if the lock is disabled
+    async initiateRefresh(troupeId: string) {
 
     }
 
-    async getTroupe() {
+    // Retrieves the current state of the troupe
+    async getTroupe(troupeId: string) {
 
     }
 
@@ -47,7 +54,7 @@ class MyTroupeCore {
     }
 
     // Pick whether to replace event type with another type, or assign points
-    async deleteEventType() {
+    async deleteEventType(troupeId: string) {
 
     }
 
@@ -81,10 +88,14 @@ class MyTroupeCore {
     async deleteEvent() {
 
     }
+
+    protected hello() {
+        console.log("Hello");
+    }
 }
 
 // Additional functionality for other backend services
-class MyTroupeService extends MyTroupeCore {
+export class MyTroupeService extends MyTroupeCore {
     constructor() { super() }
 
     async refresh() {
@@ -95,15 +106,129 @@ class MyTroupeService extends MyTroupeCore {
         // sheet update
     }
 
-    async createTroupe() {
-
+    async createTroupe(req: CreateTroupeSchema) {
+        return this.client
+            .startSession()
+            .withTransaction(async () => {
+                const lastUpdated = new Date();
+                const troupe = await this.troupeColl.insertOne({
+                    ...req,
+                    lastUpdated,
+                    eventTypes: [],
+                    memberProperties: {
+                        "First Name": "string!",
+                        "Middle Name": "string?",
+                        "Last Name": "string!",
+                        "Member ID": "string!",
+                        "Email": "string!",
+                        "Birthday": "date!",
+                    },
+                    pointTypes: {
+                        "Total": {
+                            startDate: new Date(0),
+                            endDate: new Date(3000000000000),
+                        },
+                    },
+                    refreshLock: false,
+                });
+                assert(troupe.insertedId, "Failed to create troupe");
+        
+                const dashboard = await this.dashboardColl.insertOne({
+                    troupeId: troupe.insertedId.toHexString(),
+                    lastUpdated,
+                    totalMembers: 0,
+                    totalEvents: 0,
+                    avgPointsPerEvent: 0,
+                    avgAttendeesPerEvent: 0,
+                    avgAttendeesPerEventType: [],
+                    attendeePercentageByEventType: [],
+                    eventPercentageByEventType: [],
+                    upcomingBirthdays: {
+                        frequency: "monthly",
+                        desiredFrequency: "monthly",
+                        members: [],
+                    },
+                });
+                assert(dashboard.insertedId, "Failed to create dashboard");
+                return troupe.insertedId;
+            });
     }
 
-    async deleteTroupe() {
-
+    async deleteTroupe(troupeId: string) {
+        return this.client
+            .startSession()
+            .withTransaction(async () => {
+                return Promise.all([
+                    this.troupeColl.deleteOne({ _id: new ObjectId(troupeId) }),
+                    this.dashboardColl.deleteOne({ troupeId }),
+                    this.audienceColl.deleteMany({ troupeId }),
+                    this.eventColl.deleteMany({ troupeId })
+                ]).then((res) => {
+                    assert(res.every((r) => r.acknowledged), "Failed to fully delete troupe");
+                    console.log(res.reduce((deletedCount, r) => deletedCount + r.deletedCount, 0));
+                });
+            });
     }
 
-    async resetTroupe() {
+    async resetTroupe(troupeId: string) {
+        return this.client
+            .startSession()
+            .withTransaction(async () => {
+                const lastUpdated = new Date();
+                const clearTroupe = await this.troupeColl.updateOne(
+                    { _id: new ObjectId(troupeId) },
+                    {
+                        $set: {
+                            lastUpdated,
+                            eventTypes: [],
+                            memberProperties: {
+                                "First Name": "string!",
+                                "Middle Name": "string?",
+                                "Last Name": "string!",
+                                "Member ID": "string!",
+                                "Email": "string!",
+                                "Birthday": "date!",
+                            },
+                            pointTypes: {
+                                "Total": {
+                                    startDate: new Date(0),
+                                    endDate: new Date(3000000000000),
+                                },
+                            },
+                            refreshLock: false,
+                        },
+                    }
+                );
 
+                const clearDashboard = await this.dashboardColl.updateOne(
+                    { troupeId },
+                    {
+                        $set: {
+                            lastUpdated,
+                            totalMembers: 0,
+                            totalEvents: 0,
+                            avgPointsPerEvent: 0,
+                            avgAttendeesPerEvent: 0,
+                            avgAttendeesPerEventType: [],
+                            attendeePercentageByEventType: [],
+                            eventPercentageByEventType: [],
+                            upcomingBirthdays: {
+                                frequency: "monthly",
+                                desiredFrequency: "monthly",
+                                members: [],
+                            },
+                        },
+                    }
+                );
+
+                return Promise.all([
+                    clearTroupe, 
+                    clearDashboard,
+                    this.audienceColl.deleteMany({ troupeId }),
+                    this.eventColl.deleteMany({ troupeId }),
+                ]).then((res) => {
+                    assert(res.every((r) => r.acknowledged), "Failed to fully reset troupe");
+                });
+            });
     }
 }
