@@ -5,7 +5,7 @@ import { ObjectId } from "mongodb";
 export interface TroupeSchema {
     lastUpdated: Date, // last time the troupe was updated
     name: string, // name of the troupe
-    logSheetUri: string, // spreadsheet URI to post log data to
+    logSheetId: string, // Google Spreadsheet ID to post log data to
     originEventId?: string, // event that takes precedence during member property mapping
     refreshLock: boolean, // lock to prevent refreshing conflict
     eventTypes: EventTypeSchema[], // all event types for troupe (MAX: 10)
@@ -63,10 +63,9 @@ export interface EventSchema {
         endDate?: Date,
     },
 
-    // oneof type or points to calculate value associated with the event
+    // calculate value associated with the event, optionally associated with event type
     typeId?: string,
-    typePoints?: number,
-    points?: number,
+    value: number,
 
     fieldToPropertyMapping: { // mapping of form fields to member properties
         [fieldId: string]: string,
