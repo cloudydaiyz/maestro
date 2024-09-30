@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">
-<sup>trouper</sup>
+<sup>mytroupe</sup>
 </h1>
 
 <p align="center">
