@@ -3,15 +3,15 @@ import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
 import { EventSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
 
 // To help catch and relay client-based errors
-export class TrouperError extends Error {
+export class MyTroupeClientError extends Error {
     constructor(message: string) {
         super(message);
-        this.name = "TrouperError";
+        this.name = "MyTroupeClientError";
     }
 }
 
 // Implementation for client-facing controller methods
-class TrouperCore {
+class MyTroupeCore {
     client: MongoClient;
     troupeColl: Collection<TroupeSchema | TroupeDashboardSchema>;
     audienceColl: Collection<MemberSchema>;
@@ -84,7 +84,7 @@ class TrouperCore {
 }
 
 // Additional functionality for other backend services
-class TrouperService extends TrouperCore {
+class MyTroupeService extends MyTroupeCore {
     constructor() { super() }
 
     async refresh() {

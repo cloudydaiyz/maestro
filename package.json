@@ -1,12 +1,12 @@
 {
-  "name": "trouper",
+  "name": "trouper-root",
   "version": "0.0.0",
   "description": "Root package for the Trouper project",
   "author": "Kylan Duncan",
-  "keywords": [],
+  "keywords": ["trouper"],
   "license": "ISC",
+  "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "main": "index.js"
+  }
 }
