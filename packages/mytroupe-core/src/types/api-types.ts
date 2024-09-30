@@ -2,6 +2,5 @@
 
 export interface CreateTroupeSchema {
     name: string,
-    logSheetUri: string,
     adminCode: string,
 }

@@ -4,6 +4,7 @@ import { DB_NAME } from "./util/constants";
 import { EventSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
 import assert from "assert";
 import { CreateTroupeSchema } from "./types/api-types";
+import { initTroupeSheet } from "./cloud/gcp";
 
 // To help catch and relay client-based errors
 export class MyTroupeClientError extends Error {
@@ -107,12 +108,15 @@ export class MyTroupeService extends MyTroupeCore {
     }
 
     async createTroupe(req: CreateTroupeSchema) {
+        const logSheetUri = await initTroupeSheet();
+
         return this.client
             .startSession()
             .withTransaction(async () => {
                 const lastUpdated = new Date();
                 const troupe = await this.troupeColl.insertOne({
                     ...req,
+                    logSheetUri,
                     lastUpdated,
                     eventTypes: [],
                     memberProperties: {

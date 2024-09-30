@@ -36,9 +36,7 @@ export interface PointData {
 
 export interface BaseMemberProperties {
     "First Name": "string!",
-    "Middle Name": "string?",
     "Last Name": "string!",
-    "Member ID": "string!",
     "Email": "string!",
     "Birthday": "date!",
 }

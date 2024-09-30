@@ -27,7 +27,9 @@
     "mongodb": "^6.9.0"
   },
   "devDependencies": {
+    "@google-cloud/local-auth": "^3.0.1",
     "@types/node": "^22.7.4",
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "googleapis": "^144.0.0"
   }
 }
