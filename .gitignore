@@ -2,6 +2,6 @@ node_modules
 .DS_Store
 *.tfvars.json
 dist
-quick-test.ts
+quick-test.*
 .env
 service-key.json

@@ -1,23 +1,18 @@
-// To use for API endpoints
+// Public facing types to use for API endpoints
 
-import { BaseMemberProperties, BasePointTypes, MemberPropertyType, PointData, VariableMemberProperties, VariablePointTypes } from "./core-types";
+import { ObjectId } from "mongodb";
+import { TroupeSchema, VariableMemberProperties, VariablePointTypes } from "./core-types";
+import { Replace } from "./util-types";
 
-export interface Troupe {
+export type ModifiedTroupeSchema = Replace<
+    Omit<TroupeSchema, "eventTypes" | "_id">, 
+    Date | ObjectId, 
+    string
+>;
+
+export interface Troupe extends ModifiedTroupeSchema {
     id: string,
-    lastUpdated: string, // last time the troupe was updated
-    name: string, // name of the troupe
-    logSheetUri: string, // Google Spreadsheet ID to post log data to
-    originEventId?: string, // event that takes precedence during member property mapping
-    refreshLock: boolean, // lock to prevent refreshing conflict
     eventTypes: EventType[], // all event types for troupe (MAX: 10)
-    adminCode: string, // heightened permissions for troupe
-
-    memberProperties: BaseMemberProperties & { // valid properties for members
-        [key: string]: MemberPropertyType,
-    },
-    pointTypes: BasePointTypes & { // point types for troupe
-        [key: string]: PointData,
-    },
 }
 
 export interface EventType {
@@ -40,30 +35,26 @@ export interface EventType {
  * - Cannot have more than `MAX_MEMBER_PROPERTIES` member properties
  * 
  * - Cannot have more than `MAX_POINT_TYPES` point types
+ * 
+ * Additionally, if any of the following properties equals what the troupe already has, 
+ * the update will delete the field from the troupe: `originEventId`, `memberProperties`, 
+ * `pointTypes`
+ * 
+ * e.g. If originEventId = "A", and the provided update = "A", the originEventId will be deleted 
+ * from the troupe
  */
 export interface UpdateTroupeRequest {
     troupeId: string,
     name?: string,
-
-    /**
-     * If any of the following properties equals what the troupe already has, the
-     * update will delete the field from the troupe
-     * 
-     * e.g. If originEventId = "A", and the provided update = "A", the originEventId
-     * will be deleted from the troupe
-     */
     originEventId?: string,
     memberProperties?: VariableMemberProperties,
     pointTypes?: VariablePointTypes,
 }
 
-/**
- * -`updated`: list of properties that were updated
- * 
- * -`removed`: list of properties that were removed
- */
 export interface UpdateTroupeResponse {
+    /** list of properties that were updated */
     updated: string[],
+    /** list of properties that were removed  */
     removed: string[],
 }
 
@@ -72,8 +63,12 @@ export interface UpdateTroupeResponse {
  * 
  * - `title` and `points` are updated immediately. `points` are updated for the
  *   event type across all events and members.
+ * 
  * - `sourceFolderUris` are updated immediately, but the data resulting from the
  *   update doesn't get changed until the next refresh.
+ * 
+ * - If a field in `sourceFolderUris` equals what the event type already has, the
+ *   field will be deleted from the event type.
  */
 export interface UpdateEventTypeRequest {
     troupeId: string,
@@ -81,4 +76,16 @@ export interface UpdateEventTypeRequest {
     title?: string,
     points?: number,
     sourceFolderUris?: string[],
+}
+
+export interface UpdateEventTypeResponse {
+    /** list of properties that were updated */
+    updated: string[],
+    /** list of properties that were removed  */
+    removed: string[],
+
+    /** list of added source folder uris */
+    newUris: string[],
+    /** list of removed source folder uris */
+    removedUris: string[],
 }

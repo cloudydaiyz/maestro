@@ -15,18 +15,11 @@ export interface TroupeSchema {
     pointTypes: BasePointTypes & VariablePointTypes, // point types for troupe
 }
 
-type Troupe2 = TroupeSchema[keyof TroupeSchema];
-
 // Modifiers: ? = optional, ! = required
 export type MemberPropertyType = "string?" | "string!" 
     | "number?" | "number!"
     | "boolean?" | "boolean!"
     | "date?" | "date!";
-
-export interface PointData {
-    startDate: Date,
-    endDate: Date,
-}
 
 export interface BaseMemberProperties {
     "First Name": "string!",
@@ -39,19 +32,17 @@ export interface VariableMemberProperties {
     [key: string]: MemberPropertyType,
 }
 
+export interface PointData {
+    startDate: Date,
+    endDate: Date,
+}
+
 export interface BasePointTypes {
     "Total": PointData,
 }
 
 export interface VariablePointTypes {
     [key: string]: PointData,
-}
-
-export interface EventTypeSchema {
-    lastUpdated: Date, // last time the event type was updated
-    title: string, // title of the event type
-    value: number, // points for the event type
-    sourceFolderUris: string[]; // URIs to the source folders for the event type
 }
 
 export interface EventSchema {
@@ -71,6 +62,13 @@ export interface EventSchema {
     fieldToPropertyMapping: { // mapping of form fields to member properties
         [fieldId: string]: string,
     },
+}
+
+export interface EventTypeSchema {
+    lastUpdated: Date, // last time the event type was updated
+    title: string, // title of the event type
+    value: number, // points for the event type
+    sourceFolderUris: string[]; // URIs to the source folders for the event type
 }
 
 export interface MemberSchema {

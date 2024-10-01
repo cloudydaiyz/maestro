@@ -7,6 +7,48 @@
  */
 export type WeakPartial<T, K extends keyof T> = Omit<T, K> & Partial<T>;
 
-// WeakPartial<_, A, B> & Replace<_, Date, string> & Replace<_, ObjectId, string>
-// 
-type Replace<A, B> = string;
+/**
+ * Replaces all keys in type T with a value type of A with a value type of B. Affects
+ * nested objects and arrays as well.
+ */
+export type Replace<T, A, B> = T extends A 
+    ? B
+    : T extends Object 
+    ? { [key in keyof T]: Replace<T[key], A, B> }
+    : T extends Array<any> 
+    ? Array<Replace<T[number], A, B>>
+    : T;
+
+const animals = ['cat', 'dog', 'mouse'] as const
+type Animal = typeof animals[number]
+
+interface ReplaceExample {
+    a: Date,
+    b: string,
+    c: number,
+    d: {
+        e: Date,
+        f: string,
+    };
+    g: {
+        h: Date,
+        i: number,
+    }[];
+}
+
+type ReplacedExample = Replace<ReplaceExample, Date, string>;
+const obj: ReplacedExample = {
+    a: 'date',
+    b: 'string',
+    c: 1,
+    d: {
+        e: 'date',
+        f: 'string',
+    },
+    g: [
+        {
+            h: 'date',
+            i: 1,
+        },
+    ],
+}
