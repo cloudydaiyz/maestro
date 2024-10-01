@@ -18,37 +18,3 @@ export type Replace<T, A, B> = T extends A
     : T extends Array<any> 
     ? Array<Replace<T[number], A, B>>
     : T;
-
-const animals = ['cat', 'dog', 'mouse'] as const
-type Animal = typeof animals[number]
-
-interface ReplaceExample {
-    a: Date,
-    b: string,
-    c: number,
-    d: {
-        e: Date,
-        f: string,
-    };
-    g: {
-        h: Date,
-        i: number,
-    }[];
-}
-
-type ReplacedExample = Replace<ReplaceExample, Date, string>;
-const obj: ReplacedExample = {
-    a: 'date',
-    b: 'string',
-    c: 1,
-    d: {
-        e: 'date',
-        f: 'string',
-    },
-    g: [
-        {
-            h: 'date',
-            i: 1,
-        },
-    ],
-}

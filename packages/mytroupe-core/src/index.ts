@@ -85,8 +85,7 @@ export class MyTroupeCore {
         }
     }
 
-    async updateTroupe({ troupeId, name, originEventId, memberProperties, 
-        pointTypes }: UpdateTroupeRequest): Promise<UpdateTroupeResponse> {
+    async updateTroupe({ troupeId, name, originEventId, memberProperties, pointTypes }: UpdateTroupeRequest): Promise<UpdateTroupeResponse> {
         const troupe = await this.getTroupeSchema(troupeId);
         let numResultingMemberProperties = Object.keys(troupe.memberProperties).length;
         let numResultingPointTypes = Object.keys(troupe.pointTypes).length;
@@ -178,8 +177,7 @@ export class MyTroupeCore {
     }
 
     // Update title, points, or sourceFolderUris
-    async updateEventType({troupeId, eventTypeId, title, points, 
-        sourceFolderUris}: UpdateEventTypeRequest): Promise<UpdateEventTypeResponse> {
+    async updateEventType({troupeId, eventTypeId, title, points, sourceFolderUris}: UpdateEventTypeRequest): Promise<UpdateEventTypeResponse> {
         const eventType = await this.getTroupeSchema(troupeId)
             .then(troupe => troupe.eventTypes.find(et => et._id.toHexString() == eventTypeId));
         assert(eventType, new MyTroupeClientError("Unable to find event type"));
