@@ -1,7 +1,7 @@
 // Public facing types to use for API endpoints
 
 import { ObjectId } from "mongodb";
-import { TroupeSchema, VariableMemberProperties, VariablePointTypes } from "./core-types";
+import { FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, TroupeSchema, VariableMemberProperties, VariablePointTypes } from "./core-types";
 import { Replace } from "./util-types";
 
 export type ModifiedTroupeSchema = Replace<
@@ -59,7 +59,22 @@ export interface UpdateTroupeResponse {
 }
 
 /**
- * Updates an event type. Caveats:
+ * Updates or creates a new event.
+ */
+export interface UpdateEventRequest {
+    troupeId: string,
+    eventId: string,
+    title?: string,
+    startDate?: string,
+    endDate?: string,
+    sourceUri?: string,
+    typeId?: string,
+    value?: number,
+    fieldToPropertyMap?: FieldToPropertyMap,
+}
+
+/**
+ * Updates or creates a new event type. Caveats:
  * 
  * - `title` and `points` are updated immediately. `points` are updated for the
  *   event type across all events and members.
@@ -74,7 +89,7 @@ export interface UpdateEventTypeRequest {
     troupeId: string,
     eventTypeId: string,
     title?: string,
-    points?: number,
+    value?: number,
     sourceFolderUris?: string[],
 }
 
@@ -88,4 +103,21 @@ export interface UpdateEventTypeResponse {
     newUris: string[],
     /** list of removed source folder uris */
     removedUris: string[],
+}
+
+/**
+ * If any of the properties equals what the member already has, the update will 
+ * delete the field from the member
+ */
+export interface UpdateMemberRequest {
+    troupeId: string,
+    memberId: string,
+    properties: {
+        [key: string]: MemberPropertyValue,
+    },
+}
+
+export interface UpdateMemberResponse {
+    updatedProperties: string[],
+    deletedProperties: string[],
 }

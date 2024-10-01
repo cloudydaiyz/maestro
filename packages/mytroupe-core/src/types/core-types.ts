@@ -21,6 +21,8 @@ export type MemberPropertyType = "string?" | "string!"
     | "boolean?" | "boolean!"
     | "date?" | "date!";
 
+export type MemberPropertyValue = string | number | boolean | Date | null;
+
 export interface BaseMemberProperties {
     "First Name": "string!",
     "Last Name": "string!",
@@ -50,18 +52,18 @@ export interface EventSchema {
     lastUpdated: Date, // last time the event was updated
     title: string, // name of the event
     sourceUri?: string, // source URI of the data for the event (Google Forms / Google Sheets)
-    timeline: { // start and end date of the event
-        startDate: Date,
-        endDate?: Date,
-    },
+    startDate: Date,
+    endDate?: Date,
 
     // calculate value associated with the event, optionally associated with event type
     typeId?: string,
     value: number,
 
-    fieldToPropertyMapping: { // mapping of form fields to member properties
-        [fieldId: string]: string,
-    },
+    fieldToPropertyMap: FieldToPropertyMap // mapping of form fields to member properties
+}
+
+export interface FieldToPropertyMap {
+    [fieldId: string]: string,
 }
 
 export interface EventTypeSchema {
@@ -76,7 +78,7 @@ export interface MemberSchema {
     lastUpdated: Date, // last time the member was updated
     properties: { // member properties
         [key: string]: {
-            value: string | number | boolean | Date | null,
+            value: MemberPropertyValue,
             override: boolean, // whether or not the value was manually overridden
         },
     },

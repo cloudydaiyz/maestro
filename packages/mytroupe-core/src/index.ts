@@ -176,8 +176,17 @@ export class MyTroupeCore {
         }
     }
 
+    // Update title, sourceUri, timeline, type info, point info, or field to property mapping
+    async updateEvent() {
+
+    }
+
+    async deleteEvent() {
+
+    }
+
     // Update title, points, or sourceFolderUris
-    async updateEventType({troupeId, eventTypeId, title, points, sourceFolderUris}: UpdateEventTypeRequest): Promise<UpdateEventTypeResponse> {
+    async updateEventType({troupeId, eventTypeId, title, value, sourceFolderUris}: UpdateEventTypeRequest): Promise<UpdateEventTypeResponse> {
         const eventType = await this.getTroupeSchema(troupeId)
             .then(troupe => troupe.eventTypes.find(et => et._id.toHexString() == eventTypeId));
         assert(eventType, new MyTroupeClientError("Unable to find event type"));
@@ -186,7 +195,7 @@ export class MyTroupeCore {
         let $unset: { [key: string]: any } = {};
 
         title ? $set.title = title : null;
-        points ? $set.points = points : null;
+        value ? $set.value = value : null;
 
         const newUris: string[] = [];
         const removedUris: string[] = [];
@@ -220,36 +229,22 @@ export class MyTroupeCore {
     }
 
     // Pick whether to replace event type with another type, or assign points
-    async deleteEventType(troupeId: string) {
+    async deleteEventType(troupeId: string, eventTypeId: string) {
 
     }
 
     // Retrieve all members
-    async getAudience() {
+    async getAudience(troupeId: string) {
 
     }
 
-    // Update property for single member
-    async updateMemberProperty() {
-
-    }
-
-    // Delete a member
-    async deleteMemberProperty() {
+    // Update or delete (optional) properties for single member
+    async updateMember() {
 
     }
 
     // Retrieve all events
     async getEvents() {
-
-    }
-
-    // Update title, sourceUri, timeline, type info, point info, or field to property mapping
-    async updateEvent() {
-
-    }
-
-    async deleteEvent() {
 
     }
 
