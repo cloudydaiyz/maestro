@@ -1,10 +1,12 @@
-import { Collection, MongoClient, ObjectId } from "mongodb";
+import { Collection, MongoClient, ObjectId, WithId } from "mongodb";
 import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
-import { DB_NAME } from "./util/constants";
-import { EventSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
+import { DB_NAME, MAX_POINT_TYPES } from "./util/constants";
+import { BaseMemberProperties, BasePointTypes, EventSchema, EventTypeSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
 import assert from "assert";
-import { CreateTroupeSchema } from "./types/api-types";
+import { EventType, Troupe, UpdateTroupeRequest, UpdateTroupeResponse } from "./types/api-types";
 import { initTroupeSheet } from "./cloud/gcp";
+import { WeakPartial } from "./types/util-types";
+import { CreateTroupeSchema } from "./types/service-types";
 
 // To help catch and relay client-based errors
 export class MyTroupeClientError extends Error {
@@ -32,24 +34,132 @@ export class MyTroupeCore {
         this.connection = this.client.connect();
     }
 
-    // Turns on refresh lock and places troupe into the refresh queue if the lock is disabled
-    async initiateRefresh(troupeId: string) {
-
+    private async getTroupeSchema(troupeId: string): Promise<WithId<TroupeSchema>> {
+        const schema = await this.troupeColl.findOne({ _id: new ObjectId(troupeId) });
+        assert(schema, new MyTroupeClientError("Unable to find troupe"));
+        return schema;
     }
 
     // Retrieves the current state of the troupe
-    async getTroupe(troupeId: string) {
+    async getTroupe(troupeId: string): Promise<Troupe> {
 
+        let troupe: WeakPartial<WithId<TroupeSchema>, "_id"> = await this.getTroupeSchema(troupeId);
+        const schemaId = troupe._id!.toHexString();
+        delete troupe._id;
+
+        const eventTypes = troupe.eventTypes.map((et) => {
+            const eType: WeakPartial<WithId<EventTypeSchema>, "_id"> = et;
+            const eid = eType._id!.toHexString();
+            delete eType._id;
+
+            return {
+                ...eType,
+                id: eid,
+                lastUpdated: eType.lastUpdated.toISOString(),
+            }
+        });
+
+        return {
+            ...troupe,
+            id: schemaId,
+            lastUpdated: troupe.lastUpdated.toISOString(),
+            eventTypes
+        }
     }
 
-    // Update name, originEventId, memberProperties, or pointTypes
-    // Can't make a member property required until there's at least 1 event that uses it
-    async updateTroupe() {
+    async updateTroupe({ troupeId, name, originEventId, memberProperties, 
+        pointTypes }: UpdateTroupeRequest): Promise<UpdateTroupeResponse> {
+        const troupe = await this.getTroupeSchema(troupeId);
+        let numResultingMemberProperties = Object.keys(troupe.memberProperties).length;
+        let numResultingPointTypes = Object.keys(troupe.pointTypes).length;
 
+        let $set: { [key: string]: any } = {};
+        let $unset: { [key: string]: any } = {};
+
+        name ? $set.name = name : null;
+        originEventId != troupe.originEventId 
+            ? $set.originEventId = originEventId : $unset.originEventId = "";
+        
+        if(memberProperties) {
+            let keys = Object.keys(memberProperties);
+
+            // Ensure the request isn't trying to modify the BaseMemberProperties
+            if(keys.findIndex(key => key in ["First Name", "Last Name", "Email", "Birthday"]) != -1) {
+                throw new MyTroupeClientError("Cannot modify base member properties");
+            }
+            
+            for (const key of keys) {
+                const prop = memberProperties[key];
+                if(prop != troupe.memberProperties[key]) {
+
+                    // Can't make a member property required until there's at least 1 event that uses it
+                    if(prop.substring(prop.length - 1) == "!") {
+                        const event = await this.eventColl.findOne(
+                            { troupeId, [`memberProperties.${key}`]: { $exists: true } }
+                        );
+
+                        if(!event) {
+                            throw new MyTroupeClientError("Cannot make a member property required until "
+                                + "an event uses it. Try making it optional first.");
+                        }
+                    }
+
+                    $set[`memberProperties.${key}`] = memberProperties[key];
+                    numResultingMemberProperties++;
+                } else {
+                    $unset[`memberProperties.${key}`] = "";
+                    numResultingMemberProperties--;
+                }
+
+                if(numResultingMemberProperties > MAX_POINT_TYPES) {
+                    throw new MyTroupeClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`);
+                }
+            }
+        }
+
+        if(pointTypes) {
+            const keys = Object.keys(pointTypes);
+
+            // Ensure the request isn't trying to modify the BasePointTypes
+            if(keys.findIndex(key => key in ["Total"]) != -1) {
+                throw new MyTroupeClientError("Cannot modify base point types");
+            }
+            
+            for(const key of keys) {
+                if(pointTypes[key] != troupe.pointTypes[key]) {
+                    $set[`pointTypes.${key}`] = pointTypes[key];
+                    numResultingPointTypes++;
+                } else {
+                    $unset[`pointTypes.${key}`] = "";
+                    numResultingPointTypes--;
+                }
+
+                if(numResultingPointTypes > MAX_POINT_TYPES) {
+                    throw new MyTroupeClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`);
+                }
+            }
+        }
+
+        if(Object.keys($set).length == 0 && Object.keys($unset).length == 0) {
+            return {
+                updated: [],
+                removed: [],
+            }
+        }
+        
+        const updateResult = await this.troupeColl.updateOne(
+            { _id: new ObjectId(troupeId) }, 
+            { $set: {...$set, lastUpdated: new Date()}, $unset }
+        );
+        assert(updateResult.modifiedCount == 1, "Failed to update troupe");
+
+        return {
+            updated: Object.keys($set),
+            removed: Object.keys($unset),
+        }
     }
 
     // Update title, points, or sourceFolderUris
-    // Triggers refresh on delete sourceFolderUri or create
     async updateEventType() {
 
     }
@@ -80,18 +190,17 @@ export class MyTroupeCore {
     }
 
     // Update title, sourceUri, timeline, type info, point info, or field to property mapping
-    // Triggers refresh
     async updateEvent() {
 
     }
 
-    // Triggers refresh
     async deleteEvent() {
 
     }
 
-    protected hello() {
-        console.log("Hello");
+    // Turns on refresh lock and places troupe into the refresh queue if the lock is disabled
+    async initiateRefresh(troupeId: string) {
+
     }
 }
 
@@ -100,11 +209,16 @@ export class MyTroupeService extends MyTroupeCore {
     constructor() { super() }
 
     async refresh() {
-        // event collection
-        // point calculation
-        // database update
-            // delete members that are no longer in the source folder & have no overridden properties
-        // sheet update
+        const { TroupeLogRefreshService } = await import("./refresh");
+        const refreshService = new TroupeLogRefreshService();
+        await refreshService.ready;
+
+        // refreshService.discoverEvents();
+        // refreshService.updateAudience();
+        // refreshService.refreshLogSheet();
+        // refreshService.prepareDatabaseUpdate();
+
+        // delete members that are no longer in the source folder & have no overridden properties
     }
 
     async createTroupe(req: CreateTroupeSchema) {
@@ -115,8 +229,8 @@ export class MyTroupeService extends MyTroupeCore {
             const lastUpdated = new Date();
             const troupe = await this.troupeColl.insertOne({
                 ...req,
-                logSheetId: logSheetUri,
                 lastUpdated,
+                logSheetUri,
                 eventTypes: [],
                 memberProperties: {
                     "First Name": "string!",
@@ -167,66 +281,6 @@ export class MyTroupeService extends MyTroupeCore {
             ]).then((res) => {
                 assert(res.every((r) => r.acknowledged), "Failed to fully delete troupe");
                 console.log(res.reduce((deletedCount, r) => deletedCount + r.deletedCount, 0));
-            });
-        });
-    }
-
-    async resetTroupe(troupeId: string) {
-        return this.client.startSession().withTransaction(async () => {
-            const lastUpdated = new Date();
-            const clearTroupe = await this.troupeColl.updateOne(
-                { _id: new ObjectId(troupeId) },
-                {
-                    $set: {
-                        lastUpdated,
-                        eventTypes: [],
-                        memberProperties: {
-                            "First Name": "string!",
-                            "Middle Name": "string?",
-                            "Last Name": "string!",
-                            "Member ID": "string!",
-                            "Email": "string!",
-                            "Birthday": "date!",
-                        },
-                        pointTypes: {
-                            "Total": {
-                                startDate: new Date(0),
-                                endDate: new Date(3000000000000),
-                            },
-                        },
-                        refreshLock: false,
-                    },
-                }
-            );
-
-            const clearDashboard = await this.dashboardColl.updateOne(
-                { troupeId },
-                {
-                    $set: {
-                        lastUpdated,
-                        totalMembers: 0,
-                        totalEvents: 0,
-                        avgPointsPerEvent: 0,
-                        avgAttendeesPerEvent: 0,
-                        avgAttendeesPerEventType: [],
-                        attendeePercentageByEventType: [],
-                        eventPercentageByEventType: [],
-                        upcomingBirthdays: {
-                            frequency: "monthly",
-                            desiredFrequency: "monthly",
-                            members: [],
-                        },
-                    },
-                }
-            );
-
-            return Promise.all([
-                clearTroupe, 
-                clearDashboard,
-                this.audienceColl.deleteMany({ troupeId }),
-                this.eventColl.deleteMany({ troupeId }),
-            ]).then((res) => {
-                assert(res.every((r) => r.acknowledged), "Failed to fully reset troupe");
             });
         });
     }

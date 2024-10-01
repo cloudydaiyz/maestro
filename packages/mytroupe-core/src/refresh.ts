@@ -6,6 +6,8 @@ export class TroupeLogRefreshService {
     ready: Promise<void>;
     drive!: drive_v3.Drive;
     sheets!: sheets_v4.Sheets;
+    input?: {};
+    output?: {};
 
     constructor() {
         this.ready = this.init();
@@ -14,10 +16,6 @@ export class TroupeLogRefreshService {
     async init() {
         this.drive = await getDrive();
         this.sheets = await getSheets();
-    }
-
-    async refresh() {
-
     }
 
     async discoverEvents(eventTypes: EventTypeSchema[], ignoreList: any[]) {
@@ -43,14 +41,16 @@ export class TroupeLogRefreshService {
         // return audience members from event
     }
 
-    async updateLogSheet() {
+    async refreshLogSheet() {
         // get the current log sheet
         // obtain the new values for the sheet
         // calculate the diff & generate updates
         // execute update
     }
 
-    async updateDashboard() {
+    // Populate local variables with information to update the database
+    async prepareDatabaseUpdate() {
+        // update audience members & events
         // update dashboard with statistics from event & audience update
     }
 }

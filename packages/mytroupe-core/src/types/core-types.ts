@@ -1,30 +1,24 @@
 // Data schema for the core data types
 
-import { ObjectId } from "mongodb";
+import { ObjectId, WithId } from "mongodb";
 
 export interface TroupeSchema {
     lastUpdated: Date, // last time the troupe was updated
     name: string, // name of the troupe
-    logSheetId: string, // Google Spreadsheet ID to post log data to
+    logSheetUri: string, // Google Spreadsheet ID to post log data to
     originEventId?: string, // event that takes precedence during member property mapping
     refreshLock: boolean, // lock to prevent refreshing conflict
-    eventTypes: EventTypeSchema[], // all event types for troupe (MAX: 10)
+    eventTypes: WithId<EventTypeSchema>[], // all event types for troupe (MAX: 10)
     adminCode: string, // heightened permissions for troupe
 
-    memberProperties: BaseMemberProperties & { // valid properties for members
-        [key: string]: MemberPropertyType,
-    },
-    pointTypes: BasePointTypes & { // point types for troupe
-        [key: string]: PointData,
-    },
-
-    // == FUTURE ==
-    // demo: boolean, // whether or not this troupe is being used in a demo
-    // demoActionsLeft: number, // number of demo actions left
+    memberProperties: BaseMemberProperties & VariableMemberProperties, // valid properties for members
+    pointTypes: BasePointTypes & VariablePointTypes, // point types for troupe
 }
 
+type Troupe2 = TroupeSchema[keyof TroupeSchema];
+
 // Modifiers: ? = optional, ! = required
-type MemberPropertyType = "string?" | "string!" 
+export type MemberPropertyType = "string?" | "string!" 
     | "number?" | "number!"
     | "boolean?" | "boolean!"
     | "date?" | "date!";
@@ -41,15 +35,22 @@ export interface BaseMemberProperties {
     "Birthday": "date!",
 }
 
+export interface VariableMemberProperties {
+    [key: string]: MemberPropertyType,
+}
+
 export interface BasePointTypes {
     "Total": PointData,
 }
 
+export interface VariablePointTypes {
+    [key: string]: PointData,
+}
+
 export interface EventTypeSchema {
-    _id: ObjectId, // unique ID for the event type
     lastUpdated: Date, // last time the event type was updated
     title: string, // title of the event type
-    points: number, // points for the event type
+    value: number, // points for the event type
     sourceFolderUris: string[]; // URIs to the source folders for the event type
 }
 
@@ -73,19 +74,14 @@ export interface EventSchema {
 }
 
 export interface MemberSchema {
-    _id: ObjectId,
     troupeId: string, // ID of the troupe the member belongs to
     lastUpdated: Date, // last time the member was updated
     properties: { // member properties
         [key: string]: {
-            value: string | number | boolean | Date,
+            value: string | number | boolean | Date | null,
             override: boolean, // whether or not the value was manually overridden
         },
     },
-    eventsAttended: { // event IDs
-        eventId: string,
-        points: number,
-    }[],
     totalEventsAttended: number,
     points: { // points for each type specified in the troupe schema
         [key: string]: number,
@@ -97,7 +93,8 @@ export interface EventsAttendedBucketSchema {
     lastUpdated: Date, // last time the bucket was updated
     eventsAttended: {
         eventId: string,
-        points: number,
+        startDate: Date,
+        value: number,
     }[],
     page: number,
 }
