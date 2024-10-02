@@ -20,11 +20,15 @@ export type Replace<T, A, B> = T extends A
     ? Array<Replace<T[number], A, B>>
     : T;
 
+export type Mutable<T> = { -readonly [P in keyof T]: T[P] }
+
+// == Troupe Types ==
+
 export type Id = { id: string };
 
 export type PreviousLastUpdated = { previousLastUpdated: string };
 
-export type Mutable<T> = { -readonly [P in keyof T]: T[P] }
+// == MongoDB Types ==
 
 export type SetOperator<T> = Mutable<MatchKeysAndValues<T>>;
 

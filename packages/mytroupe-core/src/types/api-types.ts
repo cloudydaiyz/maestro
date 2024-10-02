@@ -29,7 +29,6 @@ export type Member = Replace<MemberSchema, Date, string> & Id;
  *   point types
  */
 export type UpdateTroupeRequest = {
-    troupeId: string,
     name?: string,
     /** Set as an empty string to remove. */ 
     originEventId?: string, 
@@ -52,20 +51,19 @@ export type CreateEventRequest = Omit<
 >;
 
 export type UpdateEventRequest = {
-    troupeId: string,
-    eventId: string,
     title?: string,
     startDate?: string,
     /** Must be a valid {@link EventDataSource}. */
     sourceUri?: string,
-    updateTypeId?: string,
-    removeTypeId?: boolean,
+    updateEventTypeId?: string,
+    removeEventTypeId?: boolean,
     value?: number,
-    updateFields?: {
+    /** Updates properties associated with fields. Cannot create new entries. */
+    updateProperties?: {
         [fieldId: string]: string,
     },
     /** Removes properties associated with fields */
-    removeFields?: string[],
+    removeProperties?: string[],
 }
 
 /**
@@ -76,8 +74,6 @@ export type UpdateEventRequest = {
  *   update doesn't get changed until the next sync.
  */
 export type UpdateEventTypeRequest = {
-    troupeId: string,
-    eventTypeId: string,
     title?: string,
     value?: number,
     addSourceFolderUris?: string[],

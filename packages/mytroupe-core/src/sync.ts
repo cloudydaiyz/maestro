@@ -27,9 +27,9 @@ export class MyTroupeSyncService extends MyTroupeService {
      */
     async sync() {
         // this.discoverEvents();
-        // this.updateAudience();
-        // this.syncLogSheet();
-        // this.prepareDatabaseUpdate();
+        // this.discoverAndRefreshAudience();
+        // this.refreshLogSheet();
+        // this.persistSync();
     }
 
     async discoverEvents(eventTypes: EventTypeSchema[], ignoreList: any[]) {
@@ -43,7 +43,7 @@ export class MyTroupeSyncService extends MyTroupeService {
         // return the newly discovered events
     }
 
-    async updateAudience(audience: MemberSchema[], events: EventSchema[]) {
+    async discoverAndRefreshAudience(audience: MemberSchema[], events: EventSchema[]) {
         // go through event sign ups to discover audience, mark them as discovered, and update existing audience points
         // validate that new audience members have the required properties AFTER audience discovery from ALL events
             // drop invalid audience members
@@ -55,15 +55,15 @@ export class MyTroupeSyncService extends MyTroupeService {
         // return audience members from event
     }
 
-    async syncLogSheet() {
+    async refreshLogSheet() {
         // get the current log sheet
         // obtain the new values for the sheet
         // calculate the diff & generate updates
         // execute update
     }
 
-    // Populate local variables with information to update the database
-    async prepareDatabaseUpdate() {
+    // NOTE: Populate local variables with synchronized information to update the database
+    async persistSync() {
         // update audience members & events
         // update dashboard with statistics from event & audience update
     }

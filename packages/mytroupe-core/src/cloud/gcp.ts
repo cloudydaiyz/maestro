@@ -1,8 +1,7 @@
 import * as fs from "node:fs/promises";
 import { google, sheets_v4, forms_v1, drive_v3 } from "googleapis";
 import { GoogleAuth } from "google-auth-library";
-import { SERVICE_KEY_PATH } from "../util/env";
-import { BASE_LOG_SHEET_ID, LOG_SHEET_DRIVE_ID } from "../util/constants";
+import { SERVICE_KEY_PATH, BASE_LOG_SHEET_ID, LOG_SHEET_DRIVE_ID } from "../util/env";
 
 let auth: GoogleAuth;
 let sheets: sheets_v4.Sheets;

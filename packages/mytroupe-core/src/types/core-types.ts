@@ -45,6 +45,17 @@ export interface VariableMemberProperties {
     [key: string]: MemberPropertyType,
 }
 
+export type MemberProperties = {
+    [key: string]: MemberProperty,
+}
+
+export type MemberProperty = {
+    value: MemberPropertyValue,
+    /** True if this property was manually overridden; this takes precedence
+     *  over the origin event.  */
+    override: boolean,
+}
+
 // Point types
 export interface PointData {
     startDate: Date,
@@ -75,10 +86,11 @@ export interface EventSchema {
     sourceUri: string,
     synchronizedSourceUri: string,
     startDate: Date,
-    typeId?: string,
+    eventTypeId?: string,
     value: number,
     /** One-to-one mapping of form fields IDs to member properties. */ 
-    fieldToPropertyMap: FieldToPropertyMap 
+    fieldToPropertyMap: FieldToPropertyMap,
+    synchronizedFieldToPropertyMap: FieldToPropertyMap,
 }
 
 export const EventDataSourcesRegex = [FORMS_REGEX, SHEETS_REGEX] as const;
@@ -98,7 +110,8 @@ export interface EventTypeSchema {
     title: string, 
     /** Points for the event type */
     value: number, 
-    sourceFolderUris: string[];
+    sourceFolderUris: string[],
+    synchronizedSourceFolderUris: string[],
 }
 
 // Member
@@ -106,15 +119,7 @@ export interface MemberSchema {
     troupeId: string,
     lastUpdated: Date,
     /** Uses synchronized member properties */
-    properties: { 
-        [key: string]: {
-            value: MemberPropertyValue,
-            /** True if this property was manually overridden; this takes precedence
-             *  over the origin event.  */
-            override: boolean,
-        },
-    },
-    totalEventsAttended: number,
+    properties: MemberProperties,
     points: {
         [key: string]: number,
     },
