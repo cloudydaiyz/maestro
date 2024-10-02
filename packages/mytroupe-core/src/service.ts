@@ -3,6 +3,7 @@ import { initTroupeSheet } from "./cloud/gcp";
 import { MyTroupeCore } from "./index";
 import { CreateTroupeRequest } from "./types/service-types";
 import { ObjectId } from "mongodb";
+import { BaseMemberPropertiesObj, BasePointTypesObj } from "./types/core-types";
 
 // Additional functionality for other backend services
 export class MyTroupeService extends MyTroupeCore {
@@ -19,20 +20,9 @@ export class MyTroupeService extends MyTroupeCore {
                 lastUpdated,
                 logSheetUri,
                 eventTypes: [],
-                memberProperties: {
-                    "First Name": "string!",
-                    "Middle Name": "string?",
-                    "Last Name": "string!",
-                    "Member ID": "string!",
-                    "Email": "string!",
-                    "Birthday": "date!",
-                },
-                pointTypes: {
-                    "Total": {
-                        startDate: new Date(0),
-                        endDate: new Date(3000000000000),
-                    },
-                },
+                memberProperties: BaseMemberPropertiesObj,
+                pointTypes: BasePointTypesObj,
+                synchronizedPointTypes: BasePointTypesObj,
                 syncLock: false,
             });
             assert(troupe.insertedId, "Failed to create troupe");

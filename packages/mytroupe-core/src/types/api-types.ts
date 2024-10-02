@@ -12,7 +12,7 @@ export type Troupe = Replace<
     string
 > & Id & { eventTypes: EventType[] }
 
-export type Event = Replace<EventSchema, Date, string> & Id;
+export type PublicEvent = Replace<EventSchema, Date, string> & Id;
 
 export type EventType = Replace<EventTypeSchema, Date, string> & Id;
 
@@ -35,7 +35,7 @@ export type UpdateTroupeRequest = {
     originEventId?: string, 
     updateMemberProperties?: VariableMemberProperties,
     removeMemberProperties?: string[],
-    updatePointTypes?: VariablePointTypes,
+    updatePointTypes?: Replace<VariablePointTypes, Date, string>,
     removePointTypes?: string[],
 }
 
@@ -54,14 +54,12 @@ export type CreateEventRequest = Omit<
 export type UpdateEventRequest = {
     troupeId: string,
     eventId: string,
-    /** Must be non-empty. */
     title?: string,
     startDate?: string,
-    /** Set as an empty string to remove. */ 
-    endDate?: string, 
     /** Must be a valid {@link EventDataSource}. */
     sourceUri?: string,
-    typeId?: string,
+    updateTypeId?: string,
+    removeTypeId?: boolean,
     value?: number,
     updateFields?: {
         [fieldId: string]: string,

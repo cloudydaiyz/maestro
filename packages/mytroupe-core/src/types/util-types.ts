@@ -1,3 +1,4 @@
+import { MatchKeysAndValues, OnlyFieldsOfType } from "mongodb";
 
 /**
  * This creates a version of T (provided type) with the given field (or fields if 
@@ -19,6 +20,12 @@ export type Replace<T, A, B> = T extends A
     ? Array<Replace<T[number], A, B>>
     : T;
 
-export type Id = { id: string }
+export type Id = { id: string };
 
-export type PreviousLastUpdated = { previousLastUpdated: string }
+export type PreviousLastUpdated = { previousLastUpdated: string };
+
+export type Mutable<T> = { -readonly [P in keyof T]: T[P] }
+
+export type SetOperator<T> = Mutable<MatchKeysAndValues<T>>;
+
+export type UnsetOperator<T> = Mutable<OnlyFieldsOfType<T, any, '' | true | 1>>;
