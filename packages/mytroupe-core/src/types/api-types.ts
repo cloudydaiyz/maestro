@@ -1,123 +1,96 @@
 // Public facing types to use for API endpoints
 
-import { ObjectId } from "mongodb";
-import { FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, TroupeSchema, VariableMemberProperties, VariablePointTypes } from "./core-types";
-import { Replace } from "./util-types";
+import { ObjectId, WithId } from "mongodb";
+import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties, VariablePointTypes, EventDataSource } from "./core-types";
+import { Id, Replace } from "./util-types";
 
-export type ModifiedTroupeSchema = Replace<
-    Omit<TroupeSchema, "eventTypes" | "_id">, 
+// == Public Types ==
+
+export type Troupe = Replace<
+    Omit<TroupeSchema, "eventTypes" | "_id" | "refreshLock">, 
     Date | ObjectId, 
     string
->;
+> & Id & { eventTypes: EventType[] }
 
-export interface Troupe extends ModifiedTroupeSchema {
-    id: string,
-    eventTypes: EventType[], // all event types for troupe (MAX: 10)
-}
+export type Event = Replace<EventSchema, Date, string> & Id;
 
-export interface EventType {
-    id: string, // unique ID for the event type
-    lastUpdated: string, // last time the event type was updated
-    title: string, // title of the event type
-    value: number, // points for the event type
-    sourceFolderUris: string[]; // URIs to the source folders for the event type
-}
+export type EventType = Replace<EventTypeSchema, Date, string> & Id;
+
+export type Member = Replace<MemberSchema, Date, string> & Id;
+
+// == API Request Types ==
 
 /**
  * Update Troupe properties. Caveats:
- * 
  * - Cannot modify BaseMemberProperties or BasePointTypes. 
- * 
  * - Member properties cannot be required until there's at least 1 event that uses it.
- * 
  * - New member properties and point types for members get calculated on the next refresh
- * 
- * - Cannot have more than `MAX_MEMBER_PROPERTIES` member properties
- * 
- * - Cannot have more than `MAX_POINT_TYPES` point types
- * 
- * Additionally, if any of the following properties equals what the troupe already has, 
- * the update will delete the field from the troupe: `originEventId`, `memberProperties`, 
- * `pointTypes`
- * 
- * e.g. If originEventId = "A", and the provided update = "A", the originEventId will be deleted 
- * from the troupe
+ * - Cannot have more than `MAX_MEMBER_PROPERTIES` member properties or `MAX_POINT_TYPES` 
+ *   point types
  */
-export interface UpdateTroupeRequest {
+export type UpdateTroupeRequest = {
     troupeId: string,
     name?: string,
-    originEventId?: string,
-    memberProperties?: VariableMemberProperties,
-    pointTypes?: VariablePointTypes,
-}
-
-export interface UpdateTroupeResponse {
-    /** list of properties that were updated */
-    updated: string[],
-    /** list of properties that were removed  */
-    removed: string[],
+    /** Set as an empty string to remove. */ 
+    originEventId?: string, 
+    updateMemberProperties?: VariableMemberProperties,
+    removeMemberProperties?: string[],
+    updatePointTypes?: VariablePointTypes,
+    removePointTypes?: string[],
 }
 
 /**
- * Updates or creates a new event.
+ * If manually added, event starts with empty field to property map and unvalidated
+ * sourceUri (the URI is only checked to see whether it's a valid `DataSource`). During 
+ * refresh, if the sourceUri is invalid, the event is deleted, and the field to property 
+ * map is updated. User may only update the existing fields in the field to property map,
+ * even if they know the ID of other fields in the source.
  */
-export interface UpdateEventRequest {
+export type CreateEventRequest = Omit<
+    Event,
+    "id" | "lastUpdated" | "fieldToPropertyMap" | "source"
+>;
+
+export type UpdateEventRequest = {
     troupeId: string,
     eventId: string,
+    /** Must be non-empty. */
     title?: string,
     startDate?: string,
-    endDate?: string,
+    /** Set as an empty string to remove. */ 
+    endDate?: string, 
+    /** Must be a valid {@link EventDataSource}. */
     sourceUri?: string,
     typeId?: string,
     value?: number,
-    fieldToPropertyMap?: FieldToPropertyMap,
+    updateFields?: {
+        [fieldId: string]: string,
+    },
+    /** Removes properties associated with fields */
+    removeFields?: string[],
 }
 
 /**
  * Updates or creates a new event type. Caveats:
- * 
  * - `title` and `points` are updated immediately. `points` are updated for the
  *   event type across all events and members.
- * 
  * - `sourceFolderUris` are updated immediately, but the data resulting from the
  *   update doesn't get changed until the next refresh.
- * 
- * - If a field in `sourceFolderUris` equals what the event type already has, the
- *   field will be deleted from the event type.
  */
-export interface UpdateEventTypeRequest {
+export type UpdateEventTypeRequest = {
     troupeId: string,
     eventTypeId: string,
     title?: string,
     value?: number,
-    sourceFolderUris?: string[],
+    addSourceFolderUris?: string[],
+    deleteSourceFolderUris?: string[],
 }
 
-export interface UpdateEventTypeResponse {
-    /** list of properties that were updated */
-    updated: string[],
-    /** list of properties that were removed  */
-    removed: string[],
-
-    /** list of added source folder uris */
-    newUris: string[],
-    /** list of removed source folder uris */
-    removedUris: string[],
-}
-
-/**
- * If any of the properties equals what the member already has, the update will 
- * delete the field from the member
- */
-export interface UpdateMemberRequest {
+export type UpdateMemberRequest = {
     troupeId: string,
     memberId: string,
-    properties: {
-        [key: string]: MemberPropertyValue,
-    },
-}
-
-export interface UpdateMemberResponse {
-    updatedProperties: string[],
-    deletedProperties: string[],
+    updateProperties?: {
+        [key: string]: Replace<MemberPropertyValue, Date, string>,
+    }
+    deleteProperties?: string[],
 }

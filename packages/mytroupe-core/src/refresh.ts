@@ -1,8 +1,9 @@
 import { drive_v3, sheets_v4 } from "googleapis";
 import { getDrive, getSheets } from "./cloud/gcp";
 import { EventSchema, EventTypeSchema, MemberSchema } from "./types/core-types";
+import { MyTroupeService } from "./service";
 
-export class TroupeLogRefreshService {
+export class MyTroupeLogRefreshService extends MyTroupeService {
     ready: Promise<void>;
     drive!: drive_v3.Drive;
     sheets!: sheets_v4.Sheets;
@@ -10,12 +11,25 @@ export class TroupeLogRefreshService {
     output?: {};
 
     constructor() {
+        super();
         this.ready = this.init();
     }
 
     async init() {
         this.drive = await getDrive();
         this.sheets = await getSheets();
+    }
+
+    /**
+     * - Doesn't delete events previously discovered, even if not found in parent
+     *   event type folder
+     * - Delete members that are no longer in the source folder & have no overridden properties
+     */
+    async refresh() {
+        // this.discoverEvents();
+        // this.updateAudience();
+        // this.refreshLogSheet();
+        // this.prepareDatabaseUpdate();
     }
 
     async discoverEvents(eventTypes: EventTypeSchema[], ignoreList: any[]) {

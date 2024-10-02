@@ -18,3 +18,7 @@ export type Replace<T, A, B> = T extends A
     : T extends Array<any> 
     ? Array<Replace<T[number], A, B>>
     : T;
+
+export type Id = { id: string }
+
+export type PreviousLastUpdated = { previousLastUpdated: string }

@@ -1,27 +1,14 @@
 import assert from "assert";
 import { initTroupeSheet } from "./cloud/gcp";
 import { MyTroupeCore } from "./index";
-import { CreateTroupeSchema } from "./types/service-types";
+import { CreateTroupeRequest } from "./types/service-types";
 import { ObjectId } from "mongodb";
 
 // Additional functionality for other backend services
 export class MyTroupeService extends MyTroupeCore {
     constructor() { super() }
 
-    async refresh() {
-        const { TroupeLogRefreshService } = await import("./refresh");
-        const refreshService = new TroupeLogRefreshService();
-        await refreshService.ready;
-
-        // refreshService.discoverEvents();
-        // refreshService.updateAudience();
-        // refreshService.refreshLogSheet();
-        // refreshService.prepareDatabaseUpdate();
-
-        // delete members that are no longer in the source folder & have no overridden properties
-    }
-
-    async createTroupe(req: CreateTroupeSchema) {
+    async createTroupe(req: CreateTroupeRequest) {
         const logSheetUri = await initTroupeSheet(req.name).then(res => res.data.id);
         assert(logSheetUri, "Failed to create log sheet");
 

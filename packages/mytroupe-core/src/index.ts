@@ -3,10 +3,9 @@ import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
 import { DB_NAME, MAX_POINT_TYPES } from "./util/constants";
 import { BaseMemberProperties, BasePointTypes, EventSchema, EventTypeSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
 import assert from "assert";
-import { EventType, Troupe, UpdateEventTypeRequest, UpdateEventTypeResponse, UpdateTroupeRequest, UpdateTroupeResponse } from "./types/api-types";
+import { EventType, Troupe, UpdateEventTypeRequest, UpdateTroupeRequest } from "./types/api-types";
 import { initTroupeSheet } from "./cloud/gcp";
 import { WeakPartial } from "./types/util-types";
-import { CreateTroupeSchema } from "./types/service-types";
 
 // To help catch and relay client-based errors
 export class MyTroupeClientError extends Error {
@@ -85,7 +84,7 @@ export class MyTroupeCore {
         }
     }
 
-    async updateTroupe({ troupeId, name, originEventId, memberProperties, pointTypes }: UpdateTroupeRequest): Promise<UpdateTroupeResponse> {
+    async updateTroupe({ troupeId, name, originEventId, updateMemberProperties, updatePointTypes }: UpdateTroupeRequest) {
         const troupe = await this.getTroupeSchema(troupeId);
         let numResultingMemberProperties = Object.keys(troupe.memberProperties).length;
         let numResultingPointTypes = Object.keys(troupe.pointTypes).length;
@@ -97,8 +96,8 @@ export class MyTroupeCore {
         originEventId != troupe.originEventId 
             ? $set.originEventId = originEventId : $unset.originEventId = "";
         
-        if(memberProperties) {
-            let keys = Object.keys(memberProperties);
+        if(updateMemberProperties) {
+            let keys = Object.keys(updateMemberProperties);
 
             // Ensure the request isn't trying to modify the BaseMemberProperties
             if(keys.findIndex(key => key in ["First Name", "Last Name", "Email", "Birthday"]) != -1) {
@@ -106,7 +105,7 @@ export class MyTroupeCore {
             }
             
             for (const key of keys) {
-                const prop = memberProperties[key];
+                const prop = updateMemberProperties[key];
                 if(prop != troupe.memberProperties[key]) {
 
                     // Can't make a member property required until there's at least 1 event that uses it
@@ -121,7 +120,7 @@ export class MyTroupeCore {
                         }
                     }
 
-                    $set[`memberProperties.${key}`] = memberProperties[key];
+                    $set[`memberProperties.${key}`] = updateMemberProperties[key];
                     numResultingMemberProperties++;
                 } else {
                     $unset[`memberProperties.${key}`] = "";
@@ -134,8 +133,8 @@ export class MyTroupeCore {
             }
         }
 
-        if(pointTypes) {
-            const keys = Object.keys(pointTypes);
+        if(updatePointTypes) {
+            const keys = Object.keys(updatePointTypes);
 
             // Ensure the request isn't trying to modify the BasePointTypes
             if(keys.findIndex(key => key in ["Total"]) != -1) {
@@ -143,8 +142,8 @@ export class MyTroupeCore {
             }
             
             for(const key of keys) {
-                if(pointTypes[key] != troupe.pointTypes[key]) {
-                    $set[`pointTypes.${key}`] = pointTypes[key];
+                if(updatePointTypes[key] != troupe.pointTypes[key]) {
+                    $set[`pointTypes.${key}`] = updatePointTypes[key];
                     numResultingPointTypes++;
                 } else {
                     $unset[`pointTypes.${key}`] = "";
@@ -176,6 +175,11 @@ export class MyTroupeCore {
         }
     }
 
+    // Retrieve all events
+    async getEvents() {
+
+    }
+
     // Update title, sourceUri, timeline, type info, point info, or field to property mapping
     async updateEvent() {
 
@@ -186,7 +190,7 @@ export class MyTroupeCore {
     }
 
     // Update title, points, or sourceFolderUris
-    async updateEventType({troupeId, eventTypeId, title, value, sourceFolderUris}: UpdateEventTypeRequest): Promise<UpdateEventTypeResponse> {
+    async updateEventType({troupeId, eventTypeId, title, value, addSourceFolderUris: sourceFolderUris}: UpdateEventTypeRequest) {
         const eventType = await this.getTroupeSchema(troupeId)
             .then(troupe => troupe.eventTypes.find(et => et._id.toHexString() == eventTypeId));
         assert(eventType, new MyTroupeClientError("Unable to find event type"));
@@ -240,11 +244,6 @@ export class MyTroupeCore {
 
     // Update or delete (optional) properties for single member
     async updateMember() {
-
-    }
-
-    // Retrieve all events
-    async getEvents() {
 
     }
 

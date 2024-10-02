@@ -3,16 +3,19 @@
 import { ObjectId, WithId } from "mongodb";
 
 export interface TroupeSchema {
-    lastUpdated: Date, // last time the troupe was updated
-    name: string, // name of the troupe
-    logSheetUri: string, // Google Spreadsheet ID to post log data to
-    originEventId?: string, // event that takes precedence during member property mapping
-    refreshLock: boolean, // lock to prevent refreshing conflict
+    lastUpdated: Date,
+    name: string,
+    logSheetUri: string,
+    /** Event that takes precedence during member property mapping */ 
+    originEventId?: string, 
+    /** Lock to prevent refreshing conflict */
+    refreshLock: boolean, 
     eventTypes: WithId<EventTypeSchema>[], // all event types for troupe (MAX: 10)
-    adminCode: string, // heightened permissions for troupe
 
-    memberProperties: BaseMemberProperties & VariableMemberProperties, // valid properties for members
-    pointTypes: BasePointTypes & VariablePointTypes, // point types for troupe
+    /** Valid properties for members */
+    memberProperties: BaseMemberProperties & VariableMemberProperties, 
+    /** Valid point types for the troupe */
+    pointTypes: BasePointTypes & VariablePointTypes, 
 }
 
 // Modifiers: ? = optional, ! = required
@@ -48,49 +51,56 @@ export interface VariablePointTypes {
 }
 
 export interface EventSchema {
-    troupeId: string, // ID of the troupe the event belongs to
-    lastUpdated: Date, // last time the event was updated
-    title: string, // name of the event
-    sourceUri?: string, // source URI of the data for the event (Google Forms / Google Sheets)
+    /** ID of the troupe the event belongs to */ 
+    troupeId: string, 
+    lastUpdated: Date,
+    title: string,
+    source: EventDataSource,
+    /** Source URI of the data for the event. Must be a valid {@link EventDataSource}. */
+    sourceUri: string,
     startDate: Date,
     endDate?: Date,
-
-    // calculate value associated with the event, optionally associated with event type
     typeId?: string,
     value: number,
-
-    fieldToPropertyMap: FieldToPropertyMap // mapping of form fields to member properties
+    /** One-to-one mapping of form fields IDs to member properties. */ 
+    fieldToPropertyMap: FieldToPropertyMap 
 }
 
+export type EventDataSource = "Google Forms" | "Google Sheets";
+
 export interface FieldToPropertyMap {
-    [fieldId: string]: string,
+    [fieldId: string]: {
+        field: string,
+        property: string | null,
+    },
 }
 
 export interface EventTypeSchema {
-    lastUpdated: Date, // last time the event type was updated
-    title: string, // title of the event type
-    value: number, // points for the event type
-    sourceFolderUris: string[]; // URIs to the source folders for the event type
+    lastUpdated: Date, 
+    title: string, 
+    /** Points for the event type */
+    value: number, 
+    sourceFolderUris: string[];
 }
 
 export interface MemberSchema {
-    troupeId: string, // ID of the troupe the member belongs to
-    lastUpdated: Date, // last time the member was updated
-    properties: { // member properties
+    troupeId: string,
+    lastUpdated: Date,
+    properties: { 
         [key: string]: {
             value: MemberPropertyValue,
-            override: boolean, // whether or not the value was manually overridden
+            override: boolean,
         },
     },
     totalEventsAttended: number,
-    points: { // points for each type specified in the troupe schema
+    points: {
         [key: string]: number,
     },
 }
 
 export interface EventsAttendedBucketSchema {
-    memberId: string, // ID of the member the bucket belongs to
-    lastUpdated: Date, // last time the bucket was updated
+    memberId: string,
+    lastUpdated: Date,
     eventsAttended: {
         eventId: string,
         startDate: Date,
@@ -100,9 +110,9 @@ export interface EventsAttendedBucketSchema {
 }
 
 export interface TroupeDashboardSchema {
-    troupeId: string, // ID of the troupe the dashboard belongs to
-    lastUpdated: Date, // last time the dashboard was updated
-    upcomingBirthdays: { // upcoming birthdays
+    troupeId: string,
+    lastUpdated: Date,
+    upcomingBirthdays: {
         frequency: BirthdayUpdateFrequency,
         desiredFrequency: BirthdayUpdateFrequency,
         members: {
