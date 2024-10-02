@@ -8,10 +8,9 @@ export interface TroupeSchema {
     logSheetUri: string,
     /** Event that takes precedence during member property mapping */ 
     originEventId?: string, 
-    /** Lock to prevent refreshing conflict */
-    refreshLock: boolean, 
+    /** Lock to prevent sync conflict */
+    syncLock: boolean, 
     eventTypes: WithId<EventTypeSchema>[], // all event types for troupe (MAX: 10)
-
     /** Valid properties for members */
     memberProperties: BaseMemberProperties & VariableMemberProperties, 
     /** Valid point types for the troupe */

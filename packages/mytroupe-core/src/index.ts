@@ -84,94 +84,31 @@ export class MyTroupeCore {
         }
     }
 
-    async updateTroupe({ troupeId, name, originEventId, updateMemberProperties, updatePointTypes }: UpdateTroupeRequest) {
-        const troupe = await this.getTroupeSchema(troupeId);
-        let numResultingMemberProperties = Object.keys(troupe.memberProperties).length;
-        let numResultingPointTypes = Object.keys(troupe.pointTypes).length;
+    /**
+     * Wait until next sync to:
+     * - update properties of each member with the properties of the new origin event
+     */
+    async updateTroupe(request: UpdateTroupeRequest) {
+        const troupe = await this.getTroupeSchema(request.troupeId);
+        const $set: { [key: string]: any } = {};
+        const $unset: { [key: string]: any } = {};
 
-        let $set: { [key: string]: any } = {};
-        let $unset: { [key: string]: any } = {};
+        $set.lastUpdated = new Date();
+        request.name ? $set.name = request.name : null;
 
-        name ? $set.name = name : null;
-        originEventId != troupe.originEventId 
-            ? $set.originEventId = originEventId : $unset.originEventId = "";
-        
-        if(updateMemberProperties) {
-            let keys = Object.keys(updateMemberProperties);
-
-            // Ensure the request isn't trying to modify the BaseMemberProperties
-            if(keys.findIndex(key => key in ["First Name", "Last Name", "Email", "Birthday"]) != -1) {
-                throw new MyTroupeClientError("Cannot modify base member properties");
-            }
-            
-            for (const key of keys) {
-                const prop = updateMemberProperties[key];
-                if(prop != troupe.memberProperties[key]) {
-
-                    // Can't make a member property required until there's at least 1 event that uses it
-                    if(prop.substring(prop.length - 1) == "!") {
-                        const event = await this.eventColl.findOne(
-                            { troupeId, [`memberProperties.${key}`]: { $exists: true } }
-                        );
-
-                        if(!event) {
-                            throw new MyTroupeClientError("Cannot make a member property required until "
-                                + "an event uses it. Try making it optional first.");
-                        }
-                    }
-
-                    $set[`memberProperties.${key}`] = updateMemberProperties[key];
-                    numResultingMemberProperties++;
-                } else {
-                    $unset[`memberProperties.${key}`] = "";
-                    numResultingMemberProperties--;
-                }
-
-                if(numResultingMemberProperties > MAX_POINT_TYPES) {
-                    throw new MyTroupeClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`);
-                }
-            }
+        if(request.originEventId) {
+            const event = await this.eventColl.findOne({ _id: new ObjectId(request.originEventId) });
+            assert(event, new MyTroupeClientError("Unable to find specified origin event"));
+            $set.originEventId = request.originEventId;
         }
 
-        if(updatePointTypes) {
-            const keys = Object.keys(updatePointTypes);
-
-            // Ensure the request isn't trying to modify the BasePointTypes
-            if(keys.findIndex(key => key in ["Total"]) != -1) {
-                throw new MyTroupeClientError("Cannot modify base point types");
-            }
-            
-            for(const key of keys) {
-                if(updatePointTypes[key] != troupe.pointTypes[key]) {
-                    $set[`pointTypes.${key}`] = updatePointTypes[key];
-                    numResultingPointTypes++;
-                } else {
-                    $unset[`pointTypes.${key}`] = "";
-                    numResultingPointTypes--;
+        if(request.updateMemberProperties) {
+            for(const key in request.updateMemberProperties) {
+                if(!troupe.memberProperties[key] && key.substring(key.length - 1) == "!") {
+                    throw new MyTroupeClientError("Cannot add optional member properties");
                 }
-
-                if(numResultingPointTypes > MAX_POINT_TYPES) {
-                    throw new MyTroupeClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`);
-                }
+                $set[`memberProperties.${key}`] = request.updateMemberProperties[key];
             }
-        }
-
-        if(Object.keys($set).length == 0 && Object.keys($unset).length == 0) {
-            return {
-                updated: [],
-                removed: [],
-            }
-        }
-        
-        const updateResult = await this.troupeColl.updateOne(
-            { _id: new ObjectId(troupeId) }, 
-            { $set: {...$set, lastUpdated: new Date()}, $unset }
-        );
-        assert(updateResult.modifiedCount == 1, "Failed to update troupe");
-
-        return {
-            updated: Object.keys($set),
-            removed: Object.keys($unset),
         }
     }
 
@@ -190,46 +127,8 @@ export class MyTroupeCore {
     }
 
     // Update title, points, or sourceFolderUris
-    async updateEventType({troupeId, eventTypeId, title, value, addSourceFolderUris: sourceFolderUris}: UpdateEventTypeRequest) {
-        const eventType = await this.getTroupeSchema(troupeId)
-            .then(troupe => troupe.eventTypes.find(et => et._id.toHexString() == eventTypeId));
-        assert(eventType, new MyTroupeClientError("Unable to find event type"));
-
-        let $set: { [key: string]: any } = {};
-        let $unset: { [key: string]: any } = {};
-
-        title ? $set.title = title : null;
-        value ? $set.value = value : null;
-
-        const newUris: string[] = [];
-        const removedUris: string[] = [];
-        if(sourceFolderUris) {
-            const newUris = sourceFolderUris.filter(uri => !eventType.sourceFolderUris.includes(uri));
-            
-            eventType.sourceFolderUris.filter(uri => !sourceFolderUris.includes(uri)).concat(newUris);
-        }
-
-        if(Object.keys($set).length == 0 && Object.keys($unset).length == 0) {
-            return {
-                updated: [],
-                removed: [],
-                newUris: [],
-                removedUris: [],
-            }
-        }
-
-        const updateResult = await this.troupeColl.updateOne(
-            { _id: new ObjectId(troupeId), "eventTypes._id": new ObjectId(eventTypeId) },
-            { $set: { "eventTypes.$[elem].lastUpdated": new Date(), ...$set }, $unset },
-            { arrayFilters: [{ "elem._id": new ObjectId(eventTypeId) }] }
-        );
-        assert(updateResult.modifiedCount == 1, "Failed to update event type");
-
-        return {
-            updated: Object.keys($set),
-            removed: Object.keys($unset),
-            newUris, removedUris,
-        }
+    async updateEventType(request: UpdateEventTypeRequest) {
+        
     }
 
     // Pick whether to replace event type with another type, or assign points
@@ -247,8 +146,8 @@ export class MyTroupeCore {
 
     }
 
-    // Turns on refresh lock and places troupe into the refresh queue if the lock is disabled
-    async initiateRefresh(troupeId: string) {
+    // Turns on sync lock and places troupe into the sync queue if the lock is disabled
+    async initiateSync(troupeId: string) {
 
     }
 }

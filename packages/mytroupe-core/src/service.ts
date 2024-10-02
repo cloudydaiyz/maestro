@@ -33,7 +33,7 @@ export class MyTroupeService extends MyTroupeCore {
                         endDate: new Date(3000000000000),
                     },
                 },
-                refreshLock: false,
+                syncLock: false,
             });
             assert(troupe.insertedId, "Failed to create troupe");
     

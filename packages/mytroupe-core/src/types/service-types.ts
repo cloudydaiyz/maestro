@@ -2,7 +2,7 @@ import { Troupe } from "./api-types";
 
 export type CreateTroupeRequest = Omit<
     Troupe, 
-    "id" | "lastUpdated" | "refreshLock" | "eventTypes" | "logSheetUri"
+    "id" | "lastUpdated" | "syncLock" | "eventTypes" | "logSheetUri"
 > & { email: string, password: string };
 
 export type UserSchema = {

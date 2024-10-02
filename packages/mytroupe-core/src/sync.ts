@@ -3,7 +3,7 @@ import { getDrive, getSheets } from "./cloud/gcp";
 import { EventSchema, EventTypeSchema, MemberSchema } from "./types/core-types";
 import { MyTroupeService } from "./service";
 
-export class MyTroupeLogRefreshService extends MyTroupeService {
+export class MyTroupeSyncService extends MyTroupeService {
     ready: Promise<void>;
     drive!: drive_v3.Drive;
     sheets!: sheets_v4.Sheets;
@@ -25,10 +25,10 @@ export class MyTroupeLogRefreshService extends MyTroupeService {
      *   event type folder
      * - Delete members that are no longer in the source folder & have no overridden properties
      */
-    async refresh() {
+    async sync() {
         // this.discoverEvents();
         // this.updateAudience();
-        // this.refreshLogSheet();
+        // this.syncLogSheet();
         // this.prepareDatabaseUpdate();
     }
 
@@ -55,7 +55,7 @@ export class MyTroupeLogRefreshService extends MyTroupeService {
         // return audience members from event
     }
 
-    async refreshLogSheet() {
+    async syncLogSheet() {
         // get the current log sheet
         // obtain the new values for the sheet
         // calculate the diff & generate updates
