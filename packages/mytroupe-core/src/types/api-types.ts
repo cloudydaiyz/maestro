@@ -1,7 +1,7 @@
 // Public facing types to use for API endpoints
 
 import { ObjectId, WithId } from "mongodb";
-import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties, VariablePointTypes, EventDataSource } from "./core-types";
+import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties, VariablePointTypes, EventDataSource, MemberProperties } from "./core-types";
 import { Id, Replace } from "./util-types";
 
 // == Public Types ==
@@ -77,14 +77,15 @@ export type UpdateEventTypeRequest = {
     title?: string,
     value?: number,
     addSourceFolderUris?: string[],
-    deleteSourceFolderUris?: string[],
+    removeSourceFolderUris?: string[],
 }
 
 export type UpdateMemberRequest = {
-    troupeId: string,
-    memberId: string,
     updateProperties?: {
-        [key: string]: Replace<MemberPropertyValue, Date, string>,
-    }
-    deleteProperties?: string[],
+        [key: string]: {
+            value?: Replace<MemberPropertyValue, Date, string>,
+            override?: boolean,
+        }
+    },
+    removeProperties?: string[],
 }

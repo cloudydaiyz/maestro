@@ -32,7 +32,6 @@ export const MemberPropertyTypes = [
 export type MemberPropertyType = typeof MemberPropertyTypes[number];
 export type MemberPropertyValue = string | number | boolean | Date | null;
 
-// Member Properties
 export const BaseMemberPropertiesObj = {
     "First Name": "string!",
     "Last Name": "string!",
@@ -46,14 +45,12 @@ export interface VariableMemberProperties {
 }
 
 export type MemberProperties = {
-    [key: string]: MemberProperty,
-}
-
-export type MemberProperty = {
-    value: MemberPropertyValue,
-    /** True if this property was manually overridden; this takes precedence
-     *  over the origin event.  */
-    override: boolean,
+    [key: string]: {
+        value: MemberPropertyValue,
+        /** True if this property was manually overridden; this takes precedence
+         *  over the origin event.  */
+        override: boolean,
+    },
 }
 
 // Point types
@@ -99,8 +96,10 @@ export type EventDataSource = typeof EventDataSources[number];
 
 export interface FieldToPropertyMap {
     [fieldId: string]: {
-        field: string,
-        property: string | null,
+        /** Form field data (e.g. the question being asked) */ 
+        field: string, 
+        /** Member Property */ 
+        property: string | null, 
     },
 }
 
@@ -120,20 +119,7 @@ export interface MemberSchema {
     lastUpdated: Date,
     /** Uses synchronized member properties */
     properties: MemberProperties,
-    points: {
-        [key: string]: number,
-    },
-}
-
-export interface EventsAttendedBucketSchema {
-    memberId: string,
-    lastUpdated: Date,
-    eventsAttended: {
-        eventId: string,
-        startDate: Date,
-        value: number,
-    }[],
-    page: number,
+    points: { [key in keyof BasePointTypes]: number } & { [key: string]: number; },
 }
 
 // Dashboard

@@ -1,9 +1,9 @@
-import { Collection, MongoClient, ObjectId, WithId } from "mongodb";
+import { Collection, MongoClient, ObjectId, PullOperator, PushOperator, WithId } from "mongodb";
 import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
 import { DB_NAME, MAX_POINT_TYPES } from "./util/constants";
 import { BaseMemberPropertiesObj, BasePointTypesObj, EventDataSources, EventDataSourcesRegex, EventSchema, EventTypeSchema, MemberProperties, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
-import { EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateTroupeRequest } from "./types/api-types";
-import { Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
+import { EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
+import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
 import assert from "assert";
 
 // To help catch and relay client-based errors
@@ -40,7 +40,6 @@ export class MyTroupeCore {
 
     /** Retrieves or formats the current troupe using public-facing format */ 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {
-
         let publicTroupe: WeakPartial<WithId<TroupeSchema>, "_id"> = typeof troupe == "string" 
             ? await this.getTroupeSchema(troupe)
             : troupe;
@@ -317,18 +316,48 @@ export class MyTroupeCore {
         }
     }
 
+    async createEventType() {
+
+    }
+
     /** Update title, points, or sourceFolderUris */ 
     async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest) {
         const troupe = await this.getTroupeSchema(troupeId);
-        assert(!troupe.syncLock, new MyTroupeClientError("Cannot update event type while sync is in progress"));
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
+        assert(!troupe.syncLock, new MyTroupeClientError("Cannot update event type while sync is in progress"));
+        assert(eventType, new MyTroupeClientError("Unable to find event type"));
 
         const eventTypeUpdate = { 
             $set: {} as SetOperator<TroupeSchema>, 
-            $unset: {} as UnsetOperator<TroupeSchema>
+            $unset: {} as UnsetOperator<TroupeSchema>,
+            $push: {} as Mutable<PushOperator<TroupeSchema>>,
+            $pull: {} as Mutable<PullOperator<TroupeSchema>>
         };
 
         request.title ? eventTypeUpdate.$set["eventTypes.$[type].title"] = request.title : null;
+
+        if(request.value) {
+            eventTypeUpdate.$set["eventTypes.$[type].value"] = request.value;
+
+            // FUTURE: Update member points for attendees of events with the corresponding type
+        }
+
+        const newUris = request.addSourceFolderUris?.filter((uri, index) => 
+            request.addSourceFolderUris!.indexOf(uri) == index 
+                && !eventType?.sourceFolderUris.includes(uri)
+                && !request.removeSourceFolderUris?.includes(uri)
+        );
+        newUris && newUris.length > 0 
+            ? eventTypeUpdate.$push["eventTypes.$[type].sourceFolderUris"] = { 
+                $each: newUris 
+            }  
+            : null;
+        
+        request.removeSourceFolderUris 
+            ? eventTypeUpdate.$pull["eventTypes.$[type].sourceFolderUris"] = { 
+                $in: request.removeSourceFolderUris 
+            } 
+            : null;
 
         const newEventType = await this.troupeColl.findOneAndUpdate(
             { _id: new ObjectId(troupeId) },
@@ -357,9 +386,15 @@ export class MyTroupeCore {
         assert(deleteEventTypeResult.modifiedCount, "Failed to delete event type");
     }
 
-    protected getMember(member: WithId<MemberSchema>): Member {
+    protected async getMemberSchema(troupeId: string, memberId: string) {
+        const member = await this.audienceColl.findOne({ _id: new ObjectId(memberId), troupeId });
+        assert(member, new MyTroupeClientError("Unable to find member"));
+        return member;
+    }
+
+    public getMember(member: WithId<MemberSchema>): Member {
         const m: WeakPartial<WithId<MemberSchema>, "_id"> = member;
-        const mid = m._id!.toHexString();
+        const memberId = m._id!.toHexString();
         delete m._id;
 
         const properties = {} as Replace<MemberProperties, Date, string>;
@@ -374,28 +409,67 @@ export class MyTroupeCore {
 
         return {
             ...m,
-            id: mid,
+            id: memberId,
             lastUpdated: m.lastUpdated.toISOString(),
             properties,
         }
     }
 
-    // Retrieve all members
-    async getAudience(troupeId: string) {
+    /** Retrieve all members */ 
+    async getAudience(troupeId: string): Promise<Member[]> {
         const audience = await this.audienceColl.find({ troupeId }).toArray();
         return audience.map((m) => this.getMember(m));
     }
 
-    // Update or delete (optional) properties for single member
-    async updateMember() {
+    /** Update or delete (optional) properties for single member */
+    async updateMember(troupeId: string, memberId: string, request: UpdateMemberRequest): Promise<Member> {
+        const [troupe, member] = await Promise.all([
+            this.getTroupeSchema(troupeId),
+            this.getMemberSchema(troupeId, memberId)
+        ]);
+        assert(!troupe.syncLock, new MyTroupeClientError("Cannot update member while sync is in progress"));
+
+        const memberUpdate = {
+            $set: {} as SetOperator<MemberSchema>,
+            $unset: {} as UnsetOperator<MemberSchema>
+        };
+
+        memberUpdate.$set.lastUpdated = new Date();
+
+        if(request.updateProperties) {
+            for(const key in request.updateProperties) {
+                assert(member.properties[key], new MyTroupeClientError("Invalid property ID"));
+
+                if(!request.removeProperties?.includes(key)) {
+                    if(request.updateProperties[key].value) 
+                        memberUpdate.$set[`properties.${key}.value`] = request.updateProperties[key].value;
+                    if(request.updateProperties[key].override)
+                        memberUpdate.$set[`properties.${key}.override`] = request.updateProperties[key].override;
+                }
+            }
+        }
+
+        if(request.removeProperties) {
+            for(const key of request.removeProperties) {
+                memberUpdate.$unset[`properties.${key}`] = "";
+            }
+        }
+
+        const newMember = await this.audienceColl.findOneAndUpdate(
+            { _id: new ObjectId(memberId), troupeId },
+            memberUpdate,
+            { returnDocument: "after" }
+        );
+        assert(newMember, "Failed to update member");
+
+        return this.getMember(newMember);
+    }
+
+    async blacklistMember(troupeId: string, memberId: string) {
 
     }
 
-    async blacklistMember() {
-
-    }
-
-    // Turns on sync lock and places troupe into the sync queue if the lock is disabled
+    /** Turns on sync lock and places troupe into the sync queue if the lock is disabled */
     async initiateSync(troupeId: string) {
 
     }
