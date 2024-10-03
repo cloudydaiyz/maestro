@@ -1,7 +1,7 @@
 import { Collection, MongoClient, ObjectId, PullOperator, PushOperator, WithId } from "mongodb";
 import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
 import { DB_NAME, MAX_EVENT_TYPES, MAX_POINT_TYPES } from "./util/constants";
-import { BaseMemberPropertiesObj, BasePointTypesObj, EventDataSources, EventDataSourcesRegex, EventSchema, EventTypeSchema, MemberProperties, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
+import { BaseMemberPropertiesObj, BasePointTypesObj, EventDataSources, EventDataSourcesRegex, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints } from "./types/core-types";
 import { CreateEventRequest, CreateEventTypeRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
 import assert from "assert";
@@ -17,19 +17,21 @@ export class MyTroupeClientError extends Error {
 // Implementation for client-facing controller methods
 export class MyTroupeCore {
     client: MongoClient;
+    connection: Promise<MongoClient>;
     troupeColl: Collection<TroupeSchema>;
     dashboardColl: Collection<TroupeDashboardSchema>;
-    audienceColl: Collection<MemberSchema>;
     eventColl: Collection<EventSchema>;
-    connection: Promise<MongoClient>;
+    audienceColl: Collection<MemberSchema>;
+    eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
     
     constructor() {
         this.client = new MongoClient(MONGODB_URI, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
+        this.connection = this.client.connect();
         this.troupeColl = this.client.db(DB_NAME).collection("troupes");
         this.dashboardColl = this.client.db(DB_NAME).collection("dashboards");
         this.audienceColl = this.client.db(DB_NAME).collection("audience");
         this.eventColl = this.client.db(DB_NAME).collection("events");
-        this.connection = this.client.connect();
+        this.eventsAttendedColl = this.client.db(DB_NAME).collection("eventsAttended");
     }
 
     protected async getTroupeSchema(troupeId: string): Promise<WithId<TroupeSchema>> {
@@ -43,12 +45,18 @@ export class MyTroupeCore {
         let publicTroupe: WeakPartial<WithId<TroupeSchema>, "_id"> = typeof troupe == "string" 
             ? await this.getTroupeSchema(troupe)
             : troupe;
+        
+        // Remove the ObjectId to replace with a string ID
         const id = publicTroupe._id!.toHexString();
         delete publicTroupe._id;
 
+        // Get the public version of the event types
         const eventTypes = await Promise.all(publicTroupe.eventTypes.map((et) => this.getEventType(et)));
 
+        // Get the public version of the point types and synchronized point types
         let pointTypes: Troupe["pointTypes"] = {} as Troupe["pointTypes"];
+        let synchronizedPointTypes: Troupe["synchronizedPointTypes"] = {} as Troupe["synchronizedPointTypes"];
+
         for(const key in publicTroupe.pointTypes) {
             const data = publicTroupe.pointTypes[key];
             pointTypes[key] = {
@@ -57,7 +65,14 @@ export class MyTroupeCore {
             }
         }
 
-        const synchronizedPointTypes = {...pointTypes};
+        for(const key in publicTroupe.synchronizedPointTypes) {
+            const data = publicTroupe.synchronizedPointTypes[key];
+            synchronizedPointTypes[key] = {
+                startDate: data.startDate.toISOString(),
+                endDate: data.endDate.toISOString(),
+            }
+        }
+
         return {
             ...publicTroupe,
             lastUpdated: publicTroupe.lastUpdated.toISOString(),
@@ -74,25 +89,33 @@ export class MyTroupeCore {
      * - update the properties of members to have the correct type (in case they made a mistake)
      * - update the point types of members to have the correct type & amt of points*
      */
-    async updateTroupe(troupeId: string, eventId: string, request: UpdateTroupeRequest): Promise<Troupe> {
+    async updateTroupe(troupeId: string, request: UpdateTroupeRequest): Promise<Troupe> {
         const troupe = await this.getTroupeSchema(troupeId);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot update troupe while sync is in progress"));
+
+        // Prepare for the database update
         const troupeUpdate = { 
             $set: {} as SetOperator<TroupeSchema>, 
             $unset: {} as UnsetOperator<TroupeSchema>
         }
 
+        // Set the name and the last updated
         troupeUpdate.$set.lastUpdated = new Date();
         request.name ? troupeUpdate.$set.name = request.name : null;
 
+        // Ensure the origin event is valid before setting it
         if(request.originEventId) {
             const event = await this.eventColl.findOne({ _id: new ObjectId(request.originEventId) });
             assert(event, new MyTroupeClientError("Unable to find specified origin event"));
             troupeUpdate.$set.originEventId = request.originEventId;
         }
 
+        // Update member properties; must wait until next sync to synchronize member properties.
         if(request.updateMemberProperties) {
             let numMemberProperties = Object.keys(troupe.memberProperties).length;
+
+            // Ignore member properties to be removed and ensure no base member properties
+            // get updated
             for(const key in request.updateMemberProperties) {
                 assert(!(key in BaseMemberPropertiesObj), 
                     new MyTroupeClientError("Cannot modify base member properties"));
@@ -102,10 +125,13 @@ export class MyTroupeCore {
                     if(!(key in troupe.memberProperties)) numMemberProperties++;
                 }
             }
+
             assert(numMemberProperties <= MAX_POINT_TYPES, 
                 new MyTroupeClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`));
         }
 
+        // Remove member properties & ensure no base member properties are requested
+        // for removal
         if(request.removeMemberProperties) {
             for(const key of request.removeMemberProperties) {
                 assert(!(key in BaseMemberPropertiesObj), 
@@ -114,26 +140,37 @@ export class MyTroupeCore {
             }
         }
 
+        // Update point types
         if(request.updatePointTypes) {
             let numPointTypes = Object.keys(troupe.pointTypes).length;
+            let newPointTypes = troupe.pointTypes;
+
             for(const key in request.updatePointTypes) {
                 const pointType = {
                     startDate: new Date(request.updatePointTypes[key].startDate),
                     endDate: new Date(request.updatePointTypes[key].endDate),
                 }
-                assert(!(key in BasePointTypesObj), "Cannot modify base point types");
+                assert(pointType.startDate.toString() != "Invalid Date"
+                    && pointType.endDate.toString() != "Invalid Date", 
+                    new MyTroupeClientError("Invalid date syntax"))
+                assert(!(key in BasePointTypesObj), 
+                    new MyTroupeClientError("Cannot modify base point types"));
                 assert(pointType.startDate < pointType.endDate, 
-                    "Invalid point type date range");
+                    new MyTroupeClientError("Invalid point type date range"));
 
                 if(!(request.removePointTypes?.includes(key))) {
                     troupeUpdate.$set[`pointTypes.${key}`] = pointType;
                     if(!(key in troupe.pointTypes)) numPointTypes++;
                 }
+                newPointTypes[key] = pointType;
             }
             assert(numPointTypes <= MAX_POINT_TYPES, 
                 new MyTroupeClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`));
+            
+            // *FUTURE: Update point calculations for members
         }
 
+        // Remove point types
         if(request.removePointTypes) {
             for(const key of request.removePointTypes) {
                 assert(!(key in BasePointTypesObj), new MyTroupeClientError("Cannot delete base point types"));
@@ -141,17 +178,54 @@ export class MyTroupeCore {
             }
         }
 
-        // Update the troupe
+        // Perform database update
         const newTroupe = await this.troupeColl.findOneAndUpdate(
             { _id: new ObjectId(troupeId) }, 
             troupeUpdate,
             { returnDocument: "after" }
         );
         assert(newTroupe, "Failed to update troupe");
+        // *FUTURE: Update members with the new point types
         
         // Return public facing version of the new troupe
-        // *FUTURE: Update members with the new point types
         return this.getTroupe(newTroupe);
+    }
+
+    /** Creates a new event in the given Troupe. */
+    async createEvent(troupeId: string, request: CreateEventRequest): Promise<PublicEvent> {
+        const troupe = await this.getTroupeSchema(troupeId);
+        assert(!troupe.syncLock, new MyTroupeClientError("Cannot create event while sync is in progress"));
+
+        const startDate = new Date(request.startDate);
+        const eventDataSource = EventDataSourcesRegex.findIndex((regex) => regex.test(request.sourceUri!));
+        assert(eventDataSource > -1, new MyTroupeClientError("Invalid source URI"));
+        assert(startDate.toString() != "Invalid Date", new MyTroupeClientError("Invalid date"));
+        assert(request.eventTypeId == undefined || request.value == undefined, 
+            new MyTroupeClientError("Unable to define event type and value at same time for event."));
+        assert(request.eventTypeId == undefined || troupe.eventTypes.find((et) => et._id.toHexString() == request.eventTypeId),
+            new MyTroupeClientError("Invalid event type ID"));
+        
+        // Find event type and populate value
+        // FUTURE: Get event fields from source URI
+
+        const event: EventSchema = {
+            troupeId,
+            lastUpdated: new Date(),
+            title: request.title,
+            source: EventDataSources[eventDataSource],
+            synchronizedSource: "",
+            sourceUri: request.sourceUri,
+            synchronizedSourceUri: "",
+            startDate,
+            eventTypeId: request.eventTypeId,
+            value: request.value,
+            fieldToPropertyMap: {},
+            synchronizedFieldToPropertyMap: {}
+        }
+        const insertedEvent = await this.eventColl.insertOne(event);
+        assert(insertedEvent.acknowledged, "Insert failed for event");
+
+        return this.getEvent({...event, _id: insertedEvent.insertedId});
     }
 
     protected async getEventSchema(troupeId: string, eventId: string): Promise<WithId<EventSchema>> {
@@ -160,7 +234,7 @@ export class MyTroupeCore {
         return event;
     }
 
-    public async getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent> {
+    async getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent> {
         assert(typeof event != "string" || troupeId != null, 
             new MyTroupeClientError("Must have a troupe ID to retrieve event."))
         let publicEvent: WeakPartial<WithId<EventSchema>, "_id"> = typeof event == "string" 
@@ -183,41 +257,6 @@ export class MyTroupeCore {
         return Promise.all(events.map((e) => this.getEvent(e)));
     }
 
-    /** Creates a new event in the given Troupe. */
-    async createEvent(troupeId: string, request: CreateEventRequest) {
-        const troupe = await this.getTroupeSchema(troupeId);
-        assert(!troupe.syncLock, new MyTroupeClientError("Cannot create event while sync is in progress"));
-
-        const startDate = new Date(request.startDate);
-        assert(EventDataSourcesRegex.findIndex((regex) => regex.test(request.sourceUri!)), 
-            new MyTroupeClientError("Invalid source URI"));
-        assert(startDate.toString() != "Invalid Date", new MyTroupeClientError("Invalid date"));
-        assert(request.eventTypeId == undefined || request.value == undefined, 
-            new MyTroupeClientError("Unable to define event type and value at same time for event."));
-        
-        // Find event type and populate value
-        // FUTURE: Get event fields from source URI
-
-        const event: EventSchema = {
-            troupeId,
-            lastUpdated: new Date(),
-            title: request.title,
-            source: "Google Forms",
-            synchronizedSource: "Google Forms",
-            sourceUri: request.sourceUri,
-            synchronizedSourceUri: "",
-            startDate,
-            eventTypeId: request.eventTypeId,
-            value: request.value,
-            fieldToPropertyMap: {},
-            synchronizedFieldToPropertyMap: {}
-        }
-        const insertedEvent = await this.eventColl.insertOne(event);
-        assert(insertedEvent.acknowledged, "Insert failed for event");
-
-        return this.getEvent({...event, _id: insertedEvent.insertedId});
-    }
-
     /**
      * Update title, sourceUri, timeline, type info, point info, or field to property mapping. If event
      * has an event type but the user updates the value field, the event type for the event is removed.
@@ -226,6 +265,7 @@ export class MyTroupeCore {
      * Wait until next sync to:
      * - Update member points for types that the event is in data range for
      * - Update member properties for the event attendees
+     * - Update field to property mapping
      */
     async updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest): Promise<PublicEvent> {
         const [troupe, event] = await Promise.all([
@@ -282,19 +322,21 @@ export class MyTroupeCore {
             // FUTURE: Update member points for types that the event's start date is in range for
         }
 
+        // Update known properties in the field to property map of the event
         if(request.updateProperties) {
             for(const key in request.updateProperties) {
                 assert(event.fieldToPropertyMap[key], new MyTroupeClientError("Invalid field ID"));
 
                 if(!(request.removeProperties?.includes(key))) {
-                    eventUpdate.$set[`fieldToPropertyMap.${key}`] = request.updateProperties[key];
+                    eventUpdate.$set[`fieldToPropertyMap.${key}.property`] = request.updateProperties[key];
                 }
             }
         }
 
+        // Remove properties in the field to property map of the event
         if(request.removeProperties) {
             for(const key of request.removeProperties) {
-                eventUpdate.$unset[`fieldToPropertyMap.${key}`] = "";
+                eventUpdate.$set[`fieldToPropertyMap.${key}.property`] = null;
             }
         }
 
@@ -310,27 +352,61 @@ export class MyTroupeCore {
         return this.getEvent(newEvent);
     }
 
-    async deleteEvent(troupeId: string, eventId: string) {
-        const [troupe, event] = await Promise.all([
+    /**
+     * Wait until next sync to:
+     * - Update member points for types that the event is in data range for*
+     */
+    async deleteEvent(troupeId: string, eventId: string): Promise<void> {
+        const [troupe, /** event */] = await Promise.all([
             this.getTroupeSchema(troupeId), 
-            this.getEventSchema(troupeId, eventId)
+            // this.getEventSchema(troupeId, eventId)
         ]);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot delete event while sync is in progress"));
+
+        const updateEventsAttended = await this.eventsAttendedColl.updateMany(
+            { troupeId, "events.eventId": eventId },
+            { $pull: { events: { eventId } } },
+        );
+        assert(updateEventsAttended.acknowledged, "Failed to update events attended");
 
         const deletedEvent = await this.eventColl.findOneAndDelete({ _id: new ObjectId(eventId), troupeId });
         assert(deletedEvent, "Failed to delete event");
 
-        // FUTURE: Update member points for types that the event's start date is in range for
+        // *FUTURE: Update member points for types that the event's start date is in range for
     }
 
-    protected async getEventTypeSchema(troupeId: string, eventTypeId: string) {
+    /**
+     * Wait until next sync to:
+     * - Obtain the events from source folders for the event type
+     */
+    async createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<EventType> {
+        const type: WithId<EventTypeSchema> = {
+            _id: new ObjectId(),
+            lastUpdated: new Date(),
+            title: request.title,
+            value: request.value,
+            sourceFolderUris: request.sourceFolderUris,
+            synchronizedSourceFolderUris: []
+        };
+
+        // Insert into the troupe only if the max number of event types haven't been reached
+        const insertResult = await this.troupeColl.updateOne(
+            { _id: new ObjectId(troupeId), [`eventTypes.${MAX_EVENT_TYPES}`]: { $exists: false } },
+            { $push: { eventTypes: type } }
+        );
+        assert(insertResult.matchedCount == 1, new MyTroupeClientError("Invalid troupe or max event types reached"));
+        assert(insertResult.modifiedCount == 1, "Unable to create event type");
+        return this.getEventType(type);
+    }
+
+    protected async getEventTypeSchema(troupeId: string, eventTypeId: string): Promise<EventTypeSchema> {
         const troupe = await this.getTroupeSchema(troupeId);
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
         assert(eventType, new MyTroupeClientError("Unable to find event type"));
         return eventType;
     }
 
-    public async getEventType(eventType: string | WithId<EventTypeSchema>, troupeId?: string): Promise<EventType> {
+    async getEventType(eventType: string | WithId<EventTypeSchema>, troupeId?: string): Promise<EventType> {
         assert(typeof eventType != "string" || troupeId != null, 
             new MyTroupeClientError("Must have a troupe ID to retrieve event type."))
         let eType: WeakPartial<WithId<EventTypeSchema>, "_id"> = typeof eventType == "string" 
@@ -346,27 +422,13 @@ export class MyTroupeCore {
         }
     }
 
-    async createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<EventType> {
-        const type: WithId<EventTypeSchema> = {
-            _id: new ObjectId(),
-            lastUpdated: new Date(),
-            title: request.title,
-            value: request.value,
-            sourceFolderUris: request.sourceFolderUris,
-            synchronizedSourceFolderUris: []
-        };
-
-        const insertResult = await this.troupeColl.updateOne(
-            { _id: new ObjectId(troupeId), [`eventTypes.${MAX_EVENT_TYPES}`]: { $exists: false } },
-            { $push: { eventTypes: type } }
-        );
-        assert(insertResult.matchedCount == 1, new MyTroupeClientError("Max event types reached"));
-        assert(insertResult.modifiedCount == 1, "Unable to create event type");
-        return this.getEventType(type);
-    }
-
-    /** Update title, points, or sourceFolderUris */ 
-    async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest) {
+    /** 
+     * Update event type
+     * 
+     * Wait until next sync to:
+     * - Update member points for attendees of events with the corresponding type*
+     */ 
+    async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<EventType> {
         const troupe = await this.getTroupeSchema(troupeId);
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot update event type while sync is in progress"));
@@ -384,9 +446,11 @@ export class MyTroupeCore {
         if(request.value) {
             eventTypeUpdate.$set["eventTypes.$[type].value"] = request.value;
 
-            // FUTURE: Update member points for attendees of events with the corresponding type
+            // *FUTURE: Update member points for attendees of events with the corresponding type
         }
 
+        // Update source uris. Ignore duplicates, existing source folder URIs, and URIs to 
+        // be removed
         const newUris = request.addSourceFolderUris?.filter((uri, index) => 
             request.addSourceFolderUris!.indexOf(uri) == index 
                 && !eventType?.sourceFolderUris.includes(uri)
@@ -398,12 +462,14 @@ export class MyTroupeCore {
             }  
             : null;
         
+        // Remove source uris
         request.removeSourceFolderUris 
             ? eventTypeUpdate.$pull["eventTypes.$[type].sourceFolderUris"] = { 
                 $in: request.removeSourceFolderUris 
             } 
             : null;
 
+        // Perform database update
         const newEventType = await this.troupeColl.findOneAndUpdate(
             { _id: new ObjectId(troupeId) },
             eventTypeUpdate,
@@ -416,7 +482,11 @@ export class MyTroupeCore {
         );
     }
 
-    async deleteEventType(troupeId: string, eventTypeId: string) {
+    /**
+     * Wait until next sync to:
+     * - Update member points for attendees of events with the corresponding type*
+     */
+    async deleteEventType(troupeId: string, eventTypeId: string): Promise<void> {
         const updateEventResult = await this.eventColl.updateMany(
             { troupeId, eventTypeId },
             { $unset: { eventTypeId: "" } }
@@ -429,16 +499,22 @@ export class MyTroupeCore {
         );
         assert(deleteEventTypeResult.matchedCount, new MyTroupeClientError("Event type not found in troupe"));
         assert(deleteEventTypeResult.modifiedCount, "Failed to delete event type");
+
+        // *FUTURE: Update member points for attendees of events with the corresponding type
     }
 
-    protected async getMemberSchema(troupeId: string, memberId: string) {
+    protected async getMemberSchema(troupeId: string, memberId: string): Promise<WithId<MemberSchema>> {
         const member = await this.audienceColl.findOne({ _id: new ObjectId(memberId), troupeId });
         assert(member, new MyTroupeClientError("Unable to find member"));
         return member;
     }
 
-    public getMember(member: WithId<MemberSchema>): Member {
-        const m: WeakPartial<WithId<MemberSchema>, "_id"> = member;
+    async getMember(member: string | WithId<MemberSchema>, troupeId?: string): Promise<Member> {
+        assert(typeof member != "string" || troupeId != null, 
+            new MyTroupeClientError("Must have a troupe ID to retrieve event."))
+        const m: WeakPartial<WithId<MemberSchema>, "_id"> = typeof member == "string"
+            ? await this.getMemberSchema(troupeId!, member)
+            : member;
         const memberId = m._id!.toHexString();
         delete m._id;
 
@@ -446,8 +522,8 @@ export class MyTroupeCore {
         for(const key in m.properties) {
             properties[key] = {
                 value: m.properties[key].value instanceof Date 
-                    ? m.properties[key].value.toISOString()
-                    : m.properties[key].value,
+                    ? m.properties[key]!.value!.toString()
+                    : m.properties[key].value as Replace<MemberPropertyValue, Date, string>,
                 override: m.properties[key].override,
             }
         }
@@ -463,7 +539,7 @@ export class MyTroupeCore {
     /** Retrieve all members */ 
     async getAudience(troupeId: string): Promise<Member[]> {
         const audience = await this.audienceColl.find({ troupeId }).toArray();
-        return audience.map((m) => this.getMember(m));
+        return Promise.all(audience.map((m) => this.getMember(m)));
     }
 
     /** Update or delete (optional) properties for single member */
@@ -481,12 +557,16 @@ export class MyTroupeCore {
 
         memberUpdate.$set.lastUpdated = new Date();
 
+        // Update existing properties for the member
         if(request.updateProperties) {
             for(const key in request.updateProperties) {
                 const newValue = member.properties[key];
                 assert(newValue, new MyTroupeClientError("Invalid property ID"));
 
+                // Update the property if it's not to be removed
                 if(!request.removeProperties?.includes(key)) {
+
+                    // Check if the value is valid and update the property
                     if(request.updateProperties[key].value) {
                         const propertyType = troupe.memberProperties[key].substring(0, -1);
 
@@ -502,18 +582,24 @@ export class MyTroupeCore {
                         }
                     }
 
-                    if(request.updateProperties[key].override)
-                        memberUpdate.$set[`properties.${key}.override`] = request.updateProperties[key].override;
+                    // Override defaults to true if not provided
+                    if(request.updateProperties[key].override == undefined) {
+                        request.updateProperties[key].override = true
+                    }
+                    memberUpdate.$set[`properties.${key}.override`] = request.updateProperties[key].override;
                 }
             }
         }
 
+        // Remove properties
         if(request.removeProperties) {
             for(const key of request.removeProperties) {
-                memberUpdate.$unset[`properties.${key}`] = "";
+                memberUpdate.$set[`properties.${key}.value`] = null;
+                memberUpdate.$set[`properties.${key}.override`] = true;
             }
         }
 
+        // Perform database update
         const newMember = await this.audienceColl.findOneAndUpdate(
             { _id: new ObjectId(memberId), troupeId },
             memberUpdate,
@@ -524,8 +610,11 @@ export class MyTroupeCore {
         return this.getMember(newMember);
     }
 
-    /** Turns on sync lock and places troupe into the sync queue if the lock is disabled */
-    async initiateSync(troupeId: string) {
-        
+    /** 
+     * Turns on sync lock and places troupe into the sync queue if the lock is disabled. 
+     * If no ID is provided, all troupes with disabled sync locks are placed into the queue. 
+     * */
+    async initiateSync(troupeId?: string) {
+
     }
 }

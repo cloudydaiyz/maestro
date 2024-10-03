@@ -9,14 +9,14 @@ import { BaseMemberPropertiesObj, BasePointTypesObj } from "./types/core-types";
 export class MyTroupeService extends MyTroupeCore {
     constructor() { super() }
 
-    async createTroupe(req: CreateTroupeRequest) {
-        const logSheetUri = await initTroupeSheet(req.name).then(res => res.data.id);
+    async createTroupe(request: CreateTroupeRequest) {
+        const logSheetUri = await initTroupeSheet(request.name).then(res => res.data.id);
         assert(logSheetUri, "Failed to create log sheet");
 
         return this.client.startSession().withTransaction(async () => {
             const lastUpdated = new Date();
             const troupe = await this.troupeColl.insertOne({
-                ...req,
+                ...request,
                 lastUpdated,
                 logSheetUri,
                 eventTypes: [],

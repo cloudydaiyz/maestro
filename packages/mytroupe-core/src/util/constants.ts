@@ -6,3 +6,4 @@ export const MAX_PAGE_SIZE = 30;
 
 export const SHEETS_REGEX = /https:\/\/docs.google.com\/spreadsheets\/d\/(?<spreadsheetId>[^/]+)\/.*/g;
 export const FORMS_REGEX = /https:\/\/docs.google.com\/forms\/d\/(?<formId>[^/]+)\/.*/g;
+export const DRIVE_FOLDER_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/(?<folderId>[^\/&?#]+)/;

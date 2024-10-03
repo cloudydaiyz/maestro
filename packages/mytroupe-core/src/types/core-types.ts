@@ -18,7 +18,7 @@ export interface TroupeSchema {
     synchronizedMemberProperties: BaseMemberProperties & VariableMemberProperties,
     /** Valid point types for the troupe */
     pointTypes: BasePointTypes & VariablePointTypes, 
-    synchronizedPointTypes: BasePointTypes & VariablePointTypes,
+    synchronizedPointTypes: BasePointTypes & VariablePointTypes, 
 }
 
 // Member property types
@@ -44,15 +44,6 @@ export interface VariableMemberProperties {
     [key: string]: MemberPropertyType,
 }
 
-export type MemberProperties = {
-    [key: string]: {
-        value: MemberPropertyValue,
-        /** True if this property was manually overridden; this takes precedence
-         *  over the origin event.  */
-        override: boolean,
-    },
-}
-
 // Point types
 export interface PointData {
     startDate: Date,
@@ -64,7 +55,7 @@ export const BasePointTypesObj = {
         startDate: new Date(0),
         endDate: new Date(3000000000000),
     } as PointData,
-}
+} as const;
 export type BasePointTypes = typeof BasePointTypesObj
 
 export interface VariablePointTypes {
@@ -91,7 +82,7 @@ export interface EventSchema {
 }
 
 export const EventDataSourcesRegex = [FORMS_REGEX, SHEETS_REGEX] as const;
-export const EventDataSources = ["Google Forms", "Google Sheets"] as const;
+export const EventDataSources = ["Google Forms", "Google Sheets", ""] as const;
 export type EventDataSource = typeof EventDataSources[number];
 
 export interface FieldToPropertyMap {
@@ -101,6 +92,18 @@ export interface FieldToPropertyMap {
         /** Member Property */ 
         property: string | null, 
     },
+}
+
+// Invariant: Members can attend an event at most once
+export interface EventsAttendedBucketSchema {
+    troupeId: string,
+    memberId: string,
+    events: {
+        eventId: string,
+        value: number,
+        startDate: Date,
+    }[],
+    page: number,
 }
 
 // Event type
@@ -119,7 +122,18 @@ export interface MemberSchema {
     lastUpdated: Date,
     /** Uses synchronized member properties */
     properties: MemberProperties,
-    points: { [key in keyof BasePointTypes]: number } & { [key: string]: number; },
+    points: BaseMemberPoints & VariableMemberPoints,
+}
+export type BaseMemberPoints = { [key in keyof BasePointTypes]: number };
+export type VariableMemberPoints = { [key: string]: number; };
+
+export type MemberProperties = {
+    [key: string]: {
+        value: MemberPropertyValue,
+        /** True if this property was manually overridden; this takes precedence
+         *  over the origin event.  */
+        override: boolean,
+    },
 }
 
 // Dashboard
