@@ -46,7 +46,7 @@ export type UpdateTroupeRequest = {
  * even if they know the ID of other fields in the source.
  */
 export type CreateEventRequest = Omit<
-    Event,
+    PublicEvent,
     "id" | "lastUpdated" | "fieldToPropertyMap" | "source"
 >;
 
@@ -65,6 +65,11 @@ export type UpdateEventRequest = {
     /** Removes properties associated with fields */
     removeProperties?: string[],
 }
+
+export type CreateEventTypeRequest = Omit<
+    EventType,
+    "id" | "lastUpdated" | "synchronizedSourceFolderUris"
+>;
 
 /**
  * Updates or creates a new event type. Caveats:

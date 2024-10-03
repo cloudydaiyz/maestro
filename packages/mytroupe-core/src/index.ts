@@ -1,8 +1,8 @@
 import { Collection, MongoClient, ObjectId, PullOperator, PushOperator, WithId } from "mongodb";
 import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
-import { DB_NAME, MAX_POINT_TYPES } from "./util/constants";
+import { DB_NAME, MAX_EVENT_TYPES, MAX_POINT_TYPES } from "./util/constants";
 import { BaseMemberPropertiesObj, BasePointTypesObj, EventDataSources, EventDataSourcesRegex, EventSchema, EventTypeSchema, MemberProperties, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
-import { EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
+import { CreateEventRequest, CreateEventTypeRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
 import assert from "assert";
 
@@ -184,8 +184,38 @@ export class MyTroupeCore {
     }
 
     /** Creates a new event in the given Troupe. */
-    async createEvent() {
+    async createEvent(troupeId: string, request: CreateEventRequest) {
+        const troupe = await this.getTroupeSchema(troupeId);
+        assert(!troupe.syncLock, new MyTroupeClientError("Cannot create event while sync is in progress"));
 
+        const startDate = new Date(request.startDate);
+        assert(EventDataSourcesRegex.findIndex((regex) => regex.test(request.sourceUri!)), 
+            new MyTroupeClientError("Invalid source URI"));
+        assert(startDate.toString() != "Invalid Date", new MyTroupeClientError("Invalid date"));
+        assert(request.eventTypeId == undefined || request.value == undefined, 
+            new MyTroupeClientError("Unable to define event type and value at same time for event."));
+        
+        // Find event type and populate value
+        // FUTURE: Get event fields from source URI
+
+        const event: EventSchema = {
+            troupeId,
+            lastUpdated: new Date(),
+            title: request.title,
+            source: "Google Forms",
+            synchronizedSource: "Google Forms",
+            sourceUri: request.sourceUri,
+            synchronizedSourceUri: "",
+            startDate,
+            eventTypeId: request.eventTypeId,
+            value: request.value,
+            fieldToPropertyMap: {},
+            synchronizedFieldToPropertyMap: {}
+        }
+        const insertedEvent = await this.eventColl.insertOne(event);
+        assert(insertedEvent.acknowledged, "Insert failed for event");
+
+        return this.getEvent({...event, _id: insertedEvent.insertedId});
     }
 
     /**
@@ -197,7 +227,7 @@ export class MyTroupeCore {
      * - Update member points for types that the event is in data range for
      * - Update member properties for the event attendees
      */
-    async updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest) {
+    async updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest): Promise<PublicEvent> {
         const [troupe, event] = await Promise.all([
             this.getTroupeSchema(troupeId),
             this.getEventSchema(troupeId, eventId)
@@ -316,8 +346,23 @@ export class MyTroupeCore {
         }
     }
 
-    async createEventType() {
+    async createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<EventType> {
+        const type: WithId<EventTypeSchema> = {
+            _id: new ObjectId(),
+            lastUpdated: new Date(),
+            title: request.title,
+            value: request.value,
+            sourceFolderUris: request.sourceFolderUris,
+            synchronizedSourceFolderUris: []
+        };
 
+        const insertResult = await this.troupeColl.updateOne(
+            { _id: new ObjectId(troupeId), [`eventTypes.${MAX_EVENT_TYPES}`]: { $exists: false } },
+            { $push: { eventTypes: type } }
+        );
+        assert(insertResult.matchedCount == 1, new MyTroupeClientError("Max event types reached"));
+        assert(insertResult.modifiedCount == 1, "Unable to create event type");
+        return this.getEventType(type);
     }
 
     /** Update title, points, or sourceFolderUris */ 
@@ -438,11 +483,25 @@ export class MyTroupeCore {
 
         if(request.updateProperties) {
             for(const key in request.updateProperties) {
-                assert(member.properties[key], new MyTroupeClientError("Invalid property ID"));
+                const newValue = member.properties[key];
+                assert(newValue, new MyTroupeClientError("Invalid property ID"));
 
                 if(!request.removeProperties?.includes(key)) {
-                    if(request.updateProperties[key].value) 
-                        memberUpdate.$set[`properties.${key}.value`] = request.updateProperties[key].value;
+                    if(request.updateProperties[key].value) {
+                        const propertyType = troupe.memberProperties[key].substring(0, -1);
+
+                        if(propertyType == "date") {
+                            const newDate = new Date(newValue.value as string);
+                            assert(typeof newValue.value == "string" && newDate.toString() != "Invalid Date", 
+                                new MyTroupeClientError("Invalid input"));
+                            memberUpdate.$set[`properties.${key}.value`] = newDate;
+                        } else {
+                            assert(typeof newValue.value == propertyType, 
+                                new MyTroupeClientError("Invalid input"));
+                            memberUpdate.$set[`properties.${key}.value`] = newValue.value;
+                        }
+                    }
+
                     if(request.updateProperties[key].override)
                         memberUpdate.$set[`properties.${key}.override`] = request.updateProperties[key].override;
                 }
@@ -465,12 +524,8 @@ export class MyTroupeCore {
         return this.getMember(newMember);
     }
 
-    async blacklistMember(troupeId: string, memberId: string) {
-
-    }
-
     /** Turns on sync lock and places troupe into the sync queue if the lock is disabled */
     async initiateSync(troupeId: string) {
-
+        
     }
 }
