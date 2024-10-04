@@ -1,7 +1,7 @@
 import { Collection, MongoClient, ObjectId, PullOperator, PushOperator, WithId } from "mongodb";
 import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
-import { DB_NAME, DRIVE_FOLDER_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES } from "./util/constants";
-import { BaseMemberPropertiesObj, BasePointTypesObj, EventDataSources, EventDataSourcesRegex, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints } from "./types/core-types";
+import { DB_NAME, DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCES_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTIES_OBJ, BASE_POINT_TYPES_OBJ } from "./util/constants";
+import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
 import { CreateEventRequest, CreateEventTypeRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
 import assert from "assert";
@@ -117,7 +117,7 @@ export class MyTroupeCore {
             // Ignore member properties to be removed and ensure no base member properties
             // get updated
             for(const key in request.updateMemberProperties) {
-                assert(!(key in BaseMemberPropertiesObj), 
+                assert(!(key in BASE_MEMBER_PROPERTIES_OBJ), 
                     new MyTroupeClientError("Cannot modify base member properties"));
                 
                 if(!(request.removeMemberProperties?.includes(key))) {
@@ -134,7 +134,7 @@ export class MyTroupeCore {
         // for removal
         if(request.removeMemberProperties) {
             for(const key of request.removeMemberProperties) {
-                assert(!(key in BaseMemberPropertiesObj), 
+                assert(!(key in BASE_MEMBER_PROPERTIES_OBJ), 
                     new MyTroupeClientError("Cannot delete base member properties"));
                 troupeUpdate.$unset[`memberProperties.${key}`] = "";
             }
@@ -153,7 +153,7 @@ export class MyTroupeCore {
                 assert(pointType.startDate.toString() != "Invalid Date"
                     && pointType.endDate.toString() != "Invalid Date", 
                     new MyTroupeClientError("Invalid date syntax"))
-                assert(!(key in BasePointTypesObj), 
+                assert(!(key in BASE_POINT_TYPES_OBJ), 
                     new MyTroupeClientError("Cannot modify base point types"));
                 assert(pointType.startDate < pointType.endDate, 
                     new MyTroupeClientError("Invalid point type date range"));
@@ -173,7 +173,7 @@ export class MyTroupeCore {
         // Remove point types
         if(request.removePointTypes) {
             for(const key of request.removePointTypes) {
-                assert(!(key in BasePointTypesObj), new MyTroupeClientError("Cannot delete base point types"));
+                assert(!(key in BASE_POINT_TYPES_OBJ), new MyTroupeClientError("Cannot delete base point types"));
                 troupeUpdate.$unset[`pointTypes.${key}`] = "";
             }
         }
@@ -197,7 +197,7 @@ export class MyTroupeCore {
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot create event while sync is in progress"));
 
         const startDate = new Date(request.startDate);
-        const eventDataSource = EventDataSourcesRegex.findIndex((regex) => regex.test(request.sourceUri!));
+        const eventDataSource = EVENT_DATA_SOURCES_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
         assert(eventDataSource > -1, new MyTroupeClientError("Invalid source URI"));
         assert(startDate.toString() != "Invalid Date", new MyTroupeClientError("Invalid date"));
         assert(request.eventTypeId == undefined || request.value == undefined, 
@@ -212,7 +212,7 @@ export class MyTroupeCore {
             troupeId,
             lastUpdated: new Date(),
             title: request.title,
-            source: EventDataSources[eventDataSource],
+            source: EVENT_DATA_SOURCES[eventDataSource],
             synchronizedSource: "",
             sourceUri: request.sourceUri,
             synchronizedSourceUri: "",
@@ -289,10 +289,10 @@ export class MyTroupeCore {
         }
 
         if(request.sourceUri) {
-            const dataSource = EventDataSourcesRegex.findIndex((regex) => regex.test(request.sourceUri!));
+            const dataSource = EVENT_DATA_SOURCES_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
             assert(dataSource, new MyTroupeClientError("Invalid source URI"));
 
-            eventUpdate.$set.source = EventDataSources[dataSource];
+            eventUpdate.$set.source = EVENT_DATA_SOURCES[dataSource];
             eventUpdate.$set.sourceUri = request.sourceUri;
 
             // FUTURE: Update field to property mapping

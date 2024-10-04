@@ -1,7 +1,7 @@
 // Data schema for the core data types
 
 import { ObjectId, WithId } from "mongodb";
-import { FORMS_REGEX, SHEETS_REGEX } from "../util/constants";
+import { BASE_MEMBER_PROPERTIES_OBJ, BASE_POINT_TYPES_OBJ, BIRTHDAY_UPDATE_FREQUENCIES, EVENT_DATA_SOURCES, FORMS_REGEX, MEMBER_PROPERTY_TYPES, SHEETS_REGEX } from "../util/constants";
 
 // Troupe
 export interface TroupeSchema {
@@ -23,22 +23,9 @@ export interface TroupeSchema {
 
 // Member property types
 // Modifiers: ? = optional, ! = required
-export const MemberPropertyTypes = [
-    "string?", "string!", 
-    "number?", "number!", 
-    "boolean?", "boolean!", 
-    "date?", "date!"
-] as const;
-export type MemberPropertyType = typeof MemberPropertyTypes[number];
+export type BaseMemberProperties = typeof BASE_MEMBER_PROPERTIES_OBJ;
+export type MemberPropertyType = typeof MEMBER_PROPERTY_TYPES[number];
 export type MemberPropertyValue = string | number | boolean | Date | null;
-
-export const BaseMemberPropertiesObj = {
-    "First Name": "string!",
-    "Last Name": "string!",
-    "Email": "string!",
-    "Birthday": "date!",
-} as const;
-export type BaseMemberProperties = typeof BaseMemberPropertiesObj;
 
 export interface VariableMemberProperties {
     [key: string]: MemberPropertyType,
@@ -50,13 +37,7 @@ export interface PointData {
     endDate: Date,
 }
 
-export const BasePointTypesObj = {
-    "Total": {
-        startDate: new Date(0),
-        endDate: new Date(3000000000000),
-    } as PointData,
-} as const;
-export type BasePointTypes = typeof BasePointTypesObj
+export type BasePointTypes = typeof BASE_POINT_TYPES_OBJ
 
 export interface VariablePointTypes {
     [key: string]: PointData,
@@ -81,10 +62,7 @@ export interface EventSchema {
     synchronizedFieldToPropertyMap: FieldToPropertyMap,
 }
 
-export const EventDataSourcesRegex = [FORMS_REGEX, SHEETS_REGEX] as const;
-export const EventDataSources = ["Google Forms", "Google Sheets", ""] as const;
-export const EventMimeTypes = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet"] as const;
-export type EventDataSource = typeof EventDataSources[number];
+export type EventDataSource = typeof EVENT_DATA_SOURCES[number];
 
 export interface FieldToPropertyMap {
     [fieldId: string]: {
@@ -126,6 +104,7 @@ export interface MemberSchema {
     properties: MemberProperties,
     points: BaseMemberPoints & VariableMemberPoints,
 }
+
 export type BaseMemberPoints = { [key in keyof BasePointTypes]: number };
 export type VariableMemberPoints = { [key: string]: number; };
 
@@ -161,8 +140,7 @@ export interface TroupeDashboardSchema {
     eventPercentageByEventType: EventTypeStatistic[],
 }
 
-const BirthdayUpdateFrequencies = ["weekly", "monthly"] as const;
-type BirthdayUpdateFrequency = typeof BirthdayUpdateFrequencies[number];
+type BirthdayUpdateFrequency = typeof BIRTHDAY_UPDATE_FREQUENCIES[number];
 
 export interface EventTypeStatistic {
     id: string,
