@@ -1,8 +1,12 @@
 import { drive_v3, sheets_v4 } from "googleapis";
 import { getDrive, getSheets } from "./cloud/gcp";
-import { EventSchema, EventTypeSchema, MemberSchema } from "./types/core-types";
+import { EventMimeTypes, EventSchema, EventTypeSchema, MemberSchema } from "./types/core-types";
 import { MyTroupeService } from "./service";
 import { MyTroupeCore } from "./index";
+import assert from "assert";
+import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL } from "./util/constants";
+import { WithId } from "mongodb";
+import { getUrl } from "./util/helper";
 
 export class MyTroupeSyncService extends MyTroupeCore {
     ready: Promise<void>;
@@ -27,25 +31,93 @@ export class MyTroupeSyncService extends MyTroupeCore {
      * - NOTE: Populate local variables with synchronized information to update the database
      */
     async sync(troupeId: string): Promise<void> {
-        return this.discoverEvents(troupeId)
+        const troupe = await this.getTroupeSchema(troupeId);
+        assert(!troupe.syncLock, "Troupe is already being synced");
+
+        // Lock the troupe
+        const updateResult1 = await this.troupeColl.updateOne(
+            { troupeId },
+            { $set: { syncLock: true } }
+        );
+        assert(updateResult1.modifiedCount === 1, "Failed to lock troupe for sync");
+
+        // Perform sync
+        await this.discoverEvents(troupeId)
             .then(this.discoverAndRefreshAudience)
             .then(this.persistSync)
             .then(this.refreshLogSheet);
+        
+        // Unlock the troupe
+        const updateResult2 = await this.troupeColl.updateOne(
+            { troupeId },
+            { $set: { syncLock: false } }
+        );
+        assert(updateResult2.modifiedCount === 1, "Failed to unlock troupe after sync");
     }
 
+     // for each event type:
+        // for each drive folder:
+            // if the folder has already been discovered, perform tie breaker
+            // otherwise, go through its children, mark them as discovered and associate with event type
+                // if the child is a folder, add it to the list of folders to explore
+                // for the event date, use the latest date in the file name, otherwise use the creation date
     async discoverEvents(troupeId: string): Promise<string> {
-        // for each event type:
-            // for each drive folder:
-                // if the folder has already been discovered, perform tie breaker
-                // otherwise, go through its children, mark them as discovered and associate with event type
-                    // if the child is a folder, add it to the list of folders to explore
-                    // for the event date, use the latest date in the file name, otherwise use the creation date
-        
-        const types = this.getTroupeSchema(troupeId);
-        
+        const troupe = await this.getTroupeSchema(troupeId);
+
+        const events: { [sourceUri: string]: WithId<EventSchema> } = {};
+        for await(const event of this.eventColl.find({ troupeId })) {
+            events[event.sourceUri] = event;
+        }
+
+        // Populate the array with the IDs of all the event type folders for this troupe
+        let foldersToExplore: string[] = [];
+        for(const eventType of troupe.eventTypes) {
+            foldersToExplore.concat(
+                eventType.sourceFolderUris.map(uri => 
+                    DRIVE_FOLDER_REGEX.exec(uri)!.groups!["folderId"]
+                )
+            );
+        }
+
+        const mimeQuery: string[] = [];
+        for(const mimeType of EventMimeTypes) {
+            mimeQuery.push(`mimeType = '${mimeType}'`);
+        }
+
+        const discoveredFolders: string[] = [];
+        const readPromises: Promise<void>[] = [];
+        while(foldersToExplore.length > 0) {
+            const folderId = foldersToExplore.pop()!;
+            if(discoveredFolders.includes(folderId)) continue;
+            discoveredFolders.push(folderId);
+
+            // Get the folder's children
+            let q = `(${mimeQuery.join(" or ")}) and '${folderId}' in parents`;
+            const response = await this.drive.files.list(
+                { q, fields: "files(id, name, mimeType)", }
+            );
+
+            // Go through the files in the Google Drive folders
+            const files = response.data.files;
+            if(files && files.length) {
+                for(const file of files) {
+                    if(file.mimeType === DRIVE_FOLDER_MIME) {
+                        foldersToExplore.push(getUrl(DRIVE_FOLDER_URL_TEMPL, file.id!));
+                    } else if(file.mimeType === EventMimeTypes[0]) {
+                        // readGoogleForm(file.name!, file.id!);
+                    } else if(file.mimeType === EventMimeTypes[1]) {
+                        // readGoogleSheet(file.name!, file.id!);
+                    }
+                }
+            }
+        }
+        await Promise.all(readPromises);
+
         // save the newly discovered events
         return troupeId;
     }
+
+
 
     async discoverAndRefreshAudience(troupeId: string) {
         // go through event sign ups to discover audience, mark them as discovered, and update existing audience points

@@ -83,6 +83,7 @@ export interface EventSchema {
 
 export const EventDataSourcesRegex = [FORMS_REGEX, SHEETS_REGEX] as const;
 export const EventDataSources = ["Google Forms", "Google Sheets", ""] as const;
+export const EventMimeTypes = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet"] as const;
 export type EventDataSource = typeof EventDataSources[number];
 
 export interface FieldToPropertyMap {
@@ -99,10 +100,11 @@ export interface EventsAttendedBucketSchema {
     troupeId: string,
     memberId: string,
     events: {
-        eventId: string,
-        value: number,
-        startDate: Date,
-    }[],
+        [eventId: string]: {
+            value: number,
+            startDate: Date,
+        }
+    },
     page: number,
 }
 

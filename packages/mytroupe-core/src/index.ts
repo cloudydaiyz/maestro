@@ -1,6 +1,6 @@
 import { Collection, MongoClient, ObjectId, PullOperator, PushOperator, WithId } from "mongodb";
 import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
-import { DB_NAME, MAX_EVENT_TYPES, MAX_POINT_TYPES } from "./util/constants";
+import { DB_NAME, DRIVE_FOLDER_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES } from "./util/constants";
 import { BaseMemberPropertiesObj, BasePointTypesObj, EventDataSources, EventDataSourcesRegex, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints } from "./types/core-types";
 import { CreateEventRequest, CreateEventTypeRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
@@ -364,8 +364,8 @@ export class MyTroupeCore {
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot delete event while sync is in progress"));
 
         const updateEventsAttended = await this.eventsAttendedColl.updateMany(
-            { troupeId, "events.eventId": eventId },
-            { $pull: { events: { eventId } } },
+            { troupeId, [`events.${eventId}`]: {} },
+            { $unset: { [`events.${eventId}`]: "" } },
         );
         assert(updateEventsAttended.acknowledged, "Failed to update events attended");
 
@@ -380,6 +380,13 @@ export class MyTroupeCore {
      * - Obtain the events from source folders for the event type
      */
     async createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<EventType> {
+
+        // Ensure given source folder URIs are valid Google Drive folders
+        request.sourceFolderUris.forEach((uri) => assert(
+            DRIVE_FOLDER_REGEX.test(uri), 
+            new MyTroupeClientError("Invalid source URI in request")
+        ));
+
         const type: WithId<EventTypeSchema> = {
             _id: new ObjectId(),
             lastUpdated: new Date(),
@@ -429,6 +436,13 @@ export class MyTroupeCore {
      * - Update member points for attendees of events with the corresponding type*
      */ 
     async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<EventType> {
+
+        // Ensure given source folder URIs are valid Google Drive folders
+        request.addSourceFolderUris?.forEach((uri) => assert(
+            DRIVE_FOLDER_REGEX.test(uri), 
+            new MyTroupeClientError("Invalid source URI in request")
+        ));
+
         const troupe = await this.getTroupeSchema(troupeId);
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot update event type while sync is in progress"));
