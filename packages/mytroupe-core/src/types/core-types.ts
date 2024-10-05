@@ -1,9 +1,9 @@
 // Data schema for the core data types
 
 import { ObjectId, WithId } from "mongodb";
-import { BASE_MEMBER_PROPERTIES_OBJ, BASE_POINT_TYPES_OBJ, BIRTHDAY_UPDATE_FREQUENCIES, EVENT_DATA_SOURCES, FORMS_REGEX, MEMBER_PROPERTY_TYPES, SHEETS_REGEX } from "../util/constants";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, BIRTHDAY_UPDATE_FREQUENCIES, EVENT_DATA_SOURCES, MEMBER_PROPERTY_TYPES } from "../util/constants";
 
-// Troupe
+// == TROUPE ==
 export interface TroupeSchema {
     lastUpdated: Date,
     name: string,
@@ -14,24 +14,44 @@ export interface TroupeSchema {
     syncLock: boolean, 
     eventTypes: WithId<EventTypeSchema>[], // all event types for troupe (MAX: 10)
     /** Valid properties for members */
-    memberProperties: BaseMemberProperties & VariableMemberProperties, 
-    synchronizedMemberProperties: BaseMemberProperties & VariableMemberProperties,
+    memberPropertyTypes: BaseMemberPropertyTypes & VariableMemberPropertyTypes, 
+    synchronizedMemberPropertyTypes: BaseMemberPropertyTypes & VariableMemberPropertyTypes,
     /** Valid point types for the troupe */
     pointTypes: BasePointTypes & VariablePointTypes, 
     synchronizedPointTypes: BasePointTypes & VariablePointTypes, 
 }
 
-// Member property types
-// Modifiers: ? = optional, ! = required
-export type BaseMemberProperties = typeof BASE_MEMBER_PROPERTIES_OBJ;
-export type MemberPropertyType = typeof MEMBER_PROPERTY_TYPES[number];
-export type MemberPropertyValue = string | number | boolean | Date | null;
+// == MEMBER PROPERTY TYPES ==
 
-export interface VariableMemberProperties {
+// Modifiers: ? = optional, ! = required
+export type MemberPropertyType = typeof MEMBER_PROPERTY_TYPES[number];
+export type BaseMemberPropertyTypes = typeof BASE_MEMBER_PROPERTY_TYPES;
+export interface VariableMemberPropertyTypes {
     [key: string]: MemberPropertyType,
 }
 
-// Point types
+// Base type for the MemberPropertyTypeToValue interface
+export type MemberPropertyTypeToValueBase = {
+    [key in typeof MEMBER_PROPERTY_TYPES[number]]: unknown;
+}
+
+// Maps MemberPropertyType to its corresponding value type
+export interface MemberPropertyTypeToValue extends MemberPropertyTypeToValueBase {
+    "string?": string | null,
+    "string!": string,
+    "number?": number | null,
+    "number!": number,
+    "boolean?": boolean | null,
+    "boolean!": boolean,
+    "date?": Date | null,
+    "date!": Date,
+}
+
+// Must not have a type of "unknown"
+export type MemberPropertyValue = MemberPropertyTypeToValue[MemberPropertyType];
+
+// == POINT TYPES ==
+
 export interface PointData {
     startDate: Date,
     endDate: Date,
@@ -43,7 +63,11 @@ export interface VariablePointTypes {
     [key: string]: PointData,
 }
 
-// Event
+export type BaseMemberPoints = { [key in keyof BasePointTypes]: number };
+export type VariableMemberPoints = { [key: string]: number; };
+
+// == EVENT ==
+
 export interface EventSchema {
     /** ID of the troupe the event belongs to */ 
     troupeId: string, 
@@ -86,7 +110,8 @@ export interface EventsAttendedBucketSchema {
     page: number,
 }
 
-// Event type
+// == EVENT TYPES ==
+
 export interface EventTypeSchema {
     lastUpdated: Date, 
     title: string, 
@@ -96,19 +121,25 @@ export interface EventTypeSchema {
     synchronizedSourceFolderUris: string[],
 }
 
-// Member
+// == MEMBER ==
+
 export interface MemberSchema {
     troupeId: string,
     lastUpdated: Date,
     /** Uses synchronized member properties */
-    properties: MemberProperties,
+    properties: BaseMemberProperties & VariableMemberProperties,
     points: BaseMemberPoints & VariableMemberPoints,
 }
 
-export type BaseMemberPoints = { [key in keyof BasePointTypes]: number };
-export type VariableMemberPoints = { [key: string]: number; };
+// Base type for the BaseMemberProperties interface
+type BaseMemberProperties = {
+    [key in keyof typeof BASE_MEMBER_PROPERTY_TYPES]: {
+        value: MemberPropertyTypeToValue[typeof BASE_MEMBER_PROPERTY_TYPES[key]],
+        override: boolean,
+    };
+}
 
-export type MemberProperties = {
+export type VariableMemberProperties = {
     [key: string]: {
         value: MemberPropertyValue,
         /** True if this property was manually overridden; this takes precedence
@@ -117,10 +148,12 @@ export type MemberProperties = {
     },
 }
 
-// Dashboard
+// == DASHBOARD ==
+
 export interface TroupeDashboardSchema {
     troupeId: string,
     lastUpdated: Date,
+
     upcomingBirthdays: {
         frequency: BirthdayUpdateFrequency,
         desiredFrequency: BirthdayUpdateFrequency,
@@ -131,11 +164,14 @@ export interface TroupeDashboardSchema {
             birthday: Date,
         }[],
     },
+
     totalMembers: number,
     totalEvents: number,
+
     avgPointsPerEvent: number,
     avgAttendeesPerEvent: number,
     avgAttendeesPerEventType: EventTypeStatistic[],
+
     attendeePercentageByEventType: EventTypeStatistic[],
     eventPercentageByEventType: EventTypeStatistic[],
 }

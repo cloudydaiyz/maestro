@@ -3,7 +3,7 @@ import { initTroupeSheet } from "./cloud/gcp";
 import { MyTroupeCore } from "./index";
 import { CreateTroupeRequest } from "./types/service-types";
 import { ObjectId } from "mongodb";
-import { BASE_MEMBER_PROPERTIES_OBJ, BASE_POINT_TYPES_OBJ } from "./types/core-types";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "./util/constants";
 
 // Additional functionality for other backend services
 export class MyTroupeService extends MyTroupeCore {
@@ -20,7 +20,7 @@ export class MyTroupeService extends MyTroupeCore {
                 lastUpdated,
                 logSheetUri,
                 eventTypes: [],
-                memberProperties: BASE_MEMBER_PROPERTIES_OBJ,
+                memberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
                 pointTypes: BASE_POINT_TYPES_OBJ,
                 synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
                 syncLock: false,

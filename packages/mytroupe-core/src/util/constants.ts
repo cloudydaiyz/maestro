@@ -19,12 +19,13 @@ export const FORMS_URL_TEMPL = "https://docs.google.com/forms/d/<id>";
 // == Constants for the core types ==
 export const MEMBER_PROPERTY_TYPES = [
     "string?", "string!", 
-    "number?", "number!", 
-    "boolean?", "boolean!", 
-    "date?", "date!"
+    "number?", "number!", // entries must be convertible to a number
+    "boolean?", "boolean!", // entries must be either true or false
+    "date?", "date!", // entries must be in ISO format
 ] as const;
 
-export const BASE_MEMBER_PROPERTIES_OBJ = {
+export const BASE_MEMBER_PROPERTY_TYPES = {
+    "Member ID": "string!",
     "First Name": "string!",
     "Last Name": "string!",
     "Email": "string!",
@@ -38,12 +39,14 @@ export const BASE_POINT_TYPES_OBJ = {
     },
 } as const;
 
-export const EVENT_DATA_SOURCES_REGEX = [FORMS_REGEX, SHEETS_REGEX] as const;
 export const EVENT_DATA_SOURCES = ["Google Forms", "Google Sheets", ""] as const;
-export const EVENT_MIME_TYPES = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet"] as const;
+export const EVENT_DATA_SOURCE_REGEX = [FORMS_REGEX, SHEETS_REGEX] as const;
+export const EVENT_DATA_SOURCE_MIME_TYPES = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet"] as const;
+export const EVENT_DATA_SOURCE_URLS = [FORMS_URL_TEMPL, SHEETS_URL_TEMPL] as const;
+
 export const BIRTHDAY_UPDATE_FREQUENCIES = ["weekly", "monthly"] as const;
 
 export const MIME_QUERY: string[] = [];
-for(const mimeType of EVENT_MIME_TYPES) {
+for(const mimeType of EVENT_DATA_SOURCE_MIME_TYPES) {
     MIME_QUERY.push(`mimeType = '${mimeType}'`);
 }
