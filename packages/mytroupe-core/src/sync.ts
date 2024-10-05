@@ -3,8 +3,8 @@ import { getDrive, getForms, getSheets } from "./cloud/gcp";
 import { BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
 import { MyTroupeService } from "./service";
 import { MyTroupeCore } from "./index";
-import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
-import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, WithId } from "mongodb";
+import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
+import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getUrl } from "./util/helper";
 import { DiscoveryEventType, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
@@ -30,11 +30,7 @@ export class MyTroupeSyncService extends MyTroupeService {
     members: { 
         [memberId: string]: {
             member: WithId<MemberSchema>,
-            eventsAttended: {
-                eventId: string,
-                value: number,
-                startDate: Date,
-            }[],
+            eventsAttended: (EventsAttendedBucketSchema["events"][string] & { eventId: string })[],
             eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[],
             delete: boolean,
             fromColl: boolean
@@ -471,8 +467,9 @@ export class MyTroupeSyncService extends MyTroupeService {
                     properties,
                     points: { "Total": 0 },
                 };
-                let eventsAttended = [{
+                let eventsAttended: typeof this.members[string]["eventsAttended"] = [{
                     eventId: event._id.toHexString(),
+                    typeId: event.eventTypeId,
                     value: event.value,
                     startDate: event.startDate,
                 }];
@@ -546,8 +543,8 @@ export class MyTroupeSyncService extends MyTroupeService {
     }
 
     protected async persistSync(): Promise<void> {
-        assert(this.dashboard);
-        const troupeId = this.troupe!._id.toHexString();
+        assert(this.troupe && this.dashboard);
+        const troupeId = this.troupe._id.toHexString();
 
         // Initialize events, audience members, and events attended documents to update and to delete
         let updateEvents: WithId<EventSchema>[] = [];
@@ -560,19 +557,39 @@ export class MyTroupeSyncService extends MyTroupeService {
         // Initialize dashboard to update with statistics from event & audience update
         const dashboardUpdate: SetOperator<TroupeDashboardSchema> = {
             lastUpdated: new Date(),
-            totalEvents: 0,
-            totalMembers: 0,
-            avgAttendeesPerEvent: 0,
-            avgAttendeesPerEventType: {},
-            attendeePercentageByEventType: {},
-            eventPercentageByEventType: {},
             upcomingBirthdays: { 
                 frequency: this.dashboard.upcomingBirthdays.desiredFrequency,
                 desiredFrequency: this.dashboard.upcomingBirthdays.desiredFrequency,
                 members: []
             },
+            totalMembers: 0,
+            totalEvents: 0,
+            totalEventTypes: this.troupe.eventTypes.length,
+            totalAttendeesByEventType: {},
+            totalEventsByEventType: {},
+            avgAttendeesPerEvent: 0,
+            avgAttendeesByEventType: {},
+            attendeePercentageByEventType: {},
+            eventPercentageByEventType: {},
         };
-        assert(dashboardUpdate.$set);
+
+        const birthdayCutoff = dashboardUpdate.upcomingBirthdays!.frequency == "weekly" 
+            ? new Date(Date.now() + FULL_DAY * 7)
+            : new Date(Date.now() + FULL_DAY * 30);
+
+        // Initialize dashboard statistics
+        for(const eventType of this.troupe.eventTypes) {
+            const eventTypeId = eventType._id.toHexString();
+            const title = eventType.title;
+            const value = 0;
+            const percent = 0;
+
+            dashboardUpdate.totalAttendeesByEventType![eventTypeId] = { title, value };
+            dashboardUpdate.totalEventsByEventType![eventTypeId] = { title, value };
+            dashboardUpdate.avgAttendeesByEventType![eventTypeId] = { title, value };
+            dashboardUpdate.attendeePercentageByEventType![eventTypeId] = { title, value, percent };
+            dashboardUpdate.eventPercentageByEventType![eventTypeId] = { title, value, percent };
+        }
 
         // Populate the events to update and delete arrays
         for(const sourceUri in this.events) {
@@ -580,43 +597,49 @@ export class MyTroupeSyncService extends MyTroupeService {
             if(eventData.delete && eventData.fromColl) {
                 eventsToDelete.push(eventData.event._id);
             } else if(!eventData.delete) {
+                const eventTypeId = eventData.event.eventTypeId;
                 updateEvents.push(eventData.event);
+                dashboardUpdate.totalEvents! += 1;
+
+                if(eventTypeId) {
+                    dashboardUpdate.totalEventsByEventType![eventTypeId].value += 1;
+                    dashboardUpdate.eventPercentageByEventType![eventTypeId].value += 1;
+                }
             }
         }
 
         // Populate the members and events attended to update and delete arrays
         for(const memberId in this.members) {
             const memberData = this.members[memberId];
+
+            // Delete the member and the events they've attended if they're marked for deletion
             if(memberData.delete && memberData.fromColl) {
-                // Delete the member and the events they've attended
                 membersToDelete.push(memberData.member._id);
                 eventsAttendedToDelete = eventsAttendedToDelete.concat(
                     memberData.eventsAttendedDocs.map(doc => doc._id)
                 );
             } else if(!memberData.delete) {
                 updateAudience.push(memberData.member);
+                dashboardUpdate.totalMembers! += 1;
+
+                const birthday = memberData.member.properties["Birthday"].value;
+                if(birthday < birthdayCutoff) {
+                    dashboardUpdate.upcomingBirthdays!.members.push({
+                        id: memberData.member._id.toHexString(),
+                        firstName: memberData.member.properties["First Name"].value,
+                        lastName: memberData.member.properties["Last Name"].value,
+                        birthday,
+                    });
+                }
 
                 let page = 0;
                 let docsProcessed = 0;
                 while(docsProcessed < memberData.eventsAttended.length) {
+                    const events: EventsAttendedBucketSchema["events"] = {};
+
+                    // Initialize the events attended document
                     let eventsAttendedDoc = memberData.eventsAttendedDocs[page];
                     if(!eventsAttendedDoc) {
-                        const startIndex = page * MAX_PAGE_SIZE;
-                        const endIndex = Math.min(startIndex + MAX_PAGE_SIZE, memberData.eventsAttended.length);
-                        const events: {
-                            [eventId: string]: {
-                                value: number,
-                                startDate: Date,
-                            }
-                        } = {};
-
-                        for(let i = startIndex; i < endIndex; i++) {
-                            events[memberData.eventsAttended[i].eventId] = {
-                                value: memberData.eventsAttended[i].value,
-                                startDate: memberData.eventsAttended[i].startDate,
-                            }
-                        }
-
                         eventsAttendedDoc = {
                             _id: new ObjectId(),
                             troupeId,
@@ -624,8 +647,27 @@ export class MyTroupeSyncService extends MyTroupeService {
                             page,
                             events,
                         }
-                        docsProcessed += endIndex - startIndex;
                     };
+
+                    // Populate the events attended document with the events attended
+                    const startIndex = page * MAX_PAGE_SIZE;
+                    const endIndex = Math.min(startIndex + MAX_PAGE_SIZE, memberData.eventsAttended.length);
+                    for(let i = startIndex; i < endIndex; i++) {
+                        const eventTypeId = memberData.eventsAttended[i].typeId
+                        events[memberData.eventsAttended[i].eventId] = {
+                            typeId: eventTypeId,
+                            value: memberData.eventsAttended[i].value,
+                            startDate: memberData.eventsAttended[i].startDate,
+                        }
+
+                        if(eventTypeId) {
+                            dashboardUpdate.totalAttendeesByEventType![eventTypeId].value += 1;
+                            dashboardUpdate.avgAttendeesByEventType![eventTypeId].value += 1;
+                            dashboardUpdate.attendeePercentageByEventType![eventTypeId].value += 1;
+                        }
+                        dashboardUpdate.totalAttendees! += 1;
+                    }
+                    docsProcessed += endIndex - startIndex;
 
                     // Update the events attended document
                     updateEventsAttended.push(eventsAttendedDoc);
@@ -641,8 +683,27 @@ export class MyTroupeSyncService extends MyTroupeService {
             }
         }
 
+        // Complete dashboard data
+        const totalAttendees = dashboardUpdate.totalAttendees!;
+        const totalEvents = dashboardUpdate.totalEvents!;
+        this.dashboard.avgAttendeesPerEvent = totalEvents > 0 ? Math.round(totalEvents / totalAttendees) : 0;
+        
+        for(const eventType of this.troupe.eventTypes) {
+            const eventTypeId = eventType._id.toHexString();
+            const totalEventsByEventType = dashboardUpdate.totalEventsByEventType![eventTypeId].value;
+            const totalAttendeesByEventType = dashboardUpdate.totalAttendeesByEventType![eventTypeId].value;
+
+            dashboardUpdate.avgAttendeesByEventType![eventTypeId].value = totalEventsByEventType > 0
+                ? Math.round(dashboardUpdate.avgAttendeesByEventType![eventTypeId].value / totalEventsByEventType) : 0;
+            dashboardUpdate.attendeePercentageByEventType![eventTypeId].value = totalAttendees > 0 
+                ? totalAttendeesByEventType / totalAttendees : 0;
+            dashboardUpdate.eventPercentageByEventType![eventTypeId].value = totalEvents > 0 
+                ? totalEventsByEventType / totalEvents : 0;
+        }
+
         // Update the events, audience, and events attended collections
-        const persistResults: (AggregationCursor<Document> | Promise<DeleteResult>)[] = [];
+        const persistResults: (AggregationCursor<Document> | Promise<DeleteResult> | Promise<UpdateResult>)[] = [];
+
         persistResults.push(this.eventColl.aggregate([
             { $documents: updateEvents },
             { $merge: { into: "events", on: "_id", whenMatched: "replace" } }
@@ -660,6 +721,8 @@ export class MyTroupeSyncService extends MyTroupeService {
             { $merge: { into: "eventsAttended", on: "_id", whenMatched: "replace" } }
         ]));
         persistResults.push(this.eventsAttendedColl.deleteMany({ _id: { $in: eventsAttendedToDelete } }));
+
+        persistResults.push(this.dashboardColl.updateOne({ troupeId }, { $set: dashboardUpdate }));
         
         await Promise.all(persistResults);
     }

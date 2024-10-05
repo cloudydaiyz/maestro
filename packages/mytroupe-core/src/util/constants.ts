@@ -1,5 +1,7 @@
 export const DB_NAME = "mytroupe";
 
+export const FULL_DAY = 1000 * 60 * 60 * 24;
+
 export const MAX_POINT_TYPES = 5;
 export const MAX_MEMBER_PROPERTIES = 10;
 export const MAX_EVENT_TYPES = 10;

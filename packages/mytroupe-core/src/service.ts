@@ -30,17 +30,21 @@ export class MyTroupeService extends MyTroupeCore {
             const dashboard = await this.dashboardColl.insertOne({
                 troupeId: troupe.insertedId.toHexString(),
                 lastUpdated,
-                totalMembers: 0,
-                totalEvents: 0,
-                avgAttendeesPerEvent: 0,
-                avgAttendeesPerEventType: {},
-                attendeePercentageByEventType: {},
-                eventPercentageByEventType: {},
                 upcomingBirthdays: {
                     frequency: "monthly",
                     desiredFrequency: "monthly",
                     members: [],
                 },
+                totalMembers: 0,
+                totalEvents: 0,
+                totalAttendees: 0,
+                totalEventTypes: 0,
+                avgAttendeesPerEvent: 0,
+                avgAttendeesByEventType: {},
+                attendeePercentageByEventType: {},
+                eventPercentageByEventType: {},
+                totalAttendeesByEventType: {},
+                totalEventsByEventType: {},
             });
             assert(dashboard.insertedId, "Failed to create dashboard");
             return troupe.insertedId;

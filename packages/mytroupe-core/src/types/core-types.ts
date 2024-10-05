@@ -104,6 +104,7 @@ export interface EventsAttendedBucketSchema {
     memberId: string,
     events: {
         [eventId: string]: {
+            typeId?: string,
             value: number,
             startDate: Date,
         }
@@ -167,20 +168,33 @@ export interface TroupeDashboardSchema {
     },
 
     totalMembers: number,
+    totalAttendees: number,
     totalEvents: number,
+    totalEventTypes: number,
 
-    avgAttendeesPerEvent: number,
-    avgAttendeesPerEventType: EventTypeStatistics,
+    totalAttendeesByEventType: ValueStatistics,
+    totalEventsByEventType: ValueStatistics,
 
-    attendeePercentageByEventType: EventTypeStatistics,
-    eventPercentageByEventType: EventTypeStatistics,
+    avgAttendeesPerEvent: number, // totalAttendees / totalEvents
+    avgAttendeesByEventType: ValueStatistics, // totalAttendeesByEventType / totalEventsByEventType
+
+    attendeePercentageByEventType: PercentageStatistics, // totalAttendeesByEventType / totalAttendees
+    eventPercentageByEventType: PercentageStatistics, // totalEventsByEventType / totalEvents
 }
 
 type BirthdayUpdateFrequency = typeof BIRTHDAY_UPDATE_FREQUENCIES[number];
 
-export interface EventTypeStatistics {
+export interface ValueStatistics {
     [id: string]: {
         title: string,
-        data: number,
+        value: number,
+    }
+}
+
+export interface PercentageStatistics {
+    [id: string]: {
+        title: string,
+        value: number,
+        percent: number,
     }
 }
