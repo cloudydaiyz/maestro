@@ -1,14 +1,15 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "./cloud/gcp";
-import { BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
+import { BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
 import { MyTroupeService } from "./service";
 import { MyTroupeCore } from "./index";
-import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
-import { ObjectId, WithId } from "mongodb";
+import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
+import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, WithId } from "mongodb";
 import { getUrl } from "./util/helper";
 import { DiscoveryEventType, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import assert from "assert";
+import { Mutable, SetOperator } from "./types/util-types";
 
 export class MyTroupeSyncService extends MyTroupeService {
     ready: Promise<void>;
@@ -18,16 +19,34 @@ export class MyTroupeSyncService extends MyTroupeService {
 
     // Output variables
     troupe: WithId<TroupeSchema> | null;
-    events: { [sourceUri: string]: WithId<EventSchema> };
-    members: { [memberId: string]: WithId<MemberSchema> };
-    eventsAttended: { [memberId: string]: WithId<EventsAttendedBucketSchema>[] };
+    dashboard: WithId<TroupeDashboardSchema> | null;
+    events: { 
+        [sourceUri: string]: {
+            event: WithId<EventSchema>,
+            delete: boolean,
+            fromColl: boolean, 
+        }
+    };
+    members: { 
+        [memberId: string]: {
+            member: WithId<MemberSchema>,
+            eventsAttended: {
+                eventId: string,
+                value: number,
+                startDate: Date,
+            }[],
+            eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[],
+            delete: boolean,
+            fromColl: boolean
+        }
+    };
 
     constructor() {
         super();
         this.troupe = null;
+        this.dashboard = null;
         this.events = {};
         this.members = {};
-        this.eventsAttended = {};
         this.ready = this.init();
     }
 
@@ -58,6 +77,9 @@ export class MyTroupeSyncService extends MyTroupeService {
         );
         assert(this.troupe, "Failed to lock troupe for sync");
 
+        this.dashboard = await this.dashboardColl.findOne({ troupeId });
+        assert(this.dashboard, "Failed to get dashboard for sync");
+
         // Perform sync
         await this.discoverEvents()
             .then(this.discoverAndRefreshAudience)
@@ -74,14 +96,15 @@ export class MyTroupeSyncService extends MyTroupeService {
 
     /** Discovers events found from the given event types in the troupe */
     protected async discoverEvents(): Promise<void> {
-        const troupeId = this.troupe!._id.toHexString();
+        assert(this.troupe);
+        const troupeId = this.troupe._id.toHexString();
 
         // Initialize events
         for await(const event of this.eventColl.find({ troupeId })) {
             event.synchronizedSource = event.source;
             event.synchronizedSourceUri = event.sourceUri;
             event.synchronizedFieldToPropertyMap = event.fieldToPropertyMap;
-            this.events[event.sourceUri] = event;
+            this.events[event.sourceUri] = { event, delete: false, fromColl: true };
         }
 
         // To help with tie breaking, keep track of the folders that have been discovered
@@ -89,7 +112,7 @@ export class MyTroupeSyncService extends MyTroupeService {
 
         // Populate the array with the IDs of all the event type folders for this troupe
         const foldersToExplore: string[] = [];
-        for(const eventType of this.troupe!.eventTypes) {
+        for(const eventType of this.troupe.eventTypes) {
             const discoveryEventType = { ...eventType, totalFiles: 0 };
 
             for(const folder in eventType.sourceFolderUris) {
@@ -167,6 +190,12 @@ export class MyTroupeSyncService extends MyTroupeService {
 
                     // Add the event to the collection of events if it's not already added
                     if(sourceUri in this.events) {
+                        const event = this.events[sourceUri].event;
+                        if(!event.eventTypeId) {
+                            event.eventTypeId = winningEventType._id.toHexString();
+                            event.value = winningEventType.value;
+                        }
+                    } else {
                         const event: WithId<EventSchema> = {
                             _id: new ObjectId(),
                             troupeId,
@@ -184,13 +213,7 @@ export class MyTroupeSyncService extends MyTroupeService {
                             fieldToPropertyMap: {},
                             synchronizedFieldToPropertyMap: {},
                         };
-                        this.events[sourceUri] = event;
-                    } else {
-                        const event = this.events[sourceUri];
-                        if(!event.eventTypeId) {
-                            event.eventTypeId = winningEventType._id.toHexString();
-                            event.value = winningEventType.value;
-                        }
+                        this.events[sourceUri] = { event, delete: false, fromColl: false };
                     }
                 }
             }
@@ -213,22 +236,30 @@ export class MyTroupeSyncService extends MyTroupeService {
      * and update existing audience points. Drops invalid audience members.
      * */
     protected async discoverAndRefreshAudience() {
-        const troupeId = this.troupe!._id.toHexString();
+        assert(this.troupe);
+        const troupeId = this.troupe._id.toHexString();
         const lastUpdated = new Date();
 
         // Initialize audience members
         for await(const member of this.audienceColl.find({ troupeId })) {
-            this.members[member.properties["Member ID"].value] = member;
+            const eventsAttendedDocs = await this.eventsAttendedColl
+                .find({ memberId: member._id.toHexString() })
+                .sort({ page: 1 })
+                .toArray();
+            
+            this.members[member.properties["Member ID"].value] = {
+                member, eventsAttended: [], eventsAttendedDocs, delete: false, fromColl: true
+            };
 
             // Reset points for each point type in the member
             member.points = { "Total": 0 };
-            for(const pointType in Object.keys(this.troupe!.pointTypes)) {
+            for(const pointType in Object.keys(this.troupe.pointTypes)) {
                 member.points[pointType] = 0;
             }
 
             // Reset properties for each non overridden property in the member
             const baseProps: VariableMemberProperties = {};
-            for(const prop in this.troupe!.memberPropertyTypes) {
+            for(const prop in this.troupe.memberPropertyTypes) {
                 if(prop in member.properties && member.properties[prop].override) {
                     baseProps[prop] = member.properties[prop];
                 }
@@ -239,25 +270,48 @@ export class MyTroupeSyncService extends MyTroupeService {
         
         // Discover audience members from all events
         const audienceDiscovery = [];
-        for(const event of Object.values(this.events)) {
+        for(const eventData of Object.values(this.events)) {
+            const event = eventData.event;
 
             // Invariant: All events must have one field for the Member ID defined 
             // or else no member information can be collected from it
             if(!Object.values(event.fieldToPropertyMap)
                 .some(mapping => mapping.property === "Member ID")) {
+                if(this.troupe.originEventId === event._id.toHexString()) {
+                    console.log("Origin event does not have a Member ID field");
+                }
                 continue;
             }
             audienceDiscovery.push(this.discoverAudience(event, lastUpdated));
         }
         await Promise.all(audienceDiscovery);
+
+        // Get all the required properties from the troupe
+        const requiredProperties = [];
+        for(const prop in this.troupe.memberPropertyTypes) {
+            if(this.troupe.memberPropertyTypes[prop].slice(0, -1) == "!") {
+                requiredProperties.push(prop);
+            }
+        }
+
+        // Mark members without required properties for deletion
+        for(const member of Object.values(this.members)) {
+            for(const prop of requiredProperties) {
+                if(!member.member.properties[prop].value) {
+                    member.delete = true;
+                    break;
+                }
+            }
+        }
     }
 
     /**
      * Helper for {@link MyTroupeSyncService.discoverAndRefreshAudience}. Discovers
      * audience information from a single event.
      */
-    private async discoverAudience(event: EventSchema, lastUpdated: Date): Promise<void> {
-        const troupeId = this.troupe!._id.toHexString();
+    private async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
+        assert(this.troupe);
+        const troupeId = this.troupe._id.toHexString();
 
         if(event.source === "Google Forms") {
             const formId = FORMS_REGEX.exec(event.sourceUri)!.groups!["formId"];
@@ -271,7 +325,7 @@ export class MyTroupeSyncService extends MyTroupeService {
             } catch(e) {
                 console.log("Error getting form data for " + formId);
                 console.log(e);
-                delete this.events[event.sourceUri];
+                this.events[event.sourceUri].delete = true;
                 return;
             }
 
@@ -288,7 +342,7 @@ export class MyTroupeSyncService extends MyTroupeService {
 
                 // Ensure the given property is valid for the question, otherwise
                 // set the event property to null
-                const propertyType = this.troupe!.memberPropertyTypes[property].slice(0, -1);
+                const propertyType = this.troupe.memberPropertyTypes[property].slice(0, -1);
                 if(question.question.textQuestion) {
                     // Allowed types: string
                     if(propertyType == "string") {
@@ -402,22 +456,39 @@ export class MyTroupeSyncService extends MyTroupeService {
 
             // Synchronize member information with form response data
             for(const response of responseData.data.responses) {
+
+                // Initialize member properties
+                const properties = {} as BaseMemberProperties & VariableMemberProperties;
+                for(const prop in this.troupe.memberPropertyTypes) {
+                    properties[prop] = { value: null, override: false };
+                }
+
+                // Initialize a new member
                 let member: WithId<MemberSchema> = {
                     _id: new ObjectId(),
                     troupeId,
                     lastUpdated,
-                    properties: {} as BaseMemberProperties & VariableMemberProperties,
+                    properties,
                     points: { "Total": 0 },
                 };
+                let eventsAttended = [{
+                    eventId: event._id.toHexString(),
+                    value: event.value,
+                    startDate: event.startDate,
+                }];
+                let eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[] = [];
+                let fromColl = false;
 
                 for(const questionId in response.answers) {
                     const answer = response.answers[questionId];
                     const type = questionToTypeMap[questionId];
                     const property = event.fieldToPropertyMap[questionId]?.property;
-                    if(!type || !property || !answer.textAnswers 
+                    const isOriginEvent = this.troupe.originEventId != event._id.toHexString();
+                    if(!type || !property 
+                        || !answer.textAnswers 
                         || !answer.textAnswers.answers
                         || answer.textAnswers.answers.length == 0
-                        || member.properties[property]?.override) 
+                        || !isOriginEvent && member.properties[property].override) 
                         continue;
                     
                     let value: MemberPropertyValue;
@@ -434,6 +505,7 @@ export class MyTroupeSyncService extends MyTroupeService {
                             continue;
                         }
 
+                        // Invariant: At most one unique property per field
                         if(property == "Member ID") {
                             const existingMember = this.members[value as string];
 
@@ -441,21 +513,24 @@ export class MyTroupeSyncService extends MyTroupeService {
                             if(existingMember) {
                                 // Copy over properties
                                 for(const prop in member.properties) {
-                                    if(!existingMember.properties[prop]) {
-                                        existingMember.properties[prop] = member.properties[prop];
+                                    if(!existingMember.member.properties[prop]) {
+                                        existingMember.member.properties[prop] = member.properties[prop];
                                     }
                                 }
-                                member = existingMember;
+                                member = existingMember.member;
+                                eventsAttended = existingMember.eventsAttended.concat(eventsAttended);
+                                eventsAttendedDocs = existingMember.eventsAttendedDocs;
+                                fromColl = existingMember.fromColl;
                             }
                         }
 
-                        member.properties[property] = { value, override: false };
+                        member.properties[property] = { value, override: isOriginEvent };
                     }
                 }
 
                 // Update the member's points
-                for(const pointType in this.troupe!.pointTypes) {
-                    const range = this.troupe!.pointTypes[pointType];
+                for(const pointType in this.troupe.pointTypes) {
+                    const range = this.troupe.pointTypes[pointType];
                     if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
                         member.points[pointType] += event.value;
                     }
@@ -463,17 +538,130 @@ export class MyTroupeSyncService extends MyTroupeService {
 
                 // Add the member to the list of members. Member ID already proven
                 // to exist in event from discoverAndRefreshAudience method
-                this.members[member.properties["Member ID"].value] = member;
+                this.members[member.properties["Member ID"].value] = { 
+                    member, eventsAttended, eventsAttendedDocs, fromColl, delete: false 
+                };
             }
         }
     }
 
-    protected async persistSync() {
-        // update audience members & events
-        // update dashboard with statistics from event & audience update
+    protected async persistSync(): Promise<void> {
+        assert(this.dashboard);
+        const troupeId = this.troupe!._id.toHexString();
 
-        // $documents stage: https://www.mongodb.com/docs/manual/reference/operator/aggregation/documents/
-        // $merge stage: https://www.mongodb.com/docs/manual/reference/operator/aggregation/merge/
+        // Initialize events, audience members, and events attended documents to update and to delete
+        let updateEvents: WithId<EventSchema>[] = [];
+        let eventsToDelete: ObjectId[] = [];
+        let updateAudience: WithId<MemberSchema>[] = [];
+        let membersToDelete: ObjectId[] = [];
+        let updateEventsAttended: WithId<EventsAttendedBucketSchema>[] = [];
+        let eventsAttendedToDelete: ObjectId[] = [];
+
+        // Initialize dashboard to update with statistics from event & audience update
+        const dashboardUpdate: SetOperator<TroupeDashboardSchema> = {
+            lastUpdated: new Date(),
+            totalEvents: 0,
+            totalMembers: 0,
+            avgAttendeesPerEvent: 0,
+            avgAttendeesPerEventType: {},
+            attendeePercentageByEventType: {},
+            eventPercentageByEventType: {},
+            upcomingBirthdays: { 
+                frequency: this.dashboard.upcomingBirthdays.desiredFrequency,
+                desiredFrequency: this.dashboard.upcomingBirthdays.desiredFrequency,
+                members: []
+            },
+        };
+        assert(dashboardUpdate.$set);
+
+        // Populate the events to update and delete arrays
+        for(const sourceUri in this.events) {
+            const eventData = this.events[sourceUri];
+            if(eventData.delete && eventData.fromColl) {
+                eventsToDelete.push(eventData.event._id);
+            } else if(!eventData.delete) {
+                updateEvents.push(eventData.event);
+            }
+        }
+
+        // Populate the members and events attended to update and delete arrays
+        for(const memberId in this.members) {
+            const memberData = this.members[memberId];
+            if(memberData.delete && memberData.fromColl) {
+                // Delete the member and the events they've attended
+                membersToDelete.push(memberData.member._id);
+                eventsAttendedToDelete = eventsAttendedToDelete.concat(
+                    memberData.eventsAttendedDocs.map(doc => doc._id)
+                );
+            } else if(!memberData.delete) {
+                updateAudience.push(memberData.member);
+
+                let page = 0;
+                let docsProcessed = 0;
+                while(docsProcessed < memberData.eventsAttended.length) {
+                    let eventsAttendedDoc = memberData.eventsAttendedDocs[page];
+                    if(!eventsAttendedDoc) {
+                        const startIndex = page * MAX_PAGE_SIZE;
+                        const endIndex = Math.min(startIndex + MAX_PAGE_SIZE, memberData.eventsAttended.length);
+                        const events: {
+                            [eventId: string]: {
+                                value: number,
+                                startDate: Date,
+                            }
+                        } = {};
+
+                        for(let i = startIndex; i < endIndex; i++) {
+                            events[memberData.eventsAttended[i].eventId] = {
+                                value: memberData.eventsAttended[i].value,
+                                startDate: memberData.eventsAttended[i].startDate,
+                            }
+                        }
+
+                        eventsAttendedDoc = {
+                            _id: new ObjectId(),
+                            troupeId,
+                            memberId,
+                            page,
+                            events,
+                        }
+                        docsProcessed += endIndex - startIndex;
+                    };
+
+                    // Update the events attended document
+                    updateEventsAttended.push(eventsAttendedDoc);
+                    page++;
+                }
+
+                // Remove the remaining preexisting documents
+                eventsAttendedToDelete = eventsAttendedToDelete
+                    .concat(memberData.eventsAttendedDocs
+                        .slice(page)
+                        .map(doc => doc._id)
+                    );
+            }
+        }
+
+        // Update the events, audience, and events attended collections
+        const persistResults: (AggregationCursor<Document> | Promise<DeleteResult>)[] = [];
+        persistResults.push(this.eventColl.aggregate([
+            { $documents: updateEvents },
+            { $merge: { into: "events", on: "_id", whenMatched: "replace" } }
+        ]));
+        persistResults.push(this.eventColl.deleteMany({ _id: { $in: eventsToDelete } }));
+
+        persistResults.push(this.audienceColl.aggregate([
+            { $documents: updateAudience },
+            { $merge: { into: "audience", on: "_id", whenMatched: "replace" } }
+        ]));
+        persistResults.push(this.audienceColl.deleteMany({ _id: { $in: membersToDelete } }));
+
+        persistResults.push(this.eventsAttendedColl.aggregate([
+            { $documents: updateEventsAttended },
+            { $merge: { into: "eventsAttended", on: "_id", whenMatched: "replace" } }
+        ]));
+        persistResults.push(this.eventsAttendedColl.deleteMany({ _id: { $in: eventsAttendedToDelete } }));
+        
+        await Promise.all(persistResults);
     }
 
     protected async refreshLogSheet() {

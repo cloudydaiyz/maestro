@@ -327,11 +327,14 @@ export class MyTroupeCore {
             for(const key in request.updateProperties) {
                 assert(key in event.fieldToPropertyMap, new MyTroupeClientError("Invalid field ID"));
 
+                // Invariant: At most one unique property per field
                 if(!(request.removeProperties?.includes(key))) {
                     assert(Object.values(event.fieldToPropertyMap)
-                        .reduce((acc, val) => acc + (val.property 
+                        .reduce((acc, val) => acc + (
+                            val.property 
                             && val.property == request.updateProperties![key] 
-                            ? 1 : 0), 
+                            ? 1 : 0
+                        ), 
                         0) == 0,
                     "Field already present in another property"),
                     eventUpdate.$set[`fieldToPropertyMap.${key}.property`] = request.updateProperties[key];
@@ -631,8 +634,8 @@ export class MyTroupeCore {
     }
 
     /** 
-     * Turns on sync lock and places troupe into the sync queue if the lock is disabled. 
-     * If no ID is provided, all troupes with disabled sync locks are placed into the queue. 
+     * Places troupe into the sync queue if the lock is disabled. If no ID is provided,
+     * all troupes with disabled sync locks are placed into the queue.
      * */
     async initiateSync(troupeId?: string) {
 

@@ -1,0 +1,1 @@
+# mytroupe-core

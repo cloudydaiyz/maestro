@@ -35,3 +35,11 @@ export type GoogleFormsQuestionToTypeMap = {
         },
     }
 };
+
+// Handles data retrieval and synchronization from a data source
+export interface DataService {
+    retrieveFormData: () => Promise<void>;
+    synchronizeFieldToPropertyMap: () => void;
+    retrieveResponses: () => Promise<void>;
+    synchronizeMembers: () => void;
+}

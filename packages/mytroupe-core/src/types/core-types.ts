@@ -169,18 +169,18 @@ export interface TroupeDashboardSchema {
     totalMembers: number,
     totalEvents: number,
 
-    avgPointsPerEvent: number,
     avgAttendeesPerEvent: number,
-    avgAttendeesPerEventType: EventTypeStatistic[],
+    avgAttendeesPerEventType: EventTypeStatistics,
 
-    attendeePercentageByEventType: EventTypeStatistic[],
-    eventPercentageByEventType: EventTypeStatistic[],
+    attendeePercentageByEventType: EventTypeStatistics,
+    eventPercentageByEventType: EventTypeStatistics,
 }
 
 type BirthdayUpdateFrequency = typeof BIRTHDAY_UPDATE_FREQUENCIES[number];
 
-export interface EventTypeStatistic {
-    id: string,
-    title: string,
-    data: number,
+export interface EventTypeStatistics {
+    [id: string]: {
+        title: string,
+        data: number,
+    }
 }
