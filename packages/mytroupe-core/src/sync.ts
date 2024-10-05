@@ -1,16 +1,16 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "./cloud/gcp";
-import { EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema, TroupeSchema } from "./types/core-types";
+import { BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
 import { MyTroupeService } from "./service";
 import { MyTroupeCore } from "./index";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { ObjectId, WithId } from "mongodb";
 import { getUrl } from "./util/helper";
-import { DiscoveryEventType, FolderToEventTypeMap, GoogleFormsItemToTypeMap } from "./types/service-types";
+import { DiscoveryEventType, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import assert from "assert";
 
-export class MyTroupeSyncService extends MyTroupeCore {
+export class MyTroupeSyncService extends MyTroupeService {
     ready: Promise<void>;
     drive!: drive_v3.Drive;
     sheets!: sheets_v4.Sheets;
@@ -40,6 +40,7 @@ export class MyTroupeSyncService extends MyTroupeCore {
     /**
      * Synchronize the troupe with all of its source uris for events and event types, then
      * updates the audience and log sheet with the new information.
+     * 
      * - Doesn't delete events previously discovered, even if not found in parent
      *   event type folder
      * - Delete members that are no longer in the source folder & have no overridden properties
@@ -207,39 +208,62 @@ export class MyTroupeSyncService extends MyTroupeCore {
             : eventType;
     }
     
-    // go through event sign ups to discover audience, mark them as discovered, and update existing audience points
-    // validate that new audience members have the required properties AFTER audience discovery from ALL events
-        // drop invalid audience members
+    /** 
+     * Goes through event sign ups to discover audience, mark them as discovered, 
+     * and update existing audience points. Drops invalid audience members.
+     * */
     protected async discoverAndRefreshAudience() {
         const troupeId = this.troupe!._id.toHexString();
+        const lastUpdated = new Date();
 
         // Initialize audience members
         for await(const member of this.audienceColl.find({ troupeId })) {
             this.members[member.properties["Member ID"].value] = member;
+
+            // Reset points for each point type in the member
+            member.points = { "Total": 0 };
+            for(const pointType in Object.keys(this.troupe!.pointTypes)) {
+                member.points[pointType] = 0;
+            }
+
+            // Reset properties for each non overridden property in the member
+            const baseProps: VariableMemberProperties = {};
+            for(const prop in this.troupe!.memberPropertyTypes) {
+                if(prop in member.properties && member.properties[prop].override) {
+                    baseProps[prop] = member.properties[prop];
+                }
+            }
+            member.properties = baseProps as MemberSchema["properties"];
+            member.lastUpdated = lastUpdated;
         }
         
         // Discover audience members from all events
+        const audienceDiscovery = [];
         for(const event of Object.values(this.events)) {
-            if(event.fieldToPropertyMap["Member ID"] === null) {
-                delete this.events[event.sourceUri];
+
+            // Invariant: All events must have one field for the Member ID defined 
+            // or else no member information can be collected from it
+            if(!Object.values(event.fieldToPropertyMap)
+                .some(mapping => mapping.property === "Member ID")) {
                 continue;
             }
-
-            await this.discoverAudience(event);
+            audienceDiscovery.push(this.discoverAudience(event, lastUpdated));
         }
-
-        // save the updated audience (updated points & new members)
+        await Promise.all(audienceDiscovery);
     }
 
-    // synchronize the field to property map
-    // use the map to update the audience members
+    /**
+     * Helper for {@link MyTroupeSyncService.discoverAndRefreshAudience}. Discovers
+     * audience information from a single event.
+     */
+    private async discoverAudience(event: EventSchema, lastUpdated: Date): Promise<void> {
+        const troupeId = this.troupe!._id.toHexString();
 
-    private async discoverAudience(event: EventSchema) {
         if(event.source === "Google Forms") {
             const formId = FORMS_REGEX.exec(event.sourceUri)!.groups!["formId"];
-            const itemToTypeMap: GoogleFormsItemToTypeMap = {};
+            const questionToTypeMap: GoogleFormsQuestionToTypeMap = {};
 
-            // Synchronize the field to property map
+            // Retrieve form data
             let questionData;
             try {
                 questionData = await this.forms.forms.get({ formId });
@@ -251,9 +275,10 @@ export class MyTroupeSyncService extends MyTroupeCore {
                 return;
             }
 
+            // Synchronize the field to property map with the form data
             for(const item of questionData.data.items) {
                 const field = item.title;
-                const fieldId = item.itemId;
+                const fieldId = item.questionItem?.question?.questionId;
                 const question = item.questionItem;
                 if(!field || !fieldId || !question || !question.question) continue;
 
@@ -265,22 +290,180 @@ export class MyTroupeSyncService extends MyTroupeCore {
                 // set the event property to null
                 const propertyType = this.troupe!.memberPropertyTypes[property].slice(0, -1);
                 if(question.question.textQuestion) {
+                    // Allowed types: string
                     if(propertyType == "string") {
-                        itemToTypeMap[fieldId].string = true;
+                        questionToTypeMap[fieldId].string = true;
                     } else {
                         property = null;
                     }
                 } else if(question.question.choiceQuestion) {
                     if(question.question.choiceQuestion.type != "RADIO" 
                         && question.question.choiceQuestion.type != "DROP_DOWN") {
-                            property = null;
-                        }
+                        property = null;
+                    }
                     
+                    // Allowed types = string, number, date, boolean
                     if(propertyType == "string") {
-                        itemToTypeMap[fieldId].string = true;
+                        questionToTypeMap[fieldId].string = true;
+                    } else if(propertyType == "number") {
+                        // Ensure all properties are numbers
+                        const validType = question.question.choiceQuestion.options?.every(
+                            option => !Number.isNaN(Number(option.value))
+                        );
+
+                        if(!validType) {
+                            property = null;
+                        } else {
+                            questionToTypeMap[fieldId].number = true;
+                        }
+                    } else if(propertyType == "date") {
+                        // Ensure all properties are dates
+                        const validType = question.question.choiceQuestion.options?.every(
+                            option => option.value && !Number.isNaN(Date.parse(option.value))
+                        );
+
+                        if(!validType) {
+                            property = null;
+                        } else {
+                            questionToTypeMap[fieldId].date = true;
+                        }
+                    } else if(propertyType == "boolean") {
+                        // Ensure all properties are booleans
+                        const validType = question.question.choiceQuestion.options?.length === 2
+                            && question.question.choiceQuestion.options.every(
+                                option => option.value
+                            );
+
+                        if(!validType) {
+                            property = null;
+                        } else {
+                            questionToTypeMap[fieldId].boolean = {
+                                true: question.question.choiceQuestion.options![0].value!,
+                                false: question.question.choiceQuestion.options![1].value!,
+                            };
+                        }
+                    } else {
+                        property = null;
+                    }
+                } else if(question.question.scaleQuestion) {
+
+                    // Allowed types: string, number, boolean
+                    if(propertyType == "string") {
+                        questionToTypeMap[fieldId].string = true;
+                    } else if(propertyType == "number") {
+                        questionToTypeMap[fieldId].number = true;
+                    } else if(propertyType == "boolean") {
+                        const validType = question.question.scaleQuestion.high 
+                            && question.question.scaleQuestion.low == 1
+                            && question.question.scaleQuestion.high - question.question.scaleQuestion.low == 1;
+
+                        if(!validType) {
+                            property = null;
+                        } else {
+                            questionToTypeMap[fieldId].boolean = {
+                                true: question.question.scaleQuestion.high!,
+                                false: question.question.scaleQuestion.low!,
+                            };
+                        }
+                    } else {
+                        property = null;
+                    }
+                } else if(question.question.dateQuestion) {
+
+                    if(propertyType == "string") {
+                        questionToTypeMap[fieldId].string = true;
+                    } else {
+                        property = null;
+                    }
+                } else if(question.question.timeQuestion) {
+
+                    if(propertyType == "string") {
+                        questionToTypeMap[fieldId].string = true;
+                    } else {
+                        property = null;
+                    }
+                } else {
+                    property = null;
+                }
+
+                event.fieldToPropertyMap[fieldId].property = property;
+            }
+
+            // Retrieve responses
+            let responseData;
+            try {
+                responseData = await this.forms.forms.responses.list({ formId });
+                assert(responseData.data.responses, "No responses found in form");
+            } catch(e) {
+                console.log("Error getting response data for " + formId);
+                console.log(e);
+                return;
+            }
+
+            // Synchronize member information with form response data
+            for(const response of responseData.data.responses) {
+                let member: WithId<MemberSchema> = {
+                    _id: new ObjectId(),
+                    troupeId,
+                    lastUpdated,
+                    properties: {} as BaseMemberProperties & VariableMemberProperties,
+                    points: { "Total": 0 },
+                };
+
+                for(const questionId in response.answers) {
+                    const answer = response.answers[questionId];
+                    const type = questionToTypeMap[questionId];
+                    const property = event.fieldToPropertyMap[questionId]?.property;
+                    if(!type || !property || !answer.textAnswers 
+                        || !answer.textAnswers.answers
+                        || answer.textAnswers.answers.length == 0
+                        || member.properties[property]?.override) 
+                        continue;
+                    
+                    let value: MemberPropertyValue;
+                    if(answer.textAnswers.answers[0].value) {
+                        if(type.string) {
+                            value = answer.textAnswers.answers[0].value;
+                        } else if(type.boolean) {
+                            value = answer.textAnswers.answers[0].value == type.boolean.true;
+                        } else if(type.date) {
+                            value = new Date(answer.textAnswers.answers[0].value);
+                        } else if(type.number) {
+                            value = Number(answer.textAnswers.answers[0].value);
+                        } else {
+                            continue;
+                        }
+
+                        if(property == "Member ID") {
+                            const existingMember = this.members[value as string];
+
+                            // If the member already exists, use the existing member
+                            if(existingMember) {
+                                // Copy over properties
+                                for(const prop in member.properties) {
+                                    if(!existingMember.properties[prop]) {
+                                        existingMember.properties[prop] = member.properties[prop];
+                                    }
+                                }
+                                member = existingMember;
+                            }
+                        }
+
+                        member.properties[property] = { value, override: false };
                     }
                 }
-                event.fieldToPropertyMap[fieldId].property = property;
+
+                // Update the member's points
+                for(const pointType in this.troupe!.pointTypes) {
+                    const range = this.troupe!.pointTypes[pointType];
+                    if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
+                        member.points[pointType] += event.value;
+                    }
+                }
+
+                // Add the member to the list of members. Member ID already proven
+                // to exist in event from discoverAndRefreshAudience method
+                this.members[member.properties["Member ID"].value] = member;
             }
         }
     }

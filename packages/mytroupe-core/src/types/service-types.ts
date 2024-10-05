@@ -24,14 +24,14 @@ export type DiscoveryEventType = WithId<EventTypeSchema> & TieBreakerStatistics;
 // Maps folder IDs to the event type they were discovered for
 export type FolderToEventTypeMap = { [folderId: string]: DiscoveryEventType };
 
-export type GoogleFormsItemToTypeMap = {
-    [itemId: string]: {
+export type GoogleFormsQuestionToTypeMap = {
+    [questionId: string]: {
         string?: true,
         number?: true,
         date?: true,
         boolean?: {
-            true: string,
-            false: string,
+            true: string | number,
+            false: string | number,
         },
     }
 };

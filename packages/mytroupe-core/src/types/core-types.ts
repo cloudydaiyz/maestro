@@ -2,6 +2,7 @@
 
 import { ObjectId, WithId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, BIRTHDAY_UPDATE_FREQUENCIES, EVENT_DATA_SOURCES, MEMBER_PROPERTY_TYPES } from "../util/constants";
+import { Mutable } from "./util-types";
 
 // == TROUPE ==
 export interface TroupeSchema {
@@ -57,13 +58,13 @@ export interface PointData {
     endDate: Date,
 }
 
-export type BasePointTypes = typeof BASE_POINT_TYPES_OBJ
+export type BasePointTypes = typeof BASE_POINT_TYPES_OBJ;
 
 export interface VariablePointTypes {
     [key: string]: PointData,
 }
 
-export type BaseMemberPoints = { [key in keyof BasePointTypes]: number };
+export type BaseMemberPoints = Mutable<{ [key in keyof BasePointTypes]: number }>;
 export type VariableMemberPoints = { [key: string]: number; };
 
 // == EVENT ==
@@ -92,7 +93,7 @@ export interface FieldToPropertyMap {
     [fieldId: string]: {
         /** Form field data (e.g. the question being asked) */ 
         field: string, 
-        /** Member Property */ 
+        /** See {@link BaseMemberProperties} and {@link VariableMemberProperties} */ 
         property: string | null, 
     },
 }
@@ -132,7 +133,7 @@ export interface MemberSchema {
 }
 
 // Base type for the BaseMemberProperties interface
-type BaseMemberProperties = {
+export type BaseMemberProperties = {
     [key in keyof typeof BASE_MEMBER_PROPERTY_TYPES]: {
         value: MemberPropertyTypeToValue[typeof BASE_MEMBER_PROPERTY_TYPES[key]],
         override: boolean,
