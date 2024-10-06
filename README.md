@@ -1,5 +1,5 @@
 <p align="center">
-<img alt="App logo (film)" width="200" height="200" src="./assets/logo.svg" />
+<img alt="App logo (film)" width="200" height="200" src="./assets/logo-stroke.svg" />
 </p>
 
 <h1 align="center">
