@@ -10,7 +10,7 @@ import { DataService, DiscoveryEventType, EventMap, FolderToEventTypeMap, Google
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import assert from "assert";
 import { Mutable, SetOperator } from "./types/util-types";
-import { GoogleFormsDataService } from "./sources/gforms";
+import { GoogleFormsDataService } from "./services/sources/gforms";
 
 export class MyTroupeSyncService extends MyTroupeCoreService {
     ready: Promise<void>;
