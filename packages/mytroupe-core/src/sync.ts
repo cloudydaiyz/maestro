@@ -6,11 +6,12 @@ import { MyTroupeCore } from "./index";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getUrl } from "./util/helper";
-import { DataService, DiscoveryEventType, EventMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, MemberMap } from "./types/service-types";
+import { EventDataService, DiscoveryEventType, EventMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, MemberMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import assert from "assert";
 import { Mutable, SetOperator } from "./types/util-types";
-import { GoogleFormsDataService } from "./services/sources/gforms";
+import { GoogleFormsEventDataService } from "./services/sources/gforms";
+import { GoogleSheetsEventDataService } from "./services/sources/gsheets";
 
 export class MyTroupeSyncService extends MyTroupeCoreService {
     ready: Promise<void>;
@@ -176,6 +177,7 @@ export class MyTroupeSyncService extends MyTroupeCoreService {
                         const event = this.events[sourceUri].event;
                         if(!event.eventTypeId) {
                             event.eventTypeId = winningEventType._id.toHexString();
+                            event.eventTypeTitle = winningEventType.title;
                             event.value = winningEventType.value;
                         }
                     } else {
@@ -191,8 +193,9 @@ export class MyTroupeSyncService extends MyTroupeCoreService {
                             startDate: file.createdTime
                                 ? new Date(file.createdTime)
                                 : new Date(),
-                            value: 0,
                             eventTypeId: winningEventType._id.toHexString(),
+                            eventTypeTitle: winningEventType.title,
+                            value: winningEventType.value,
                             fieldToPropertyMap: {},
                             synchronizedFieldToPropertyMap: {},
                         };
@@ -296,13 +299,15 @@ export class MyTroupeSyncService extends MyTroupeCoreService {
         assert(this.troupe);
 
         // Select a data service to collect event data from, and discover audience using the service
-        let dataService: DataService;
+        let dataService: EventDataService;
         if(event.source === "Google Forms") {
-            dataService = new GoogleFormsDataService(this.troupe, this.events, this.members);
+            dataService = new GoogleFormsEventDataService(this.troupe, this.events, this.members);
+        } else if(event.source == "Google Sheets") {
+            dataService = new GoogleSheetsEventDataService(this.troupe, this.events, this.members);
         } else {
             return;
         }
-        dataService.ready.then(() => dataService.discoverAudience(event, lastUpdated));
+        await dataService.ready.then(() => dataService.discoverAudience(event, lastUpdated));
     }
 
     protected async persistSync(): Promise<void> {

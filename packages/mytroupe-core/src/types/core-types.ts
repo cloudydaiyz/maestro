@@ -81,6 +81,7 @@ export interface EventSchema {
     synchronizedSourceUri: string,
     startDate: Date,
     eventTypeId?: string,
+    eventTypeTitle?: string,
     value: number,
     /** One-to-one mapping of form fields IDs to member properties. */ 
     fieldToPropertyMap: FieldToPropertyMap,

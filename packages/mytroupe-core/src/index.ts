@@ -196,13 +196,14 @@ export class MyTroupeCore {
         const troupe = await this.getTroupeSchema(troupeId);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot create event while sync is in progress"));
 
+        const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == request.eventTypeId);
         const startDate = new Date(request.startDate);
         const eventDataSource = EVENT_DATA_SOURCE_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
         assert(eventDataSource > -1, new MyTroupeClientError("Invalid source URI"));
         assert(startDate.toString() != "Invalid Date", new MyTroupeClientError("Invalid date"));
         assert(request.eventTypeId == undefined || request.value == undefined, 
             new MyTroupeClientError("Unable to define event type and value at same time for event."));
-        assert(request.eventTypeId == undefined || troupe.eventTypes.find((et) => et._id.toHexString() == request.eventTypeId),
+        assert(request.eventTypeId == undefined || eventType,
             new MyTroupeClientError("Invalid event type ID"));
         
         // Find event type and populate value
@@ -218,6 +219,7 @@ export class MyTroupeCore {
             synchronizedSourceUri: "",
             startDate,
             eventTypeId: request.eventTypeId,
+            eventTypeTitle: request.eventTypeTitle,
             value: request.value,
             fieldToPropertyMap: {},
             synchronizedFieldToPropertyMap: {}
@@ -298,25 +300,8 @@ export class MyTroupeCore {
             // FUTURE: Update field to property mapping
         }
 
-        if(request.updateEventTypeId) {
-            const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == request.updateEventTypeId);
-            assert(eventType, new MyTroupeClientError("Invalid event type ID"));
-
-            eventUpdate.$set.eventTypeId = request.updateEventTypeId;
-            if(eventType.value != event.value) {
-                eventUpdate.$set.value = eventType.value;
-
-                // FUTURE: Update member points for types that the event's start date is in range for
-            }
-        }
-
-        if(request.removeEventTypeId) {
-            assert(!request.updateEventTypeId, new MyTroupeClientError("Cannot remove and update type ID"));
-            eventUpdate.$unset.eventTypeId = "";
-        }
-
         if(request.value && request.value != event.value) {
-            assert(!request.updateEventTypeId, new MyTroupeClientError("Cannot update value and type ID at the same time"));
+            assert(!event.eventTypeId, new MyTroupeClientError("Cannot update value when the event has an event type"));
             eventUpdate.$set.value = request.value;
 
             // FUTURE: Update member points for types that the event's start date is in range for
@@ -373,7 +358,7 @@ export class MyTroupeCore {
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot delete event while sync is in progress"));
 
         const updateEventsAttended = await this.eventsAttendedColl.updateMany(
-            { troupeId, [`events.${eventId}`]: {} },
+            { troupeId, [`events.${eventId}`]: { $exists: true } },
             { $unset: { [`events.${eventId}`]: "" } },
         );
         assert(updateEventsAttended.acknowledged, "Failed to update events attended");
@@ -443,6 +428,7 @@ export class MyTroupeCore {
      * 
      * Wait until next sync to:
      * - Update member points for attendees of events with the corresponding type*
+     * - Update event type titles in the corresponding events
      */ 
     async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<EventType> {
 
@@ -464,7 +450,10 @@ export class MyTroupeCore {
             $pull: {} as Mutable<PullOperator<TroupeSchema>>
         };
 
-        request.title ? eventTypeUpdate.$set["eventTypes.$[type].title"] = request.title : null;
+        if(request.title) {
+            eventTypeUpdate.$set["eventTypes.$[type].title"] = request.title;
+
+        }
 
         if(request.value) {
             eventTypeUpdate.$set["eventTypes.$[type].value"] = request.value;

@@ -25,7 +25,7 @@ export type DiscoveryEventType = WithId<EventTypeSchema> & TieBreakerStatistics;
 export type FolderToEventTypeMap = { [folderId: string]: DiscoveryEventType };
 
 // Handles event/member data retrieval and synchronization from a data source
-export interface DataService {
+export interface EventDataService {
     ready: Promise<void>;
     discoverAudience: (event: WithId<EventSchema>, lastUpdated: Date) => Promise<void>;
 }
