@@ -1,17 +1,18 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "./cloud/gcp";
 import { BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
-import { MyTroupeService } from "./service";
+import { MyTroupeCoreService } from "./services/core-service";
 import { MyTroupeCore } from "./index";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getUrl } from "./util/helper";
-import { DiscoveryEventType, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap } from "./types/service-types";
+import { DataService, DiscoveryEventType, EventMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, MemberMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import assert from "assert";
 import { Mutable, SetOperator } from "./types/util-types";
+import { GoogleFormsDataService } from "./sources/gforms";
 
-export class MyTroupeSyncService extends MyTroupeService {
+export class MyTroupeSyncService extends MyTroupeCoreService {
     ready: Promise<void>;
     drive!: drive_v3.Drive;
     sheets!: sheets_v4.Sheets;
@@ -20,22 +21,8 @@ export class MyTroupeSyncService extends MyTroupeService {
     // Output variables
     troupe: WithId<TroupeSchema> | null;
     dashboard: WithId<TroupeDashboardSchema> | null;
-    events: { 
-        [sourceUri: string]: {
-            event: WithId<EventSchema>,
-            delete: boolean,
-            fromColl: boolean, 
-        }
-    };
-    members: { 
-        [memberId: string]: {
-            member: WithId<MemberSchema>,
-            eventsAttended: (EventsAttendedBucketSchema["events"][string] & { eventId: string })[],
-            eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[],
-            delete: boolean,
-            fromColl: boolean
-        }
-    };
+    events: EventMap;
+    members: MemberMap;
 
     constructor() {
         super();
@@ -307,239 +294,15 @@ export class MyTroupeSyncService extends MyTroupeService {
      */
     private async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
         assert(this.troupe);
-        const troupeId = this.troupe._id.toHexString();
 
+        // Select a data service to collect event data from, and discover audience using the service
+        let dataService: DataService;
         if(event.source === "Google Forms") {
-            const formId = FORMS_REGEX.exec(event.sourceUri)!.groups!["formId"];
-            const questionToTypeMap: GoogleFormsQuestionToTypeMap = {};
-
-            // Retrieve form data
-            let questionData;
-            try {
-                questionData = await this.forms.forms.get({ formId });
-                assert(questionData.data.items, "No questions found in form");
-            } catch(e) {
-                console.log("Error getting form data for " + formId);
-                console.log(e);
-                this.events[event.sourceUri].delete = true;
-                return;
-            }
-
-            // Synchronize the field to property map with the form data
-            for(const item of questionData.data.items) {
-                const field = item.title;
-                const fieldId = item.questionItem?.question?.questionId;
-                const question = item.questionItem;
-                if(!field || !fieldId || !question || !question.question) continue;
-
-                let property = event.fieldToPropertyMap[fieldId]?.property;
-                event.fieldToPropertyMap[fieldId] = { field, property: null };
-                if(!property) continue;
-
-                // Ensure the given property is valid for the question, otherwise
-                // set the event property to null
-                const propertyType = this.troupe.memberPropertyTypes[property].slice(0, -1);
-                if(question.question.textQuestion) {
-                    // Allowed types: string
-                    if(propertyType == "string") {
-                        questionToTypeMap[fieldId].string = true;
-                    } else {
-                        property = null;
-                    }
-                } else if(question.question.choiceQuestion) {
-                    if(question.question.choiceQuestion.type != "RADIO" 
-                        && question.question.choiceQuestion.type != "DROP_DOWN") {
-                        property = null;
-                    }
-                    
-                    // Allowed types = string, number, date, boolean
-                    if(propertyType == "string") {
-                        questionToTypeMap[fieldId].string = true;
-                    } else if(propertyType == "number") {
-                        // Ensure all properties are numbers
-                        const validType = question.question.choiceQuestion.options?.every(
-                            option => !Number.isNaN(Number(option.value))
-                        );
-
-                        if(!validType) {
-                            property = null;
-                        } else {
-                            questionToTypeMap[fieldId].number = true;
-                        }
-                    } else if(propertyType == "date") {
-                        // Ensure all properties are dates
-                        const validType = question.question.choiceQuestion.options?.every(
-                            option => option.value && !Number.isNaN(Date.parse(option.value))
-                        );
-
-                        if(!validType) {
-                            property = null;
-                        } else {
-                            questionToTypeMap[fieldId].date = true;
-                        }
-                    } else if(propertyType == "boolean") {
-                        // Ensure all properties are booleans
-                        const validType = question.question.choiceQuestion.options?.length === 2
-                            && question.question.choiceQuestion.options.every(
-                                option => option.value
-                            );
-
-                        if(!validType) {
-                            property = null;
-                        } else {
-                            questionToTypeMap[fieldId].boolean = {
-                                true: question.question.choiceQuestion.options![0].value!,
-                                false: question.question.choiceQuestion.options![1].value!,
-                            };
-                        }
-                    } else {
-                        property = null;
-                    }
-                } else if(question.question.scaleQuestion) {
-
-                    // Allowed types: string, number, boolean
-                    if(propertyType == "string") {
-                        questionToTypeMap[fieldId].string = true;
-                    } else if(propertyType == "number") {
-                        questionToTypeMap[fieldId].number = true;
-                    } else if(propertyType == "boolean") {
-                        const validType = question.question.scaleQuestion.high 
-                            && question.question.scaleQuestion.low == 1
-                            && question.question.scaleQuestion.high - question.question.scaleQuestion.low == 1;
-
-                        if(!validType) {
-                            property = null;
-                        } else {
-                            questionToTypeMap[fieldId].boolean = {
-                                true: question.question.scaleQuestion.high!,
-                                false: question.question.scaleQuestion.low!,
-                            };
-                        }
-                    } else {
-                        property = null;
-                    }
-                } else if(question.question.dateQuestion) {
-
-                    if(propertyType == "string") {
-                        questionToTypeMap[fieldId].string = true;
-                    } else {
-                        property = null;
-                    }
-                } else if(question.question.timeQuestion) {
-
-                    if(propertyType == "string") {
-                        questionToTypeMap[fieldId].string = true;
-                    } else {
-                        property = null;
-                    }
-                } else {
-                    property = null;
-                }
-
-                event.fieldToPropertyMap[fieldId].property = property;
-            }
-
-            // Retrieve responses
-            let responseData;
-            try {
-                responseData = await this.forms.forms.responses.list({ formId });
-                assert(responseData.data.responses, "No responses found in form");
-            } catch(e) {
-                console.log("Error getting response data for " + formId);
-                console.log(e);
-                return;
-            }
-
-            // Synchronize member information with form response data
-            for(const response of responseData.data.responses) {
-
-                // Initialize member properties
-                const properties = {} as BaseMemberProperties & VariableMemberProperties;
-                for(const prop in this.troupe.memberPropertyTypes) {
-                    properties[prop] = { value: null, override: false };
-                }
-
-                // Initialize a new member
-                let member: WithId<MemberSchema> = {
-                    _id: new ObjectId(),
-                    troupeId,
-                    lastUpdated,
-                    properties,
-                    points: { "Total": 0 },
-                };
-                let eventsAttended: typeof this.members[string]["eventsAttended"] = [{
-                    eventId: event._id.toHexString(),
-                    typeId: event.eventTypeId,
-                    value: event.value,
-                    startDate: event.startDate,
-                }];
-                let eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[] = [];
-                let fromColl = false;
-
-                for(const questionId in response.answers) {
-                    const answer = response.answers[questionId];
-                    const type = questionToTypeMap[questionId];
-                    const property = event.fieldToPropertyMap[questionId]?.property;
-                    const isOriginEvent = this.troupe.originEventId != event._id.toHexString();
-                    if(!type || !property 
-                        || !answer.textAnswers 
-                        || !answer.textAnswers.answers
-                        || answer.textAnswers.answers.length == 0
-                        || !isOriginEvent && member.properties[property].override) 
-                        continue;
-                    
-                    let value: MemberPropertyValue;
-                    if(answer.textAnswers.answers[0].value) {
-                        if(type.string) {
-                            value = answer.textAnswers.answers[0].value;
-                        } else if(type.boolean) {
-                            value = answer.textAnswers.answers[0].value == type.boolean.true;
-                        } else if(type.date) {
-                            value = new Date(answer.textAnswers.answers[0].value);
-                        } else if(type.number) {
-                            value = Number(answer.textAnswers.answers[0].value);
-                        } else {
-                            continue;
-                        }
-
-                        // Invariant: At most one unique property per field
-                        if(property == "Member ID") {
-                            const existingMember = this.members[value as string];
-
-                            // If the member already exists, use the existing member
-                            if(existingMember) {
-                                // Copy over properties
-                                for(const prop in member.properties) {
-                                    if(!existingMember.member.properties[prop]) {
-                                        existingMember.member.properties[prop] = member.properties[prop];
-                                    }
-                                }
-                                member = existingMember.member;
-                                eventsAttended = existingMember.eventsAttended.concat(eventsAttended);
-                                eventsAttendedDocs = existingMember.eventsAttendedDocs;
-                                fromColl = existingMember.fromColl;
-                            }
-                        }
-
-                        member.properties[property] = { value, override: isOriginEvent };
-                    }
-                }
-
-                // Update the member's points
-                for(const pointType in this.troupe.pointTypes) {
-                    const range = this.troupe.pointTypes[pointType];
-                    if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
-                        member.points[pointType] += event.value;
-                    }
-                }
-
-                // Add the member to the list of members. Member ID already proven
-                // to exist in event from discoverAndRefreshAudience method
-                this.members[member.properties["Member ID"].value] = { 
-                    member, eventsAttended, eventsAttendedDocs, fromColl, delete: false 
-                };
-            }
+            dataService = new GoogleFormsDataService(this.troupe, this.events, this.members);
+        } else {
+            return;
         }
+        dataService.ready.then(() => dataService.discoverAudience(event, lastUpdated));
     }
 
     protected async persistSync(): Promise<void> {
