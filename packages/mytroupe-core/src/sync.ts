@@ -8,10 +8,10 @@ import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, 
 import { getUrl } from "./util/helper";
 import { EventDataService, DiscoveryEventType, EventMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, MemberMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
-import assert from "assert";
 import { Mutable, SetOperator } from "./types/util-types";
 import { GoogleFormsEventDataService } from "./services/sources/gforms";
 import { GoogleSheetsEventDataService } from "./services/sources/gsheets";
+import assert from "assert";
 
 export class MyTroupeSyncService extends MyTroupeCoreService {
     ready: Promise<void>;

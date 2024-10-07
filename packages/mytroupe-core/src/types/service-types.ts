@@ -42,6 +42,14 @@ export type GoogleFormsQuestionToTypeMap = {
     }
 };
 
+export type GoogleSheetsQuestionToTypeMap = {
+    [column: number]: {
+        string?: true,
+        number?: true,
+        date?: true,
+    }
+}
+
 export interface EventMap { 
     [sourceUri: string]: {
         event: WithId<EventSchema>,

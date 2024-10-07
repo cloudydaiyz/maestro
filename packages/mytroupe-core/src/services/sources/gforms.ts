@@ -61,7 +61,10 @@ export class GoogleFormsEventDataService implements EventDataService {
     // Synchronize the event's field to property map with the form data
     protected async synchronizeEvent(event: WithId<EventSchema>, items: forms_v1.Schema$Item[], 
         questionToTypeMap: GoogleFormsQuestionToTypeMap): Promise<void> {
+        const allFields = Object.keys(event.fieldToPropertyMap);
+        const includedFields: string[] = [];
 
+        // Extract the event's field to property map from event questions
         for(const item of items) {
             const field = item.title;
             const fieldId = item.questionItem?.question?.questionId;
@@ -70,6 +73,7 @@ export class GoogleFormsEventDataService implements EventDataService {
 
             let property = event.fieldToPropertyMap[fieldId]?.property;
             event.fieldToPropertyMap[fieldId] = { field, property: null };
+            includedFields.push(fieldId);
             if(!property) continue;
 
             // Ensure the given property is valid for the question, otherwise
@@ -173,6 +177,13 @@ export class GoogleFormsEventDataService implements EventDataService {
             }
 
             event.fieldToPropertyMap[fieldId].property = property;
+        }
+
+        // Delete any fields that are no longer in the form
+        for(const fieldId of allFields) {
+            if(!includedFields.includes(fieldId)) {
+                delete event.fieldToPropertyMap[fieldId];
+            }
         }
     }
 

@@ -91,7 +91,7 @@ export interface EventSchema {
 export type EventDataSource = typeof EVENT_DATA_SOURCES[number];
 
 export interface FieldToPropertyMap {
-    [fieldId: string]: {
+    [fieldId: string | number]: {
         /** Form field data (e.g. the question being asked) */ 
         field: string, 
         /** See {@link BaseMemberProperties} and {@link VariableMemberProperties} */ 

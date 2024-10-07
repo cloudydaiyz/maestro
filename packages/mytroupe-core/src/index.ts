@@ -297,7 +297,7 @@ export class MyTroupeCore {
             eventUpdate.$set.source = EVENT_DATA_SOURCES[dataSource];
             eventUpdate.$set.sourceUri = request.sourceUri;
 
-            // FUTURE: Update field to property mapping
+            // FUTURE: Delete the field to property mapping
         }
 
         if(request.value && request.value != event.value) {
