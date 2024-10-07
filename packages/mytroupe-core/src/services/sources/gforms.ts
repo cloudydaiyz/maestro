@@ -1,13 +1,14 @@
 // Google Forms data source
 
 import { ObjectId, WithId } from "mongodb";
-import { EventDataService, EventMap, GoogleFormsQuestionToTypeMap, MemberMap } from "../../types/service-types";
+import { EventMap, GoogleFormsQuestionToTypeMap, MemberMap } from "../../types/service-types";
 import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "../../types/core-types";
 import { FORMS_REGEX } from "../../util/constants";
-import assert from "assert";
 import { forms_v1 } from "googleapis";
 import { getForms } from "../../cloud/gcp";
 import { GaxiosResponse } from "gaxios";
+import { EventDataService } from "../base-service";
+import assert from "assert";
 
 export class GoogleFormsEventDataService implements EventDataService {
     ready: Promise<void>;

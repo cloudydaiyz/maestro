@@ -1,7 +1,7 @@
-import { MyTroupeCoreService } from "./services/core-service";
-import { CreateTroupeRequest } from "./types/service-types";
+import { BaseService } from "./base-service";
+import { CreateTroupeRequest } from "../types/service-types";
 
-export class AuthService extends MyTroupeCoreService {
+export class AuthService extends BaseService {
     constructor() { super() }
 
     /** Resets the credentials */

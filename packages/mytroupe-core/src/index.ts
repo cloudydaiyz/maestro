@@ -1,10 +1,12 @@
-import { Collection, MongoClient, ObjectId, PullOperator, PushOperator, WithId } from "mongodb";
-import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "./util/env";
-import { DB_NAME, DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "./util/constants";
+// Implementation for client-facing controller methods
+
+import { ObjectId, PullOperator, PushOperator, WithId } from "mongodb";
+import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "./util/constants";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
 import { CreateEventRequest, CreateEventTypeRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
 import assert from "assert";
+import { BaseService } from "./services/base-service";
 
 // To help catch and relay client-based errors
 export class MyTroupeClientError extends Error {
@@ -14,25 +16,8 @@ export class MyTroupeClientError extends Error {
     }
 }
 
-// Implementation for client-facing controller methods
-export class MyTroupeCore {
-    client: MongoClient;
-    connection: Promise<MongoClient>;
-    troupeColl: Collection<TroupeSchema>;
-    dashboardColl: Collection<TroupeDashboardSchema>;
-    eventColl: Collection<EventSchema>;
-    audienceColl: Collection<MemberSchema>;
-    eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
-    
-    constructor() {
-        this.client = new MongoClient(MONGODB_URI, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
-        this.connection = this.client.connect();
-        this.troupeColl = this.client.db(DB_NAME).collection("troupes");
-        this.dashboardColl = this.client.db(DB_NAME).collection("dashboards");
-        this.audienceColl = this.client.db(DB_NAME).collection("audience");
-        this.eventColl = this.client.db(DB_NAME).collection("events");
-        this.eventsAttendedColl = this.client.db(DB_NAME).collection("eventsAttended");
-    }
+export class TroupeApiService extends BaseService {
+    constructor() { super() }
 
     protected async getTroupeSchema(troupeId: string): Promise<WithId<TroupeSchema>> {
         const schema = await this.troupeColl.findOne({ _id: new ObjectId(troupeId) });

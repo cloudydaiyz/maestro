@@ -1,19 +1,19 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "./cloud/gcp";
 import { BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
-import { MyTroupeCoreService } from "./services/core-service";
-import { MyTroupeCore } from "./index";
+import { TroupeApiService } from "./index";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getUrl } from "./util/helper";
-import { EventDataService, DiscoveryEventType, EventMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, MemberMap } from "./types/service-types";
+import { DiscoveryEventType, EventMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, MemberMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "./types/util-types";
 import { GoogleFormsEventDataService } from "./services/sources/gforms";
 import { GoogleSheetsEventDataService } from "./services/sources/gsheets";
+import { EventDataService } from "./services/base-service";
 import assert from "assert";
 
-export class MyTroupeSyncService extends MyTroupeCoreService {
+export class TroupeSyncService extends TroupeApiService {
     ready: Promise<void>;
     drive!: drive_v3.Drive;
     sheets!: sheets_v4.Sheets;
@@ -71,11 +71,11 @@ export class MyTroupeSyncService extends MyTroupeCoreService {
             .then(this.refreshLogSheet);
         
         // Unlock the troupe
-        const updateResult2 = await this.troupeColl.updateOne(
+        const unlockResult = await this.troupeColl.updateOne(
             { troupeId },
             { $set: { syncLock: false } }
         );
-        assert(updateResult2.modifiedCount === 1, "Failed to unlock troupe after sync");
+        assert(unlockResult.modifiedCount === 1, "Failed to unlock troupe after sync");
     }
 
     /** Discovers events found from the given event types in the troupe */
@@ -285,7 +285,7 @@ export class MyTroupeSyncService extends MyTroupeCoreService {
     }
 
     /**
-     * Helper for {@link MyTroupeSyncService.discoverAndRefreshAudience}. Discovers
+     * Helper for {@link TroupeSyncService.discoverAndRefreshAudience}. Discovers
      * audience information from a single event. 
      * 
      * Invariant: All events must have one field for the Member ID defined or else

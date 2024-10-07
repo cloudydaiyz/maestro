@@ -1,12 +1,13 @@
-import assert from "assert";
-import { initTroupeSheet } from "../cloud/gcp";
-import { MyTroupeCore } from "../index";
-import { CreateTroupeRequest } from "../types/service-types";
-import { ObjectId } from "mongodb";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "../util/constants";
-
 // Additional functionality for other backend services
-export class MyTroupeCoreService extends MyTroupeCore {
+
+import assert from "assert";
+import { initTroupeSheet } from "./cloud/gcp";
+import { TroupeApiService } from "./index";
+import { CreateTroupeRequest } from "./types/service-types";
+import { ObjectId } from "mongodb";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "./util/constants";
+
+export class TroupeCoreService extends TroupeApiService {
     constructor() { super() }
 
     async createTroupe(request: CreateTroupeRequest) {
