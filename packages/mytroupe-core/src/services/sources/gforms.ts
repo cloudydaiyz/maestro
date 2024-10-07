@@ -18,6 +18,7 @@ export class GoogleFormsEventDataService implements EventDataService {
 
     questionData?: GaxiosResponse<forms_v1.Schema$Form>;
     responseData?: GaxiosResponse<forms_v1.Schema$ListFormResponsesResponse>;
+    containsMemberId?: true;
 
     constructor(troupe: WithId<TroupeSchema>, events: EventMap, members: MemberMap) { 
         this.troupe = troupe;
@@ -33,6 +34,7 @@ export class GoogleFormsEventDataService implements EventDataService {
     async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
         const formId = FORMS_REGEX.exec(event.sourceUri)!.groups!["formId"];
         const questionToTypeMap: GoogleFormsQuestionToTypeMap = {};
+        const eventData = this.events[event.sourceUri];
 
         // Retrieve form data
         try {
@@ -41,21 +43,26 @@ export class GoogleFormsEventDataService implements EventDataService {
         } catch(e) {
             console.log("Error getting form data for " + formId);
             console.log(e);
-            this.events[event.sourceUri].delete = true;
+            eventData.delete = true;
             return;
         }
-        await this.synchronizeEvent(event, this.questionData.data.items, questionToTypeMap);
 
-        // Retrieve responses
-        try {
-            this.responseData = await this.forms.forms.responses.list({ formId });
-            assert(this.responseData.data.responses, "No responses found in form");
-        } catch(e) {
-            console.log("Error getting response data for " + formId);
-            console.log(e);
-            return;
+        // Retrieve the event and responses responses if the event isn't flagged for deletion
+        if(!eventData.delete) {
+            await this.synchronizeEvent(event, this.questionData.data.items, questionToTypeMap);
+
+            if(this.containsMemberId) {
+                try {
+                    this.responseData = await this.forms.forms.responses.list({ formId });
+                    assert(this.responseData.data.responses, "No responses found in form");
+                } catch(e) {
+                    console.log("Error getting response data for " + formId);
+                    console.log(e);
+                    return;
+                }
+                await this.synchronizeAudience(event, lastUpdated, this.responseData.data.responses, questionToTypeMap);
+            }
         }
-        await this.synchronizeAudience(event, lastUpdated, this.responseData.data.responses, questionToTypeMap);
     }
 
     // Synchronize the event's field to property map with the form data
@@ -176,6 +183,7 @@ export class GoogleFormsEventDataService implements EventDataService {
                 property = null;
             }
 
+            if(property == "Member ID") this.containsMemberId = true;
             event.fieldToPropertyMap[fieldId].property = property;
         }
 
@@ -247,9 +255,8 @@ export class GoogleFormsEventDataService implements EventDataService {
                     if(property == "Member ID") {
                         const existingMember = this.members[value as string];
 
-                        // If the member already exists, use the existing member
+                        // If the member already exists, use the existing member and copy over any new properties
                         if(existingMember) {
-                            // Copy over properties
                             for(const prop in member.properties) {
                                 if(!existingMember.member.properties[prop]) {
                                     existingMember.member.properties[prop] = member.properties[prop];

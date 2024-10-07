@@ -254,21 +254,14 @@ export class MyTroupeSyncService extends MyTroupeCoreService {
             member.lastUpdated = lastUpdated;
         }
         
-        // Discover audience members from all events
+        // Discover audience members from events not flagged for deletion
         const audienceDiscovery = [];
         for(const eventData of Object.values(this.events)) {
             const event = eventData.event;
 
-            // Invariant: All events must have one field for the Member ID defined 
-            // or else no member information can be collected from it
-            if(!Object.values(event.fieldToPropertyMap)
-                .some(mapping => mapping.property === "Member ID")) {
-                if(this.troupe.originEventId === event._id.toHexString()) {
-                    console.log("Origin event does not have a Member ID field");
-                }
-                continue;
+            if(!eventData.delete) {
+                audienceDiscovery.push(this.discoverAudience(event, lastUpdated));
             }
-            audienceDiscovery.push(this.discoverAudience(event, lastUpdated));
         }
         await Promise.all(audienceDiscovery);
 
@@ -293,7 +286,10 @@ export class MyTroupeSyncService extends MyTroupeCoreService {
 
     /**
      * Helper for {@link MyTroupeSyncService.discoverAndRefreshAudience}. Discovers
-     * audience information from a single event.
+     * audience information from a single event. 
+     * 
+     * Invariant: All events must have one field for the Member ID defined or else
+     * no member information can be collected from it.
      */
     private async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
         assert(this.troupe);
