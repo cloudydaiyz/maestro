@@ -10,22 +10,15 @@ import { GaxiosResponse } from "gaxios";
 import { EventDataService } from "../base-service";
 import assert from "assert";
 
-export class GoogleFormsEventDataService implements EventDataService {
-    ready: Promise<void>;
+export class GoogleFormsEventDataService extends EventDataService {
     forms!: forms_v1.Forms;
-    troupe: WithId<TroupeSchema>;
-    events: EventMap;
-    members: MemberMap;
 
     questionData?: GaxiosResponse<forms_v1.Schema$Form>;
     responseData?: GaxiosResponse<forms_v1.Schema$ListFormResponsesResponse>;
     containsMemberId?: true;
 
     constructor(troupe: WithId<TroupeSchema>, events: EventMap, members: MemberMap) { 
-        this.troupe = troupe;
-        this.events = events;
-        this.members = members;
-        this.ready = this.init() 
+        super(troupe, events, members);
     };
 
     async init(): Promise<void> {

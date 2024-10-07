@@ -1,17 +1,16 @@
 // Additional functionality for other backend services
 
 import assert from "assert";
-import { initTroupeSheet } from "./cloud/gcp";
-import { TroupeApiService } from "./index";
 import { CreateTroupeRequest } from "./types/service-types";
 import { ObjectId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "./util/constants";
+import { BaseService } from "./services/base-service";
 
-export class TroupeCoreService extends TroupeApiService {
+export class TroupeCoreService extends BaseService {
     constructor() { super() }
 
     async createTroupe(request: CreateTroupeRequest) {
-        const logSheetUri = await initTroupeSheet(request.name).then(res => res.data.id);
+        const logSheetUri = "";
         assert(logSheetUri, "Failed to create log sheet");
 
         return this.client.startSession().withTransaction(async () => {

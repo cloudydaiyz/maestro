@@ -7,28 +7,15 @@ import { CreateEventRequest, CreateEventTypeRequest, EventType, Member, PublicEv
 import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
 import assert from "assert";
 import { BaseService } from "./services/base-service";
-
-// To help catch and relay client-based errors
-export class MyTroupeClientError extends Error {
-    constructor(message: string) {
-        super(message);
-        this.name = "MyTroupeClientError";
-    }
-}
+import { MyTroupeClientError } from "./util/error";
 
 export class TroupeApiService extends BaseService {
     constructor() { super() }
 
-    protected async getTroupeSchema(troupeId: string): Promise<WithId<TroupeSchema>> {
-        const schema = await this.troupeColl.findOne({ _id: new ObjectId(troupeId) });
-        assert(schema, new MyTroupeClientError("Unable to find troupe"));
-        return schema;
-    }
-
     /** Retrieves or formats the current troupe using public-facing format */ 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {
         let publicTroupe: WeakPartial<WithId<TroupeSchema>, "_id"> = typeof troupe == "string" 
-            ? await this.getTroupeSchema(troupe)
+            ? await this.getTroupeSchema(troupe, true)
             : troupe;
         
         // Remove the ObjectId to replace with a string ID
@@ -75,7 +62,7 @@ export class TroupeApiService extends BaseService {
      * - update the point types of members to have the correct type & amt of points*
      */
     async updateTroupe(troupeId: string, request: UpdateTroupeRequest): Promise<Troupe> {
-        const troupe = await this.getTroupeSchema(troupeId);
+        const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot update troupe while sync is in progress"));
 
         // Prepare for the database update
@@ -178,7 +165,7 @@ export class TroupeApiService extends BaseService {
 
     /** Creates a new event in the given Troupe. */
     async createEvent(troupeId: string, request: CreateEventRequest): Promise<PublicEvent> {
-        const troupe = await this.getTroupeSchema(troupeId);
+        const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot create event while sync is in progress"));
 
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == request.eventTypeId);
@@ -215,17 +202,11 @@ export class TroupeApiService extends BaseService {
         return this.getEvent({...event, _id: insertedEvent.insertedId});
     }
 
-    protected async getEventSchema(troupeId: string, eventId: string): Promise<WithId<EventSchema>> {
-        const event = await this.eventColl.findOne({ _id: new ObjectId(eventId), troupeId });
-        assert(event, new MyTroupeClientError("Unable to find event"));
-        return event;
-    }
-
     async getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent> {
         assert(typeof event != "string" || troupeId != null, 
             new MyTroupeClientError("Must have a troupe ID to retrieve event."))
         let publicEvent: WeakPartial<WithId<EventSchema>, "_id"> = typeof event == "string" 
-            ? await this.getEventSchema(troupeId!, event)
+            ? await this.getEventSchema(troupeId!, event, true)
             : event;
         const eid = publicEvent._id!.toHexString();
         delete publicEvent._id;
@@ -256,8 +237,8 @@ export class TroupeApiService extends BaseService {
      */
     async updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest): Promise<PublicEvent> {
         const [troupe, event] = await Promise.all([
-            this.getTroupeSchema(troupeId),
-            this.getEventSchema(troupeId, eventId)
+            this.getTroupeSchema(troupeId, true),
+            this.getEventSchema(troupeId, eventId, true)
         ]);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot update event while sync is in progress"));
 
@@ -337,7 +318,7 @@ export class TroupeApiService extends BaseService {
      */
     async deleteEvent(troupeId: string, eventId: string): Promise<void> {
         const [troupe, /** event */] = await Promise.all([
-            this.getTroupeSchema(troupeId), 
+            this.getTroupeSchema(troupeId, true), 
             // this.getEventSchema(troupeId, eventId)
         ]);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot delete event while sync is in progress"));
@@ -385,18 +366,11 @@ export class TroupeApiService extends BaseService {
         return this.getEventType(type);
     }
 
-    protected async getEventTypeSchema(troupeId: string, eventTypeId: string): Promise<EventTypeSchema> {
-        const troupe = await this.getTroupeSchema(troupeId);
-        const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
-        assert(eventType, new MyTroupeClientError("Unable to find event type"));
-        return eventType;
-    }
-
     async getEventType(eventType: string | WithId<EventTypeSchema>, troupeId?: string): Promise<EventType> {
         assert(typeof eventType != "string" || troupeId != null, 
             new MyTroupeClientError("Must have a troupe ID to retrieve event type."))
         let eType: WeakPartial<WithId<EventTypeSchema>, "_id"> = typeof eventType == "string" 
-            ? await this.getEventTypeSchema(troupeId!, eventType)
+            ? await this.getEventTypeSchema(troupeId!, eventType, true)
             : eventType;
         const eid = eType._id!.toHexString();
         delete eType._id;
@@ -423,7 +397,7 @@ export class TroupeApiService extends BaseService {
             new MyTroupeClientError("Invalid source URI in request")
         ));
 
-        const troupe = await this.getTroupeSchema(troupeId);
+        const troupe = await this.getTroupeSchema(troupeId, true);
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot update event type while sync is in progress"));
         assert(eventType, new MyTroupeClientError("Unable to find event type"));
@@ -500,17 +474,11 @@ export class TroupeApiService extends BaseService {
         // *FUTURE: Update member points for attendees of events with the corresponding type
     }
 
-    protected async getMemberSchema(troupeId: string, memberId: string): Promise<WithId<MemberSchema>> {
-        const member = await this.audienceColl.findOne({ _id: new ObjectId(memberId), troupeId });
-        assert(member, new MyTroupeClientError("Unable to find member"));
-        return member;
-    }
-
     async getMember(member: string | WithId<MemberSchema>, troupeId?: string): Promise<Member> {
         assert(typeof member != "string" || troupeId != null, 
             new MyTroupeClientError("Must have a troupe ID to retrieve event."))
         const m: WeakPartial<WithId<MemberSchema>, "_id"> = typeof member == "string"
-            ? await this.getMemberSchema(troupeId!, member)
+            ? await this.getMemberSchema(troupeId!, member, true)
             : member;
         const memberId = m._id!.toHexString();
         delete m._id;
@@ -542,8 +510,8 @@ export class TroupeApiService extends BaseService {
     /** Update or delete (optional) properties for single member */
     async updateMember(troupeId: string, memberId: string, request: UpdateMemberRequest): Promise<Member> {
         const [troupe, member] = await Promise.all([
-            this.getTroupeSchema(troupeId),
-            this.getMemberSchema(troupeId, memberId)
+            this.getTroupeSchema(troupeId, true),
+            this.getMemberSchema(troupeId, memberId, true)
         ]);
         assert(!troupe.syncLock, new MyTroupeClientError("Cannot update member while sync is in progress"));
 

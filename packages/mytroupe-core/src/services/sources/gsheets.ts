@@ -10,21 +10,17 @@ import { Readable } from "stream";
 import assert from "assert";
 import { EventDataService } from "../base-service";
 
-export class GoogleSheetsEventDataService implements EventDataService {
-    ready: Promise<void>;
-    troupe: WithId<TroupeSchema>;
-    events: EventMap;
-    members: MemberMap;
-
+export class GoogleSheetsEventDataService extends EventDataService {
     results?: string[][];
     columnToTypeMap?: GoogleSheetsQuestionToTypeMap;
     containsMemberId?: boolean;
-
+    
     constructor(troupe: WithId<TroupeSchema>, events: EventMap, members: MemberMap) {
-        this.troupe = troupe;
-        this.events = events;
-        this.members = members;
-        this.ready = Promise.resolve();
+        super(troupe, events, members);
+    }
+
+    init(): Promise<void> {
+        return Promise.resolve();
     }
 
     async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {

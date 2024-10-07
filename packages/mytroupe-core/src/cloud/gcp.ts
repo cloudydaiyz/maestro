@@ -47,31 +47,6 @@ export async function getForms(): Promise<forms_v1.Forms> {
     return forms;
 }
 
-// Creating a new spreadsheet
-// Copy the file, move it to the appropriate folder and rename it
-// https://developers.google.com/drive/api/reference/rest/v3/files/copy
-
-// https://developers.google.com/drive/api/reference/rest/v3/files/update
-// https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/batchUpdate
-
-// Delete spreadsheet
-// https://developers.google.com/drive/api/reference/rest/v3/files/delete
-
-// Updating the spreadsheet
-// https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/batchUpdate
-
-// Get spreadsheet values (for validation)
-// https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/get
-// https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets.values/batchGet
-
-export async function initTroupeSheet(name: string) {
-    return getDrive()
-        .then(client => client.files.copy({
-            fileId: BASE_LOG_SHEET_ID,
-            requestBody: { name, parents: [ LOG_SHEET_DRIVE_ID ] }
-        }))
-}
-
 export async function getTroupeSheetData() {}
 
 export async function clearTroupeSheet() {}

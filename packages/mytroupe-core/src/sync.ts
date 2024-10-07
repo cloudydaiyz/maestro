@@ -1,7 +1,6 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "./cloud/gcp";
 import { BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
-import { TroupeApiService } from "./index";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getUrl } from "./util/helper";
@@ -10,10 +9,10 @@ import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "./types/util-types";
 import { GoogleFormsEventDataService } from "./services/sources/gforms";
 import { GoogleSheetsEventDataService } from "./services/sources/gsheets";
-import { EventDataService } from "./services/base-service";
+import { BaseService, EventDataService } from "./services/base-service";
 import assert from "assert";
 
-export class TroupeSyncService extends TroupeApiService {
+export class TroupeSyncService extends BaseService {
     ready: Promise<void>;
     drive!: drive_v3.Drive;
     sheets!: sheets_v4.Sheets;

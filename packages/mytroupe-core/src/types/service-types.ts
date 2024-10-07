@@ -24,12 +24,6 @@ export type DiscoveryEventType = WithId<EventTypeSchema> & TieBreakerStatistics;
 // Maps folder IDs to the event type they were discovered for
 export type FolderToEventTypeMap = { [folderId: string]: DiscoveryEventType };
 
-// Handles event/member data retrieval and synchronization from a data source
-export interface EventDataService {
-    ready: Promise<void>;
-    discoverAudience: (event: WithId<EventSchema>, lastUpdated: Date) => Promise<void>;
-}
-
 export type GoogleFormsQuestionToTypeMap = {
     [questionId: string]: {
         string?: true,
