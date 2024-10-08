@@ -199,3 +199,18 @@ export interface PercentageStatistics {
         percent: number,
     }
 }
+
+// == USERS ==
+
+export interface UserSchema {
+    troupeId: string,
+    emails: string[],
+    password: string, // encrypted at rest
+}
+
+export interface UserSessionSchema {
+    userId: string,
+    accessToken: string,
+    refreshToken: string,
+    expiration: Date,
+}

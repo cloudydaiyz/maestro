@@ -8,12 +8,6 @@ export type CreateTroupeRequest = Omit<
     "id" | "lastUpdated" | "syncLock" | "eventTypes" | "logSheetUri"
 > & { email: string, password: string };
 
-export type UserSchema = {
-    troupeId: string,
-    emails: string[],
-    password: string,
-}
-
 // Additional statistics for the event type to help with tie breaking
 type TieBreakerStatistics = Partial<{
     totalFiles: number,
