@@ -411,7 +411,6 @@ export class TroupeApiService extends BaseService {
 
         if(request.title) {
             eventTypeUpdate.$set["eventTypes.$[type].title"] = request.title;
-
         }
 
         if(request.value) {

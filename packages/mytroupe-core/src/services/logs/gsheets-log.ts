@@ -31,7 +31,13 @@ export class GoogleSheetsLogService extends TroupeLogService {
     deleteLog(troupeId: string): Promise<void> {
         throw new Error("Method not implemented.");
     }
-    
+
+    // https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/batchUpdate
+    // https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/request#Request
+    // 
+    // https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/request#UpdateSpreadsheetPropertiesRequest
+
+
     protected updateLogHelper(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<MemberSchema>[], eventsAttendedSchema: WithId<EventsAttendedBucketSchema>[]): Promise<void> {
         throw new Error("Method not implemented.");
     }

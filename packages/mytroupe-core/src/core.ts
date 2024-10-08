@@ -15,7 +15,7 @@ export class TroupeCoreService extends BaseService {
 
         return this.client.startSession().withTransaction(async () => {
             const lastUpdated = new Date();
-            const troupe = await this.troupeColl.insertOne({
+            const insertTroupe = await this.troupeColl.insertOne({
                 ...request,
                 lastUpdated,
                 logSheetUri,
@@ -25,10 +25,10 @@ export class TroupeCoreService extends BaseService {
                 synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
                 syncLock: false,
             });
-            assert(troupe.insertedId, "Failed to create troupe");
+            assert(insertTroupe.insertedId, "Failed to create troupe");
     
-            const dashboard = await this.dashboardColl.insertOne({
-                troupeId: troupe.insertedId.toHexString(),
+            const insertDashboard = await this.dashboardColl.insertOne({
+                troupeId: insertTroupe.insertedId.toHexString(),
                 lastUpdated,
                 upcomingBirthdays: {
                     frequency: "monthly",
@@ -46,9 +46,13 @@ export class TroupeCoreService extends BaseService {
                 totalAttendeesByEventType: {},
                 totalEventsByEventType: {},
             });
-            assert(dashboard.insertedId, "Failed to create dashboard");
-            return troupe.insertedId;
+            assert(insertDashboard.insertedId, "Failed to create dashboard");
+            return insertTroupe.insertedId;
         });
+    }
+
+    async newTroupeLog(troupeId: string) {
+
     }
 
     async deleteTroupe(troupeId: string) {
