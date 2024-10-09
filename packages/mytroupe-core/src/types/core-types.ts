@@ -99,20 +99,6 @@ export interface FieldToPropertyMap {
     },
 }
 
-// Invariant: Members can attend an event at most once
-export interface EventsAttendedBucketSchema {
-    troupeId: string,
-    memberId: string,
-    events: {
-        [eventId: string]: {
-            typeId?: string,
-            value: number,
-            startDate: Date,
-        }
-    },
-    page: number,
-}
-
 // == EVENT TYPES ==
 
 export interface EventTypeSchema {
@@ -132,6 +118,25 @@ export interface MemberSchema {
     /** Uses synchronized member properties */
     properties: BaseMemberProperties & VariableMemberProperties,
     points: BaseMemberPoints & VariableMemberPoints,
+}
+
+// Invariant: Members can attend an event at most once
+export interface EventsAttendedBucketSchema {
+    troupeId: string,
+    memberId: string,
+    events: {
+        [eventId: string]: {
+            typeId?: string,
+            value: number,
+            startDate: Date,
+        }
+    },
+    page: number,
+}
+
+// Attendee = Member + Events Attended
+export interface AttendeeSchema extends MemberSchema {
+    eventsAttended: EventsAttendedBucketSchema["events"],
 }
 
 // Base type for the BaseMemberProperties interface

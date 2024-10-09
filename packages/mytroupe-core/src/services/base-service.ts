@@ -92,8 +92,8 @@ export abstract class TroupeLogService extends BaseService {
         return this.updateLogHelper(troupe as WithId<TroupeSchema>, events, audience, eventsAttendedSchema);
     }
     
-    abstract initLog(troupe: WithId<TroupeSchema>): Promise<string>;
-    abstract deleteLog(troupeId: string): Promise<void>;
+    abstract createLog(troupe: WithId<TroupeSchema>): Promise<string>;
+    abstract deleteLog(troupe: WithId<TroupeSchema>): Promise<void>;
     protected abstract updateLogHelper(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<MemberSchema>[], 
         eventsAttendedSchema: WithId<EventsAttendedBucketSchema>[]): Promise<void>;
 }
