@@ -393,6 +393,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
         });
 
         updateRequests.concat(this.updateEventTypeLog(currentData.data.valueRanges?.[0].values || [], troupe));
+        updateRequests.concat(this.updateEventLog(currentData.data.valueRanges?.[1].values || [], events));
 
         if(updateRequests.length > 0) {
             await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: updateRequests } });
@@ -402,6 +403,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
     protected updateEventTypeLog(currentData: string[][], troupe: WithId<TroupeSchema>): sheets_v4.Schema$Request[] {
         const requests: sheets_v4.Schema$Request[] = [];
 
+        // Obtain the desired state
         const desiredData: sheets_v4.Schema$RowData[] = troupe.eventTypes.map((eventType, i) => {
             return {
                 values: [
@@ -410,7 +412,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             };
         });
 
-        // If there are currently more columns than desired, delete the extra columns
+        // If there are currently more rows than desired, delete the extra rows
         if(currentData.length > desiredData.length) {
             requests.push({
                 deleteDimension: {
@@ -453,6 +455,71 @@ export class GoogleSheetsLogService extends TroupeLogService {
                     rows: updatedRows,
                     fields: "userEnteredValue",
                     start: { sheetId: 0, rowIndex: 2, columnIndex: 0 },
+                }
+            });
+        }
+
+        return requests;
+    }
+
+    protected updateEventLog(currentData: string[][], events: WithId<EventSchema>[]): sheets_v4.Schema$Request[] {
+        const requests: sheets_v4.Schema$Request[] = [];
+
+        // Obtain the desired state
+        const desiredData: sheets_v4.Schema$RowData[] = events.map((event, i) => {
+            return {
+                values: [
+                    ...this.cellBuilder([
+                        i.toString(), event._id.toHexString(), event.eventTypeId || "", event.eventTypeTitle || "", 
+                        event.title, event.startDate.toISOString(), event.value.toString(), event.source, event.sourceUri, ""
+                    ]),
+                ]
+            };
+        });
+
+        // If there are currently more rows than desired, delete the extra rows
+        if(currentData.length > desiredData.length) {
+            requests.push({
+                deleteDimension: {
+                    range: {
+                        sheetId: 1,
+                        dimension: "ROWS",
+                        startIndex: desiredData.length,
+                        endIndex: currentData.length,
+                    }
+                }
+            });
+        }
+
+        // Update the rows that have changed
+        const updatedRows: sheets_v4.Schema$RowData[] = [];
+        for(let i = 0; i <= desiredData.length; i++) {
+            let addRow = false;
+            const row = desiredData[i];
+
+            // Check the row to see if any cells have changed and, if so, add the row to the updated rows
+            for(let j = 0; !addRow && j <= row.values!.length; j++) {
+                const desiredCell = row.values![j].effectiveValue!.stringValue;
+                if(desiredCell != currentData[i][j]) {
+                    updatedRows.push(row);
+                    addRow = true;
+                }
+            }
+
+            // If the row has not changed, add an empty row to the updated rows.
+            // For the Google Sheets API, you can skip rows, but you can't skip cells.
+            if(!addRow) {
+                updatedRows.push({});
+            }
+        }
+
+        // If there's any updated rows, update the cells
+        if(updatedRows.length > 0) {
+            requests.push({
+                updateCells: {
+                    rows: updatedRows,
+                    fields: "userEnteredValue",
+                    start: { sheetId: 1, rowIndex: 2, columnIndex: 0 },
                 }
             });
         }

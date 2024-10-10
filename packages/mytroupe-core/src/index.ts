@@ -473,6 +473,10 @@ export class TroupeApiService extends BaseService {
         // *FUTURE: Update member points for attendees of events with the corresponding type
     }
 
+    async createMember() {
+        
+    }
+
     async getMember(member: string | WithId<MemberSchema>, troupeId?: string): Promise<Member> {
         assert(typeof member != "string" || troupeId != null, 
             new MyTroupeClientError("Must have a troupe ID to retrieve event."))
@@ -572,6 +576,10 @@ export class TroupeApiService extends BaseService {
         assert(newMember, "Failed to update member");
 
         return this.getMember(newMember);
+    }
+
+    async deleteMember() {
+
     }
 
     /** 
