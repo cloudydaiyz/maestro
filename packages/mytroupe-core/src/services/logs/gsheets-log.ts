@@ -71,7 +71,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
         // Prepare for sheet update after sheet creation (deletes unused columns from created sheets)
         const requests: sheets_v4.Schema$Request[] = [];
 
-        // Build the Event Type Log
+        // Build the Event Type Log and delete the unused columns from the default grid
         const eventTypeLogSheet = this.buildEventTypeLog(troupe);
         requests.push({
             deleteDimension: {
@@ -84,7 +84,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             }
         });
 
-        // Build the Event Log
+        // Build the Event Log and delete the unused columns from the default grid
         const eventLogSheet = this.buildEventLog(events);
         requests.push({
             deleteDimension: {
@@ -97,8 +97,21 @@ export class GoogleSheetsLogService extends TroupeLogService {
             }
         });
 
-        // Build the Audience Log
-        const audienceLogSheet = this.buildAudienceLog(troupe, events, audience, requests);
+        // Build the Audience Log and delete the unused columns from the default grid if there are less than 26 columns created
+        const audienceLogSheet = this.buildAudienceLog(troupe, events, audience);
+        const numColumns = audienceLogSheet.data![0].rowData![0].values!.length;
+        if(numColumns < 26) {
+            requests.push({
+                deleteDimension: {
+                    range: {
+                        sheetId: 2,
+                        dimension: "COLUMNS",
+                        startIndex: numColumns,
+                        endIndex: 26,
+                    }
+                }
+            });
+        }
 
         // Create the spreadsheet
         const createSheet = await sheets.spreadsheets.create({
@@ -114,7 +127,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
 
         const postCreationOps: Promise<any>[] = [];
         
-        // Update the spreadsheet, deleting unnecessary rows
+        // Update the spreadsheet, deleting unused columns from the default grid
         postCreationOps.push(sheets.spreadsheets.batchUpdate({
             spreadsheetId: createSheet.data.spreadsheetId!,
             requestBody: { requests }
@@ -236,7 +249,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
         return eventLogSheet;
     }
 
-    protected buildAudienceLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[], updateRequests: sheets_v4.Schema$Request[]): sheets_v4.Schema$Sheet {
+    protected buildAudienceLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): sheets_v4.Schema$Sheet {
         const eventTitles = events.map(e => e.title);
 
         /** Object array of keys for each property type in the troupe; first section of subheader values */
@@ -354,20 +367,6 @@ export class GoogleSheetsLogService extends TroupeLogService {
                 }
             ]
         };
-
-        // Resize the columns if the headers are less than 26
-        if(audienceLogHeaders.values!.length < 26) {
-            updateRequests.push({
-                deleteDimension: {
-                    range: {
-                        sheetId: 2,
-                        dimension: "COLUMNS",
-                        startIndex: audienceLogHeaders.values!.length,
-                        endIndex: 26,
-                    }
-                }
-            });
-        }
 
         return audienceLogSheet;
     }
@@ -525,5 +524,13 @@ export class GoogleSheetsLogService extends TroupeLogService {
         }
 
         return requests;
+    }
+
+    protected updateAudienceLogHeaders(currentData: string[][], troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): sheets_v4.Schema$Request[] {
+        return this.updateAudienceLog(currentData, troupe, events, audience);
+    }
+
+    protected updateAudienceLog(currentData: string[][], troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): sheets_v4.Schema$Request[] {
+        return [];
     }
 }
