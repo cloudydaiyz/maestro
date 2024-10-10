@@ -1,7 +1,7 @@
 // Initialization for all services
 
 import { Collection, MongoClient, ObjectId, WithId } from "mongodb";
-import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
+import { AttendeeSchema, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
 import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "../util/env";
 import { DB_NAME } from "../util/constants";
 import { EventMap, MemberMap } from "../types/service-types";
@@ -9,13 +9,13 @@ import assert from "assert";
 import { MyTroupeClientError } from "../util/error";
 
 export class BaseService {
-    client: MongoClient;
-    connection: Promise<MongoClient>;
-    troupeColl: Collection<TroupeSchema>;
-    dashboardColl: Collection<TroupeDashboardSchema>;
-    eventColl: Collection<EventSchema>;
-    audienceColl: Collection<MemberSchema>;
-    eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
+    protected client: MongoClient;
+    protected connection: Promise<MongoClient>;
+    protected troupeColl: Collection<TroupeSchema>;
+    protected dashboardColl: Collection<TroupeDashboardSchema>;
+    protected eventColl: Collection<EventSchema>;
+    protected audienceColl: Collection<MemberSchema>;
+    protected eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
     
     constructor() {
         this.client = new MongoClient(MONGODB_URI, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
@@ -72,28 +72,8 @@ export abstract class EventDataService {
 }
 
 // Handles the update of troupe logs
-export abstract class TroupeLogService extends BaseService {
-    constructor() { super() }
-
-    async updateLog(troupe: string | WithId<TroupeSchema>, events?: WithId<EventSchema>[], audience?: WithId<MemberSchema>[], 
-        eventsAttendedSchema?: WithId<EventsAttendedBucketSchema>[]): Promise<void> {
-        if(typeof troupe == "string") {
-            assert(!events && !audience && !eventsAttendedSchema);
-            const findTroupe = this.getTroupeSchema(troupe);
-            const findEvents = this.eventColl.find({ troupeId: troupe }).toArray();
-            const findAudience = this.audienceColl.find({ troupeId: troupe }).toArray();
-            const findEventsAttended = this.eventsAttendedColl.find({ troupeId: troupe }).toArray();
-
-            // Search for troupe, events, audience, and events attended asynchronously
-            [ troupe, events, audience, eventsAttendedSchema ] = await Promise.all([ findTroupe, findEvents, findAudience, findEventsAttended ]);
-        } else {
-            assert(events && audience && eventsAttendedSchema);
-        }
-        return this.updateLogHelper(troupe as WithId<TroupeSchema>, events, audience, eventsAttendedSchema);
-    }
-    
+export abstract class TroupeLogService {
     abstract createLog(troupe: WithId<TroupeSchema>): Promise<string>;
     abstract deleteLog(troupe: WithId<TroupeSchema>): Promise<void>;
-    protected abstract updateLogHelper(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<MemberSchema>[], 
-        eventsAttendedSchema: WithId<EventsAttendedBucketSchema>[]): Promise<void>;
+    protected abstract updateLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void>;
 }

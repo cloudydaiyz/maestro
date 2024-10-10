@@ -3,7 +3,7 @@ import { getDrive, getForms, getSheets } from "./cloud/gcp";
 import { BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
-import { getUrl } from "./util/helper";
+import { getDataSourceUrl } from "./util/helper";
 import { DiscoveryEventType, EventMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, MemberMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "./types/util-types";
@@ -163,7 +163,7 @@ export class TroupeSyncService extends BaseService {
                         
                         file.mimeType = EVENT_DATA_SOURCE_MIME_TYPES[eventDataSource];
                         source = EVENT_DATA_SOURCES[eventDataSource];
-                        sourceUri = getUrl(EVENT_DATA_SOURCE_URLS[eventDataSource], file.id!);
+                        sourceUri = getDataSourceUrl(source, file.id!);
                     } else {
                         continue;
                     }
