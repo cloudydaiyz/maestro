@@ -66,7 +66,68 @@ export class GoogleSheetsLogService extends TroupeLogService {
         // events?.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
         // audience?.sort((a, b) => a.points["Total"] - b.points["Total"]);
 
+        // Prepare for update post sheet creation (deletes unused columns from created sheets)
+        const requests: sheets_v4.Schema$Request[] = [];
+
         // Build the Event Type Log
+        const eventTypeLogSheet = this.buildEventTypeLog(troupe);
+        requests.push({
+            deleteDimension: {
+                range: {
+                    sheetId: 0,
+                    dimension: "COLUMNS",
+                    startIndex: 5,
+                    endIndex: 26,
+                }
+            }
+        });
+
+        // Build the Event Log
+        const eventLogSheet = this.buildEventLog(events || []);
+        requests.push({
+            deleteDimension: {
+                range: {
+                    sheetId: 1,
+                    dimension: "COLUMNS",
+                    startIndex: 10,
+                    endIndex: 26,
+                }
+            }
+        });
+
+        // Build the Audience Log
+        const audienceLogSheet = this.buildAudienceLog(troupe, events || [], audience || [], requests);
+
+        // Create the spreadsheet
+        const createSheet = await sheets.spreadsheets.create({
+            requestBody: {
+                properties: {
+                    title: "My Troupe Log " + Date.now()
+                },
+                sheets: [ eventTypeLogSheet, eventLogSheet, audienceLogSheet ],
+            }
+        });
+        assert(createSheet.data.spreadsheetId && createSheet.data.spreadsheetUrl, "Failed to create log sheet");
+        console.log(createSheet.data.spreadsheetId);
+
+        // Update the spreadsheet, deleting unnecessary rows
+        await sheets.spreadsheets.batchUpdate({
+            spreadsheetId: createSheet.data.spreadsheetId!,
+            requestBody: { requests }
+        });
+
+        // Move the spreadsheet to the main drive folder for all troupes
+        await drive.files.update({
+            fileId: createSheet.data.spreadsheetId!,
+            addParents: PARENT_DRIVE_FOLDER_ID,
+        });
+
+        // Update the sheet URI for the troupe
+        await this.troupeColl.updateOne({ _id: troupe._id }, { $set: { logSheetUri: createSheet.data.spreadsheetUrl } });
+        return createSheet.data.spreadsheetUrl;
+    }
+
+    protected buildEventTypeLog(troupe: WithId<TroupeSchema>): sheets_v4.Schema$Sheet {
         const eventTypeLogHeaders: sheets_v4.Schema$RowData = {
             values: [
                 ...this.headerBuilder(["EVENT TYPES"], Colors.orange),
@@ -113,7 +174,10 @@ export class GoogleSheetsLogService extends TroupeLogService {
             ]
         }
 
-        // Build the Event Log
+        return eventTypeLogSheet;
+    }
+
+    protected buildEventLog(events: WithId<EventSchema>[]): sheets_v4.Schema$Sheet {
         const eventLogHeaders: sheets_v4.Schema$RowData = {
             values: [
                 ...this.headerBuilder(["EVENTS"], Colors.yellow),
@@ -168,7 +232,10 @@ export class GoogleSheetsLogService extends TroupeLogService {
             ]
         };
 
-        // Build the Audience Log
+        return eventLogSheet;
+    }
+
+    protected buildAudienceLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[], updateRequests: sheets_v4.Schema$Request[]): sheets_v4.Schema$Sheet {
         const eventTitles = events ? events.map(e => e.title) : [];
 
         let memberInformation = Object.keys(troupe.memberPropertyTypes);
@@ -284,88 +351,21 @@ export class GoogleSheetsLogService extends TroupeLogService {
             ]
         };
 
-        const createSheet = await sheets.spreadsheets.create({
-            requestBody: {
-                properties: {
-                    title: "My Troupe Log " + Date.now()
-                },
-                sheets: [ eventTypeLogSheet, eventLogSheet, audienceLogSheet ],
-            }
-        });
-        assert(createSheet.data.spreadsheetId && createSheet.data.spreadsheetUrl, "Failed to create log sheet");
-        console.log(createSheet.data.spreadsheetId);
-
-        const requests: sheets_v4.Schema$Request[] = [
-            {
-                deleteDimension: {
-                    range: {
-                        sheetId: 0,
-                        dimension: "COLUMNS",
-                        startIndex: 5,
-                        endIndex: 26,
-                    }
-                }
-            },
-            {
-                deleteDimension: {
-                    range: {
-                        sheetId: 1,
-                        dimension: "COLUMNS",
-                        startIndex: 10,
-                        endIndex: 26,
-                    }
-                }
-            },
-        ];
-
+        // Resize the columns if the headers are less than 26
         if(audienceLogHeaders.values!.length < 26) {
-            requests.push({
+            updateRequests.push({
                 deleteDimension: {
                     range: {
                         sheetId: 2,
                         dimension: "COLUMNS",
-                        startIndex: columnMetadata.length,
+                        startIndex: audienceLogHeaders.values!.length,
                         endIndex: 26,
                     }
                 }
             });
         }
 
-        await sheets.spreadsheets.batchUpdate({
-            spreadsheetId: createSheet.data.spreadsheetId!,
-            requestBody: {
-                requests: [
-                    {
-                        deleteDimension: {
-                            range: {
-                                sheetId: 0,
-                                dimension: "COLUMNS",
-                                startIndex: 5,
-                                endIndex: 26,
-                            }
-                        }
-                    },
-                    {
-                        deleteDimension: {
-                            range: {
-                                sheetId: 1,
-                                dimension: "COLUMNS",
-                                startIndex: 10,
-                                endIndex: 26,
-                            }
-                        }
-                    },
-                ]
-            }
-        });
-
-        await drive.files.update({
-            fileId: createSheet.data.spreadsheetId!,
-            addParents: PARENT_DRIVE_FOLDER_ID,
-        });
-
-        await this.troupeColl.updateOne({ _id: troupe._id }, { $set: { logSheetUri: createSheet.data.spreadsheetUrl } });
-        return createSheet.data.spreadsheetUrl;
+        return audienceLogSheet;
     }
 
     async deleteLog(troupe: WithId<TroupeSchema>): Promise<void> {
