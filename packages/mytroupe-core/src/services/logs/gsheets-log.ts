@@ -3,12 +3,13 @@
 import { WithId } from "mongodb";
 import { TroupeSchema, EventSchema, MemberSchema, EventsAttendedBucketSchema, AttendeeSchema } from "../../types/core-types";
 import { TroupeLogService } from "../base-service";
-import { drive_v3, sheets_v4 } from "googleapis";
+import { sheets_v4 } from "googleapis";
 import { getDrive, getSheets } from "../../cloud/gcp";
 import { BASE_MEMBER_PROPERTY_TYPES, SHEETS_REGEX } from "../../util/constants";
 import { PARENT_DRIVE_FOLDER_ID } from "../../util/env";
 import assert from "assert";
 import { getDataSourceId } from "../../util/helper";
+import { A1Notation } from "@shogo82148/a1notation";
 
 namespace Colors {
     function rgb(hex: string): sheets_v4.Schema$Color {
@@ -25,7 +26,6 @@ namespace Colors {
     export const orange = rgb("F6B26B");
     export const lightOrange = rgb("F9CB9C");
     export const black = rgb("000000");
-    export const gray = rgb("999999");
 }
 
 export class GoogleSheetsLogService extends TroupeLogService {
@@ -377,10 +377,6 @@ export class GoogleSheetsLogService extends TroupeLogService {
         if(fileId) await drive.files.delete({ fileId });
     }
 
-    // https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/batchUpdate
-    // https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/request#Request
-    // https://developers.google.com/sheets/api/reference/rest/v4/spreadsheets/request#UpdateSpreadsheetPropertiesRequest
-
     protected async updateLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void> {
         const sheets = await getSheets();
         const spreadsheetId = getDataSourceId("Google Sheets", troupe.logSheetUri);
@@ -391,8 +387,14 @@ export class GoogleSheetsLogService extends TroupeLogService {
             ranges: ["Event Type Log!A3:D", "Event Log!A3:I", "Member Log!A1:2"],
         });
 
+        const currentAudienceData = await sheets.spreadsheets.values.get({
+            spreadsheetId,
+            range: new A1Notation("Member Log", 1, 1, (currentData.data.valueRanges?.[2].values?.length || 0) + 1).toString(),
+        });
+
         updateRequests.concat(this.updateEventTypeLog(currentData.data.valueRanges?.[0].values || [], troupe));
         updateRequests.concat(this.updateEventLog(currentData.data.valueRanges?.[1].values || [], events));
+        updateRequests.concat(this.updateAudienceLog(currentAudienceData.data.values || [], troupe, events, audience));
 
         if(updateRequests.length > 0) {
             await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: updateRequests } });
@@ -526,11 +528,102 @@ export class GoogleSheetsLogService extends TroupeLogService {
         return requests;
     }
 
-    protected updateAudienceLogHeaders(currentData: string[][], troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): sheets_v4.Schema$Request[] {
-        return this.updateAudienceLog(currentData, troupe, events, audience);
-    }
-
     protected updateAudienceLog(currentData: string[][], troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): sheets_v4.Schema$Request[] {
-        return [];
+        const requests: sheets_v4.Schema$Request[] = [];
+        const desiredSheet = this.buildAudienceLog(troupe, events, audience);
+
+        // Update the headers
+        const currentCutoff1 = currentData[1].indexOf("");
+        const currentCutoff2 = currentData[1].lastIndexOf("");
+
+        const desiredCutoff1 = desiredSheet.data![0].rowData![1].values!.findIndex(data => data.userEnteredValue!.stringValue == "");
+        const desiredCutoff2 = desiredSheet.data![0].rowData![1].values!.findIndex((data, i) => i != desiredCutoff1 && data.userEnteredValue!.stringValue == "");
+
+        if(currentCutoff1 < desiredCutoff1) {
+            requests.push({
+                insertDimension: {
+                    range: {
+                        sheetId: 2,
+                        dimension: "COLUMNS",
+                        startIndex: currentCutoff1,
+                        endIndex: desiredCutoff1,
+                    }
+                }
+            })
+        } else if(currentCutoff1 > desiredCutoff1) {
+            requests.push({
+                deleteDimension: {
+                    range: {
+                        sheetId: 2,
+                        dimension: "COLUMNS",
+                        startIndex: desiredCutoff1,
+                        endIndex: currentCutoff1,
+                    }
+                }
+            });
+        }
+
+        if(currentCutoff2 < desiredCutoff2) {
+            requests.push({
+                insertDimension: {
+                    range: {
+                        sheetId: 2,
+                        dimension: "COLUMNS",
+                        startIndex: currentCutoff2,
+                        endIndex: desiredCutoff2,
+                    }
+                }
+            })
+        } else if(currentCutoff2 > desiredCutoff2) {
+            requests.push({
+                deleteDimension: {
+                    range: {
+                        sheetId: 2,
+                        dimension: "COLUMNS",
+                        startIndex: desiredCutoff2,
+                        endIndex: currentCutoff2,
+                    }
+                }
+            });
+        }
+
+        // Delete extra rows in the current sheet
+        if(desiredSheet.data![0].rowData![0].values!.length < currentData[0].length) {
+            requests.push({
+                deleteDimension: {
+                    range: {
+                        sheetId: 2,
+                        dimension: "COLUMNS",
+                        startIndex: desiredSheet.data![0].rowData![0].values!.length,
+                        endIndex: currentData[0].length,
+                    }
+                }
+            });
+        }
+
+        // The dimensions of the current sheet should match the desired sheets' dimensions now. 
+        // Update the sheet data based on the desired state
+        requests.push({
+            updateCells: {
+                rows: desiredSheet.data![0].rowData!,
+                fields: "userEnteredValue",
+                start: { sheetId: 2, rowIndex: 0, columnIndex: 0 },
+            }
+        });
+
+        // Resize the columns
+        requests.push(...desiredSheet.data![0].columnMetadata!.map((properties) => ({ 
+            updateDimensionProperties: { 
+                range: { 
+                    sheetId: 2, 
+                    dimension: "COLUMNS", 
+                    startIndex: 0, 
+                    endIndex: desiredSheet.data![0].rowData![0].values!.length 
+                }, 
+                properties
+            } as sheets_v4.Schema$UpdateDimensionPropertiesRequest
+        })));
+
+        return requests;
     }
 }
