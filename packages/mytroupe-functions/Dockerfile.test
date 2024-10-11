@@ -1,7 +1,0 @@
-# Local image used for testing how lambda will be built and run on the cloud
-
-# Look at:
-# https://www.reddit.com/r/aws/comments/z9cbw4/aws_lambda_package_as_docker_container_or/
-# https://docs.aws.amazon.com/lambda/latest/dg/nodejs-image.html#nodejs-image-instructions
-# https://docs.docker.com/build/building/best-practices/ 
-# https://docs.docker.com/build/building/multi-stage/
