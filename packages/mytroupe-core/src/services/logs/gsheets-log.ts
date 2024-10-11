@@ -58,12 +58,6 @@ export class GoogleSheetsLogService extends TroupeLogService {
         }));
     }
 
-    /**
-     * If provided, all events and attendee schema must be from the provided troupe.
-     * Ensure the events are sorted by ascending start date, and audience by ascending total membership points. e.g.:
-     * - `events?.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());`
-     * - `audience?.sort((a, b) => a.points["Total"] - b.points["Total"]);`
-     */
     async createLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[] = [], audience: WithId<AttendeeSchema>[] = []): Promise<string> {
         const drive = await getDrive();
         const sheets = await getSheets();
@@ -377,7 +371,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
         if(fileId) await drive.files.delete({ fileId });
     }
 
-    protected async updateLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void> {
+    async updateLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void> {
         const sheets = await getSheets();
         const spreadsheetId = getDataSourceId("Google Sheets", troupe.logSheetUri);
 

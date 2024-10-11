@@ -1,16 +1,17 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "./cloud/gcp";
-import { BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
+import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getDataSourceUrl } from "./util/helper";
 import { DiscoveryEventType, EventMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, MemberMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "./types/util-types";
-import { GoogleFormsEventDataService } from "./services/sources/gforms";
-import { GoogleSheetsEventDataService } from "./services/sources/gsheets";
+import { GoogleFormsEventDataService } from "./services/events/gforms-event";
+import { GoogleSheetsEventDataService } from "./services/events/gsheets-event";
 import { BaseService, EventDataService } from "./services/base-service";
 import assert from "assert";
+import { GoogleSheetsLogService } from "./services/logs/gsheets-log";
 
 export class TroupeSyncService extends BaseService {
     ready: Promise<void>;
@@ -491,9 +492,27 @@ export class TroupeSyncService extends BaseService {
     }
 
     protected async refreshLogSheet() {
-        // get the current log sheet
-        // obtain the new values for the sheet
-        // calculate the diff & generate updates
-        // execute update
+        const events = Object.keys(this.events).map(e => this.events[e].event).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+        const audience = Object.keys(this.members).map(m => {
+            const member = this.members[m].member;
+            const attendee: WithId<AttendeeSchema> = {
+                ...member,
+                _id: new ObjectId(member._id.toHexString()),
+                eventsAttended: {},
+            };
+
+            this.members[m].eventsAttended.forEach(e => {
+                attendee.eventsAttended[e.eventId] = {
+                    typeId: e.typeId,
+                    value: e.value,
+                    startDate: e.startDate,
+                }
+            });
+
+            return attendee;
+        }).sort((a, b) => a.points["Total"] - b.points["Total"]);
+
+        const logService = new GoogleSheetsLogService();
+        logService.updateLog(this.troupe!, events, audience);
     }
 }

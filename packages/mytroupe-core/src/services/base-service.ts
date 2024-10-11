@@ -73,7 +73,19 @@ export abstract class EventDataService {
 
 // Handles the update of troupe logs
 export abstract class TroupeLogService {
+    /**
+     * If provided, all events and attendee schema must be from the provided troupe.
+     * Ensure the events are sorted by ascending start date, and audience by ascending total membership points. e.g.:
+     * - `events?.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());`
+     * - `audience?.sort((a, b) => a.points["Total"] - b.points["Total"]);`
+     */
     abstract createLog(troupe: WithId<TroupeSchema>): Promise<string>;
     abstract deleteLog(troupe: WithId<TroupeSchema>): Promise<void>;
-    protected abstract updateLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void>;
+    /**
+     * If provided, all events and attendee schema must be from the provided troupe.
+     * Ensure the events are sorted by ascending start date, and audience by ascending total membership points. e.g.:
+     * - `events?.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());`
+     * - `audience?.sort((a, b) => a.points["Total"] - b.points["Total"]);`
+     */
+    abstract updateLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void>;
 }
