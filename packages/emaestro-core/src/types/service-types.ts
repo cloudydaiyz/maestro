@@ -3,10 +3,10 @@ import { Troupe } from "./api-types";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema } from "./core-types";
 import { WeakPartial } from "./util-types";
 
-export type CreateTroupeRequest = Omit<
-    Troupe, 
-    "id" | "lastUpdated" | "syncLock" | "eventTypes" | "logSheetUri"
-> & { email: string, password: string };
+export type CreateTroupeRequest = Pick<
+    Troupe,
+    "name"
+>;
 
 // Additional statistics for the event type to help with tie breaking
 type TieBreakerStatistics = Partial<{

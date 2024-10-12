@@ -10,7 +10,7 @@ export class TroupeCoreService extends BaseService {
     constructor() { super() }
 
     async createTroupe(request: CreateTroupeRequest) {
-        const logSheetUri = "";
+        const logSheetUri = "blah";
         assert(logSheetUri, "Failed to create log sheet");
 
         return this.client.startSession().withTransaction(async () => {
@@ -21,6 +21,7 @@ export class TroupeCoreService extends BaseService {
                 logSheetUri,
                 eventTypes: [],
                 memberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
+                synchronizedMemberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
                 pointTypes: BASE_POINT_TYPES_OBJ,
                 synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
                 syncLock: false,

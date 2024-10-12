@@ -10,12 +10,12 @@ import { MaestroClientError } from "../util/error";
 
 export class BaseService {
     protected client: MongoClient;
-    protected connection: Promise<MongoClient>;
     protected troupeColl: Collection<TroupeSchema>;
     protected dashboardColl: Collection<TroupeDashboardSchema>;
     protected eventColl: Collection<EventSchema>;
     protected audienceColl: Collection<MemberSchema>;
     protected eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
+    connection: Promise<MongoClient>;
     
     constructor() {
         this.client = new MongoClient(MONGODB_URI, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
@@ -51,6 +51,8 @@ export class BaseService {
         assert(member, clientError ? new MaestroClientError("Unable to find member") : "Unable to find member");
         return member;
     }
+
+    async close() { return this.client.close() }
 }
 
 /** Handles event/member data retrieval and synchronization from a data source */
