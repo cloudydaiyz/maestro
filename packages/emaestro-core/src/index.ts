@@ -1,7 +1,7 @@
 // Implementation for client-facing controller methods
 
 import { ObjectId, PullOperator, PushOperator, WithId } from "mongodb";
-import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "./util/constants";
+import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "./util/constants";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
 import { CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
@@ -97,12 +97,12 @@ export class TroupeApiService extends BaseService {
                     new MaestroClientError("Cannot modify base member properties"));
                 
                 if(!(request.removeMemberProperties?.includes(key))) {
-                    troupeUpdate.$set[`memberProperties.${key}`] = request.updateMemberProperties[key];
+                    troupeUpdate.$set[`memberPropertyTypes.${key}`] = request.updateMemberProperties[key];
                     if(!(key in troupe.memberPropertyTypes)) numMemberProperties++;
                 }
             }
 
-            assert(numMemberProperties <= MAX_POINT_TYPES, 
+            assert(numMemberProperties <= MAX_MEMBER_PROPERTIES, 
                 new MaestroClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`));
         }
 
@@ -111,7 +111,7 @@ export class TroupeApiService extends BaseService {
             for(const key of request.removeMemberProperties) {
                 assert(!(key in BASE_MEMBER_PROPERTY_TYPES), 
                     new MaestroClientError("Cannot delete base member properties"));
-                troupeUpdate.$unset[`memberProperties.${key}`] = "";
+                troupeUpdate.$unset[`memberPropertyTypes.${key}`] = "";
             }
         }
 
@@ -154,6 +154,7 @@ export class TroupeApiService extends BaseService {
         }
 
         // Perform database update
+        console.log(troupeUpdate);
         const newTroupe = await this.troupeColl.findOneAndUpdate(
             { _id: new ObjectId(troupeId) }, 
             troupeUpdate,

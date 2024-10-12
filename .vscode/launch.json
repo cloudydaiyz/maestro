@@ -1,0 +1,17 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "quick-test | emaestro-core",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/packages/emaestro-core",
+            "preLaunchTask": "tsc: build - packages/emaestro-core/tsconfig.json",
+            "program": "${workspaceFolder}/packages/emaestro-core/src/quick-test.ts",
+            "outFiles": ["${workspaceFolder}/packages/emaestro-core/dist/**/*.js"]
+        }
+    ]
+}

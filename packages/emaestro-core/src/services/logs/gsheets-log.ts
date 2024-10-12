@@ -6,10 +6,10 @@ import { TroupeLogService } from "../base-service";
 import { sheets_v4 } from "googleapis";
 import { getDrive, getSheets } from "../../cloud/gcp";
 import { BASE_MEMBER_PROPERTY_TYPES, SHEETS_REGEX } from "../../util/constants";
-import { PARENT_DRIVE_FOLDER_ID } from "../../util/env";
 import { getDataSourceId } from "../../util/helper";
 import { A1Notation } from "@shogo82148/a1notation";
 import assert from "assert";
+import { LOG_SHEET_DRIVE_ID } from "../../util/env";
 
 namespace Colors {
     function rgb(hex: string): sheets_v4.Schema$Color {
@@ -111,7 +111,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
         const createSheet = await sheets.spreadsheets.create({
             requestBody: {
                 properties: {
-                    title: "My Troupe Log " + Date.now()
+                    title: `${troupe.name} - Troupe Log (${Date.now()})`
                 },
                 sheets: [ eventTypeLogSheet, eventLogSheet, audienceLogSheet ],
             }
@@ -130,7 +130,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
         // Move the spreadsheet to the main drive folder for all troupes
         postCreationOps.push(drive.files.update({
             fileId: createSheet.data.spreadsheetId!,
-            addParents: PARENT_DRIVE_FOLDER_ID,
+            addParents: LOG_SHEET_DRIVE_ID,
         }));
 
         await Promise.all(postCreationOps);
@@ -254,7 +254,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             const bBaseKey = baseMemberProperties.indexOf(b);
             return aBaseKey == bBaseKey && aBaseKey == -1 ? a.localeCompare(b) : aBaseKey - bBaseKey;
         });
-        memberInformationSection = memberInformationSection.splice(1, 0, "Member No.");
+        memberInformationSection.splice(0, 0, "Member No.");
 
         /** Second section of subheader values */
         const membershipPointsSection = Object.keys(troupe.pointTypes);
@@ -284,11 +284,17 @@ export class GoogleSheetsLogService extends TroupeLogService {
             ]
         };
 
+        // Set the max characters for each column in the member information section log
         audienceLogSubheaders.values!.forEach((cell, i) => {
-            if(cell.effectiveValue!.stringValue!.length > audienceLogMaxCharacters[i]) {
-                audienceLogMaxCharacters[i] = cell.effectiveValue!.stringValue!.length;
+            if(cell.userEnteredValue!.stringValue!.length > audienceLogMaxCharacters[i]) {
+                audienceLogMaxCharacters[i] = cell.userEnteredValue!.stringValue!.length;
             }
         });
+
+        // Set the max characters for each column in the membership points section log (default size = 160px)
+        for(let i = memberInformationSection.length + 1; i < memberInformationSection.length + membershipPointsSection.length + 1; i++) {
+            audienceLogMaxCharacters[i] = 14;
+        }
 
         const audienceLogData: sheets_v4.Schema$RowData[] = audience.map((member, i) => {
 
@@ -321,13 +327,16 @@ export class GoogleSheetsLogService extends TroupeLogService {
         const columnMetadata: sheets_v4.Schema$DimensionProperties[] = audienceLogMaxCharacters.map((maxCharacters, i) => { 
             let pixelSize = 23;
             if(maxCharacters > 20) pixelSize = 200;
-            else if(maxCharacters > 10) pixelSize = 110;
             else if(maxCharacters > 13) pixelSize = 160;
+            else if(maxCharacters > 10) pixelSize = 110;
             else if(maxCharacters > 4) pixelSize = 85;
             else if(maxCharacters > 3) pixelSize = 37;
             else if(maxCharacters > 2) pixelSize = 29;
             return { pixelSize };
         });
+        console.log(JSON.stringify(audienceLogSubheaders, null, 4));
+        console.log(audienceLogMaxCharacters);
+        console.log(columnMetadata);
         
         const audienceLogSheet: sheets_v4.Schema$Sheet = {
             properties: {
