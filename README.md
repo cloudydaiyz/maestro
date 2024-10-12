@@ -3,9 +3,9 @@
 </p>
 
 <h1 align="center">
-<sup>maestro</sup>
+<sup>emaestro</sup>
 </h1>
 
 <p align="center">
-<strong>maestro</strong> is an analytics application that collects aggregate data from events for your audience, allowing you to effectively track event and membership data. Based on <a href="https://github.com/cloudydaiyz/membership-logger">membership-logger</a>.
+<strong>emaestro</strong> is an analytics application that collects aggregate data from events for your audience, allowing you to effectively track event and membership data. Based on <a href="https://github.com/cloudydaiyz/membership-logger">membership-logger</a>.
 </p>
