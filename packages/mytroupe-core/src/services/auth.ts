@@ -1,31 +1,31 @@
 import { BaseService } from "./base-service";
-import { CreateTroupeRequest } from "../types/service-types";
 import { Collection } from "mongodb";
 import { UserSchema, UserSessionSchema } from "../types/core-types";
 import { DB_NAME } from "../util/constants";
-import { TroupeCoreService } from "../core";
+import assert from "assert";
 
 /**
  *  1. Encrypt passwords at rest
  *  2. Recycle keys to encrypt / decrypt tokens daily
  *  3. Recycle keys to encrypt / decrypt passwords weekly
  */
-export class AuthCoreService extends TroupeCoreService {
+export class AuthCoreService extends BaseService {
     userColl: Collection<UserSchema>;
     sessionColl: Collection<UserSessionSchema>;
 
     constructor() { 
-        super() 
+        super();
         this.userColl = this.client.db(DB_NAME).collection("users");
         this.sessionColl = this.client.db(DB_NAME).collection("sessions");
     }
 
     /** Creates a new account with the associated troupe */
-    register(email: string, password: string, request: CreateTroupeRequest) {
-        this.createTroupe(request);
+    async register(email: string, password: string, troupeId: string): Promise<void> {
+        const insertUser = await this.userColl.insertOne({ email, password, troupeId });
+        assert(insertUser.acknowledged, "Failed to create user");
     }
     
-    /** Creates a new session and returns the associated access and refresh tokens */
+    /** Creates a new user session and returns the associated access and refresh tokens */
     login(email: string, password: string) {
 
     }

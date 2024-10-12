@@ -13,6 +13,11 @@ import { BaseService, EventDataService } from "./services/base-service";
 import assert from "assert";
 import { GoogleSheetsLogService } from "./services/logs/gsheets-log";
 
+// Get event fields helper
+export async function populateEventFields(troupeId: string, eventId: string) {
+
+}
+
 export class TroupeSyncService extends BaseService {
     ready: Promise<void>;
     drive!: drive_v3.Drive;

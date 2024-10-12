@@ -53,7 +53,7 @@ export class BaseService {
     }
 }
 
-// Handles event/member data retrieval and synchronization from a data source
+/** Handles event/member data retrieval and synchronization from a data source */
 export abstract class EventDataService {
     ready: Promise<void>;
     troupe: WithId<TroupeSchema>;
@@ -71,21 +71,14 @@ export abstract class EventDataService {
     abstract discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void>;
 }
 
-// Handles the update of troupe logs
+/**
+ * Handles the management of troupe logs. If provided, all events and attendee schema must be from the provided troupe.
+ * Ensure the events are sorted by ascending start date, and audience by ascending total membership points. e.g.:
+ * - `events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());`
+ * - `audience.sort((a, b) => a.points["Total"] - b.points["Total"]);`
+ */
 export abstract class TroupeLogService {
-    /**
-     * If provided, all events and attendee schema must be from the provided troupe.
-     * Ensure the events are sorted by ascending start date, and audience by ascending total membership points. e.g.:
-     * - `events?.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());`
-     * - `audience?.sort((a, b) => a.points["Total"] - b.points["Total"]);`
-     */
     abstract createLog(troupe: WithId<TroupeSchema>): Promise<string>;
     abstract deleteLog(troupe: WithId<TroupeSchema>): Promise<void>;
-    /**
-     * If provided, all events and attendee schema must be from the provided troupe.
-     * Ensure the events are sorted by ascending start date, and audience by ascending total membership points. e.g.:
-     * - `events?.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());`
-     * - `audience?.sort((a, b) => a.points["Total"] - b.points["Total"]);`
-     */
     abstract updateLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void>;
 }

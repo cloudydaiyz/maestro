@@ -3,12 +3,17 @@
 import { ObjectId, PullOperator, PushOperator, WithId } from "mongodb";
 import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "./util/constants";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
-import { CreateEventRequest, CreateEventTypeRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
+import { CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
 import assert from "assert";
 import { BaseService } from "./services/base-service";
 import { MyTroupeClientError } from "./util/error";
 
+/**
+ * Provides methods for interacting with the Troupe API. The structure of all given parameters will
+ * not be checked (e.g. data type, constant range boundaries), but any checks requiring database access 
+ * will be performed on each parameter.
+ */
 export class TroupeApiService extends BaseService {
     constructor() { super() }
 
@@ -86,8 +91,7 @@ export class TroupeApiService extends BaseService {
         if(request.updateMemberProperties) {
             let numMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
 
-            // Ignore member properties to be removed and ensure no base member properties
-            // get updated
+            // Ignore member properties to be removed and ensure no base member properties get updated
             for(const key in request.updateMemberProperties) {
                 assert(!(key in BASE_MEMBER_PROPERTY_TYPES), 
                     new MyTroupeClientError("Cannot modify base member properties"));
@@ -102,8 +106,7 @@ export class TroupeApiService extends BaseService {
                 new MyTroupeClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`));
         }
 
-        // Remove member properties & ensure no base member properties are requested
-        // for removal
+        // Remove member properties & ensure no base member properties are requested for removal
         if(request.removeMemberProperties) {
             for(const key of request.removeMemberProperties) {
                 assert(!(key in BASE_MEMBER_PROPERTY_TYPES), 
@@ -173,10 +176,8 @@ export class TroupeApiService extends BaseService {
         const eventDataSource = EVENT_DATA_SOURCE_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
         assert(eventDataSource > -1, new MyTroupeClientError("Invalid source URI"));
         assert(startDate.toString() != "Invalid Date", new MyTroupeClientError("Invalid date"));
-        assert(request.eventTypeId == undefined || request.value == undefined, 
-            new MyTroupeClientError("Unable to define event type and value at same time for event."));
-        assert(request.eventTypeId == undefined || eventType,
-            new MyTroupeClientError("Invalid event type ID"));
+        assert(request.eventTypeId == undefined || request.value == undefined, new MyTroupeClientError("Unable to define event type and value at same time for event."));
+        assert(request.eventTypeId == undefined || eventType, new MyTroupeClientError("Invalid event type ID"));
         
         // Find event type and populate value
         // FUTURE: Get event fields from source URI
@@ -191,8 +192,8 @@ export class TroupeApiService extends BaseService {
             synchronizedSourceUri: "",
             startDate,
             eventTypeId: request.eventTypeId,
-            eventTypeTitle: request.eventTypeTitle,
-            value: request.value,
+            eventTypeTitle: eventType?.title,
+            value: request.value || eventType?.value as number,
             fieldToPropertyMap: {},
             synchronizedFieldToPropertyMap: {}
         }
@@ -473,7 +474,7 @@ export class TroupeApiService extends BaseService {
         // *FUTURE: Update member points for attendees of events with the corresponding type
     }
 
-    async createMember() {
+    async createMember(troupeId: string, request: CreateMemberRequest) {
         
     }
 
@@ -578,8 +579,12 @@ export class TroupeApiService extends BaseService {
         return this.getMember(newMember);
     }
 
-    async deleteMember() {
-
+    async deleteMember(troupeId: string, memberId: string): Promise<void> {
+        const res = await Promise.all([
+            this.audienceColl.deleteOne({ _id: new ObjectId(memberId), troupeId }),
+            this.eventsAttendedColl.deleteMany({ troupeId, memberId })
+        ]);
+        assert(res.every(r => r.acknowledged), "Failed to delete member data");
     }
 
     /** 

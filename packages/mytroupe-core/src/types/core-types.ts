@@ -208,9 +208,9 @@ export interface PercentageStatistics {
 // == USERS ==
 
 export interface UserSchema {
-    troupeId: string,
-    emails: string[],
+    email: string,
     password: string, // encrypted at rest
+    troupeId: string,
 }
 
 export interface UserSessionSchema {

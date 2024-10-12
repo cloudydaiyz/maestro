@@ -52,7 +52,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
     protected synchronizeEvent(event: WithId<EventSchema>, row: string[]): void {
         assert(this.results && this.columnToTypeMap);
         const columnToTypeMap = this.columnToTypeMap;
-        row = row.map(r => r.trim()); // Trim whitespace from each cell
+        row = row.map(r => r.trim());
 
         if(this.results.length == 0) {
             row.forEach((label, i) => {
@@ -61,8 +61,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 if(!property) return;
                 else if(property == "Member ID") this.containsMemberId = true;
 
-                // Ensure the given property is valid for the question, otherwise
-                // set the event property to null
+                // Ensure the given property is valid for the question, otherwise set the event property to null
                 const propertyType = this.troupe.memberPropertyTypes[property].slice(0, -1);
                 if(propertyType == "string") columnToTypeMap[i] = { string: true };
                 else if(propertyType == "number") columnToTypeMap[i] = { number: true };

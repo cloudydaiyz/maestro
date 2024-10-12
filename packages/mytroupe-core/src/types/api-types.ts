@@ -2,7 +2,7 @@
 
 import { ObjectId, WithId } from "mongodb";
 import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, VariableMemberProperties } from "./core-types";
-import { Id, Replace } from "./util-types";
+import { Id, Replace, WeakPartial } from "./util-types";
 
 // == Public Types ==
 
@@ -45,9 +45,12 @@ export type UpdateTroupeRequest = {
  * map is updated. User may only update the existing fields in the field to property map,
  * even if they know the ID of other fields in the source.
  */
-export type CreateEventRequest = Omit<
-    PublicEvent,
-    "id" | "lastUpdated" | "fieldToPropertyMap" | "source"
+export type CreateEventRequest = WeakPartial<
+    Pick<
+        PublicEvent,
+        "title" | "sourceUri" | "startDate" | "eventTypeId" | "value"
+    >, 
+    "value"
 >;
 
 export type UpdateEventRequest = {
@@ -64,13 +67,13 @@ export type UpdateEventRequest = {
     removeProperties?: string[],
 }
 
-export type CreateEventTypeRequest = Omit<
+export type CreateEventTypeRequest = Pick<
     EventType,
-    "id" | "lastUpdated" | "synchronizedSourceFolderUris"
+    "title" | "value" | "sourceFolderUris"
 >;
 
 /**
- * Updates or creates a new event type. Caveats:
+ * Updates an event type. Caveats:
  * - `title` and `points` are updated immediately. `points` are updated for the
  *   event type across all events and members.
  * - `sourceFolderUris` are updated immediately, but the data resulting from the
@@ -82,6 +85,14 @@ export type UpdateEventTypeRequest = {
     addSourceFolderUris?: string[],
     removeSourceFolderUris?: string[],
 }
+
+/**
+ * Creates a new member. All required member properties defined by the troupe must be set.
+ */
+export type CreateMemberRequest = Pick<
+    MemberSchema,
+    "properties"
+>;
 
 export type UpdateMemberRequest = {
     updateProperties?: {

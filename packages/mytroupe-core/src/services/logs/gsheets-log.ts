@@ -7,9 +7,9 @@ import { sheets_v4 } from "googleapis";
 import { getDrive, getSheets } from "../../cloud/gcp";
 import { BASE_MEMBER_PROPERTY_TYPES, SHEETS_REGEX } from "../../util/constants";
 import { PARENT_DRIVE_FOLDER_ID } from "../../util/env";
-import assert from "assert";
 import { getDataSourceId } from "../../util/helper";
 import { A1Notation } from "@shogo82148/a1notation";
+import assert from "assert";
 
 namespace Colors {
     function rgb(hex: string): sheets_v4.Schema$Color {
