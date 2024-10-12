@@ -1,7 +1,7 @@
 // To help catch and relay client-based errors
-export class MyTroupeClientError extends Error {
+export class MaestroClientError extends Error {
     constructor(message: string) {
         super(message);
-        this.name = "MyTroupeClientError";
+        this.name = "MaestroClientError";
     }
 }

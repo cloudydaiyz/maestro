@@ -7,7 +7,7 @@ import { CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventT
 import { Mutable, Replace, SetOperator, UnsetOperator, WeakPartial } from "./types/util-types";
 import assert from "assert";
 import { BaseService } from "./services/base-service";
-import { MyTroupeClientError } from "./util/error";
+import { MaestroClientError } from "./util/error";
 
 /**
  * Provides methods for interacting with the Troupe API. The structure of all given parameters will
@@ -68,7 +68,7 @@ export class TroupeApiService extends BaseService {
      */
     async updateTroupe(troupeId: string, request: UpdateTroupeRequest): Promise<Troupe> {
         const troupe = await this.getTroupeSchema(troupeId, true);
-        assert(!troupe.syncLock, new MyTroupeClientError("Cannot update troupe while sync is in progress"));
+        assert(!troupe.syncLock, new MaestroClientError("Cannot update troupe while sync is in progress"));
 
         // Prepare for the database update
         const troupeUpdate = { 
@@ -83,7 +83,7 @@ export class TroupeApiService extends BaseService {
         // Ensure the origin event is valid before setting it
         if(request.originEventId) {
             const event = await this.eventColl.findOne({ _id: new ObjectId(request.originEventId) });
-            assert(event, new MyTroupeClientError("Unable to find specified origin event"));
+            assert(event, new MaestroClientError("Unable to find specified origin event"));
             troupeUpdate.$set.originEventId = request.originEventId;
         }
 
@@ -94,7 +94,7 @@ export class TroupeApiService extends BaseService {
             // Ignore member properties to be removed and ensure no base member properties get updated
             for(const key in request.updateMemberProperties) {
                 assert(!(key in BASE_MEMBER_PROPERTY_TYPES), 
-                    new MyTroupeClientError("Cannot modify base member properties"));
+                    new MaestroClientError("Cannot modify base member properties"));
                 
                 if(!(request.removeMemberProperties?.includes(key))) {
                     troupeUpdate.$set[`memberProperties.${key}`] = request.updateMemberProperties[key];
@@ -103,14 +103,14 @@ export class TroupeApiService extends BaseService {
             }
 
             assert(numMemberProperties <= MAX_POINT_TYPES, 
-                new MyTroupeClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`));
+                new MaestroClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`));
         }
 
         // Remove member properties & ensure no base member properties are requested for removal
         if(request.removeMemberProperties) {
             for(const key of request.removeMemberProperties) {
                 assert(!(key in BASE_MEMBER_PROPERTY_TYPES), 
-                    new MyTroupeClientError("Cannot delete base member properties"));
+                    new MaestroClientError("Cannot delete base member properties"));
                 troupeUpdate.$unset[`memberProperties.${key}`] = "";
             }
         }
@@ -127,11 +127,11 @@ export class TroupeApiService extends BaseService {
                 }
                 assert(pointType.startDate.toString() != "Invalid Date"
                     && pointType.endDate.toString() != "Invalid Date", 
-                    new MyTroupeClientError("Invalid date syntax"))
+                    new MaestroClientError("Invalid date syntax"))
                 assert(!(key in BASE_POINT_TYPES_OBJ), 
-                    new MyTroupeClientError("Cannot modify base point types"));
+                    new MaestroClientError("Cannot modify base point types"));
                 assert(pointType.startDate < pointType.endDate, 
-                    new MyTroupeClientError("Invalid point type date range"));
+                    new MaestroClientError("Invalid point type date range"));
 
                 if(!(request.removePointTypes?.includes(key))) {
                     troupeUpdate.$set[`pointTypes.${key}`] = pointType;
@@ -140,7 +140,7 @@ export class TroupeApiService extends BaseService {
                 newPointTypes[key] = pointType;
             }
             assert(numPointTypes <= MAX_POINT_TYPES, 
-                new MyTroupeClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`));
+                new MaestroClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`));
             
             // *FUTURE: Update point calculations for members
         }
@@ -148,7 +148,7 @@ export class TroupeApiService extends BaseService {
         // Remove point types
         if(request.removePointTypes) {
             for(const key of request.removePointTypes) {
-                assert(!(key in BASE_POINT_TYPES_OBJ), new MyTroupeClientError("Cannot delete base point types"));
+                assert(!(key in BASE_POINT_TYPES_OBJ), new MaestroClientError("Cannot delete base point types"));
                 troupeUpdate.$unset[`pointTypes.${key}`] = "";
             }
         }
@@ -169,15 +169,15 @@ export class TroupeApiService extends BaseService {
     /** Creates a new event in the given Troupe. */
     async createEvent(troupeId: string, request: CreateEventRequest): Promise<PublicEvent> {
         const troupe = await this.getTroupeSchema(troupeId, true);
-        assert(!troupe.syncLock, new MyTroupeClientError("Cannot create event while sync is in progress"));
+        assert(!troupe.syncLock, new MaestroClientError("Cannot create event while sync is in progress"));
 
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == request.eventTypeId);
         const startDate = new Date(request.startDate);
         const eventDataSource = EVENT_DATA_SOURCE_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
-        assert(eventDataSource > -1, new MyTroupeClientError("Invalid source URI"));
-        assert(startDate.toString() != "Invalid Date", new MyTroupeClientError("Invalid date"));
-        assert(request.eventTypeId == undefined || request.value == undefined, new MyTroupeClientError("Unable to define event type and value at same time for event."));
-        assert(request.eventTypeId == undefined || eventType, new MyTroupeClientError("Invalid event type ID"));
+        assert(eventDataSource > -1, new MaestroClientError("Invalid source URI"));
+        assert(startDate.toString() != "Invalid Date", new MaestroClientError("Invalid date"));
+        assert(request.eventTypeId == undefined || request.value == undefined, new MaestroClientError("Unable to define event type and value at same time for event."));
+        assert(request.eventTypeId == undefined || eventType, new MaestroClientError("Invalid event type ID"));
         
         // Find event type and populate value
         // FUTURE: Get event fields from source URI
@@ -205,7 +205,7 @@ export class TroupeApiService extends BaseService {
 
     async getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent> {
         assert(typeof event != "string" || troupeId != null, 
-            new MyTroupeClientError("Must have a troupe ID to retrieve event."))
+            new MaestroClientError("Must have a troupe ID to retrieve event."))
         let publicEvent: WeakPartial<WithId<EventSchema>, "_id"> = typeof event == "string" 
             ? await this.getEventSchema(troupeId!, event, true)
             : event;
@@ -241,7 +241,7 @@ export class TroupeApiService extends BaseService {
             this.getTroupeSchema(troupeId, true),
             this.getEventSchema(troupeId, eventId, true)
         ]);
-        assert(!troupe.syncLock, new MyTroupeClientError("Cannot update event while sync is in progress"));
+        assert(!troupe.syncLock, new MaestroClientError("Cannot update event while sync is in progress"));
 
         const eventUpdate = { 
             $set: {} as SetOperator<EventSchema>, 
@@ -259,7 +259,7 @@ export class TroupeApiService extends BaseService {
 
         if(request.sourceUri) {
             const dataSource = EVENT_DATA_SOURCE_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
-            assert(dataSource, new MyTroupeClientError("Invalid source URI"));
+            assert(dataSource, new MaestroClientError("Invalid source URI"));
 
             eventUpdate.$set.source = EVENT_DATA_SOURCES[dataSource];
             eventUpdate.$set.sourceUri = request.sourceUri;
@@ -268,7 +268,7 @@ export class TroupeApiService extends BaseService {
         }
 
         if(request.value && request.value != event.value) {
-            assert(!event.eventTypeId, new MyTroupeClientError("Cannot update value when the event has an event type"));
+            assert(!event.eventTypeId, new MaestroClientError("Cannot update value when the event has an event type"));
             eventUpdate.$set.value = request.value;
 
             // FUTURE: Update member points for types that the event's start date is in range for
@@ -277,7 +277,7 @@ export class TroupeApiService extends BaseService {
         // Update known properties in the field to property map of the event
         if(request.updateProperties) {
             for(const key in request.updateProperties) {
-                assert(key in event.fieldToPropertyMap, new MyTroupeClientError("Invalid field ID"));
+                assert(key in event.fieldToPropertyMap, new MaestroClientError("Invalid field ID"));
 
                 // Invariant: At most one unique property per field
                 if(!(request.removeProperties?.includes(key))) {
@@ -322,7 +322,7 @@ export class TroupeApiService extends BaseService {
             this.getTroupeSchema(troupeId, true), 
             // this.getEventSchema(troupeId, eventId)
         ]);
-        assert(!troupe.syncLock, new MyTroupeClientError("Cannot delete event while sync is in progress"));
+        assert(!troupe.syncLock, new MaestroClientError("Cannot delete event while sync is in progress"));
 
         const updateEventsAttended = await this.eventsAttendedColl.updateMany(
             { troupeId, [`events.${eventId}`]: { $exists: true } },
@@ -345,7 +345,7 @@ export class TroupeApiService extends BaseService {
         // Ensure given source folder URIs are valid Google Drive folders
         request.sourceFolderUris.forEach((uri) => assert(
             DRIVE_FOLDER_REGEX.test(uri), 
-            new MyTroupeClientError("Invalid source URI in request")
+            new MaestroClientError("Invalid source URI in request")
         ));
 
         const type: WithId<EventTypeSchema> = {
@@ -362,14 +362,14 @@ export class TroupeApiService extends BaseService {
             { _id: new ObjectId(troupeId), [`eventTypes.${MAX_EVENT_TYPES}`]: { $exists: false } },
             { $push: { eventTypes: type } }
         );
-        assert(insertResult.matchedCount == 1, new MyTroupeClientError("Invalid troupe or max event types reached"));
+        assert(insertResult.matchedCount == 1, new MaestroClientError("Invalid troupe or max event types reached"));
         assert(insertResult.modifiedCount == 1, "Unable to create event type");
         return this.getEventType(type);
     }
 
     async getEventType(eventType: string | WithId<EventTypeSchema>, troupeId?: string): Promise<EventType> {
         assert(typeof eventType != "string" || troupeId != null, 
-            new MyTroupeClientError("Must have a troupe ID to retrieve event type."))
+            new MaestroClientError("Must have a troupe ID to retrieve event type."))
         let eType: WeakPartial<WithId<EventTypeSchema>, "_id"> = typeof eventType == "string" 
             ? await this.getEventTypeSchema(troupeId!, eventType, true)
             : eventType;
@@ -395,13 +395,13 @@ export class TroupeApiService extends BaseService {
         // Ensure given source folder URIs are valid Google Drive folders
         request.addSourceFolderUris?.forEach((uri) => assert(
             DRIVE_FOLDER_REGEX.test(uri), 
-            new MyTroupeClientError("Invalid source URI in request")
+            new MaestroClientError("Invalid source URI in request")
         ));
 
         const troupe = await this.getTroupeSchema(troupeId, true);
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
-        assert(!troupe.syncLock, new MyTroupeClientError("Cannot update event type while sync is in progress"));
-        assert(eventType, new MyTroupeClientError("Unable to find event type"));
+        assert(!troupe.syncLock, new MaestroClientError("Cannot update event type while sync is in progress"));
+        assert(eventType, new MaestroClientError("Unable to find event type"));
 
         const eventTypeUpdate = { 
             $set: {} as SetOperator<TroupeSchema>, 
@@ -468,7 +468,7 @@ export class TroupeApiService extends BaseService {
             { _id: new ObjectId(troupeId) },
             { $pull: { eventTypes: { _id: new ObjectId(eventTypeId) }}}
         );
-        assert(deleteEventTypeResult.matchedCount, new MyTroupeClientError("Event type not found in troupe"));
+        assert(deleteEventTypeResult.matchedCount, new MaestroClientError("Event type not found in troupe"));
         assert(deleteEventTypeResult.modifiedCount, "Failed to delete event type");
 
         // *FUTURE: Update member points for attendees of events with the corresponding type
@@ -480,7 +480,7 @@ export class TroupeApiService extends BaseService {
 
     async getMember(member: string | WithId<MemberSchema>, troupeId?: string): Promise<Member> {
         assert(typeof member != "string" || troupeId != null, 
-            new MyTroupeClientError("Must have a troupe ID to retrieve event."))
+            new MaestroClientError("Must have a troupe ID to retrieve event."))
         const m: WeakPartial<WithId<MemberSchema>, "_id"> = typeof member == "string"
             ? await this.getMemberSchema(troupeId!, member, true)
             : member;
@@ -517,7 +517,7 @@ export class TroupeApiService extends BaseService {
             this.getTroupeSchema(troupeId, true),
             this.getMemberSchema(troupeId, memberId, true)
         ]);
-        assert(!troupe.syncLock, new MyTroupeClientError("Cannot update member while sync is in progress"));
+        assert(!troupe.syncLock, new MaestroClientError("Cannot update member while sync is in progress"));
 
         const memberUpdate = {
             $set: {} as SetOperator<MemberSchema>,
@@ -530,7 +530,7 @@ export class TroupeApiService extends BaseService {
         if(request.updateProperties) {
             for(const key in request.updateProperties) {
                 const newValue = member.properties[key];
-                assert(newValue, new MyTroupeClientError("Invalid property ID"));
+                assert(newValue, new MaestroClientError("Invalid property ID"));
 
                 // Update the property if it's not to be removed
                 if(!request.removeProperties?.includes(key)) {
@@ -542,11 +542,11 @@ export class TroupeApiService extends BaseService {
                         if(propertyType == "date") {
                             const newDate = new Date(newValue.value as string);
                             assert(typeof newValue.value == "string" && newDate.toString() != "Invalid Date", 
-                                new MyTroupeClientError("Invalid input"));
+                                new MaestroClientError("Invalid input"));
                             memberUpdate.$set[`properties.${key}.value`] = newDate;
                         } else {
                             assert(typeof newValue.value == propertyType, 
-                                new MyTroupeClientError("Invalid input"));
+                                new MaestroClientError("Invalid input"));
                             memberUpdate.$set[`properties.${key}.value`] = newValue.value;
                         }
                     }

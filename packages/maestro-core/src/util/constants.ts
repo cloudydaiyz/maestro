@@ -1,6 +1,6 @@
 import { BaseMemberPropertyTypes } from "../types/core-types";
 
-export const DB_NAME = "mytroupe";
+export const DB_NAME = "maestro";
 
 export const FULL_DAY = 1000 * 60 * 60 * 24;
 

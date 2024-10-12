@@ -6,7 +6,7 @@ import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "../util/env";
 import { DB_NAME } from "../util/constants";
 import { EventMap, MemberMap } from "../types/service-types";
 import assert from "assert";
-import { MyTroupeClientError } from "../util/error";
+import { MaestroClientError } from "../util/error";
 
 export class BaseService {
     protected client: MongoClient;
@@ -29,26 +29,26 @@ export class BaseService {
 
     protected async getTroupeSchema(troupeId: string, clientError?: true): Promise<WithId<TroupeSchema>> {
         const schema = await this.troupeColl.findOne({ _id: new ObjectId(troupeId) });
-        assert(schema, clientError ? new MyTroupeClientError("Unable to find troupe") : "Unable to find troupe");
+        assert(schema, clientError ? new MaestroClientError("Unable to find troupe") : "Unable to find troupe");
         return schema;
     }
 
     protected async getEventSchema(troupeId: string, eventId: string, clientError?: true): Promise<WithId<EventSchema>> {
         const event = await this.eventColl.findOne({ _id: new ObjectId(eventId), troupeId });
-        assert(event, clientError ? new MyTroupeClientError("Unable to find event") : "Unable to find event");
+        assert(event, clientError ? new MaestroClientError("Unable to find event") : "Unable to find event");
         return event;
     }
 
     protected async getEventTypeSchema(troupeId: string, eventTypeId: string, clientError?: true): Promise<EventTypeSchema> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
-        assert(eventType, clientError ? new MyTroupeClientError("Unable to find event type") : "Unable to find event type");
+        assert(eventType, clientError ? new MaestroClientError("Unable to find event type") : "Unable to find event type");
         return eventType;
     }
 
     protected async getMemberSchema(troupeId: string, memberId: string, clientError?: true): Promise<WithId<MemberSchema>> {
         const member = await this.audienceColl.findOne({ _id: new ObjectId(memberId), troupeId });
-        assert(member, clientError ? new MyTroupeClientError("Unable to find member") : "Unable to find member");
+        assert(member, clientError ? new MaestroClientError("Unable to find member") : "Unable to find member");
         return member;
     }
 }
