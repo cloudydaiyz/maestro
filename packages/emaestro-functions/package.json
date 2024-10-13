@@ -1,12 +1,17 @@
 {
-  "name": "maestro-functions",
+  "name": "emaestro-functions",
   "description": "Cloud functions for the Trouper project",
   "author": "Kylan Duncan",
   "license": "ISC",
-  "keywords": ["trouper"],
+  "keywords": [
+    "emaestro"
+  ],
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "express": "^4.21.1"
   }
 }

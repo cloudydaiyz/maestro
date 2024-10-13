@@ -1,6 +1,6 @@
 // Helper functions
 
-import { EventDataSource } from "../types/core-types";
+import { EventDataSource, MemberPropertyType, MemberPropertyValue } from "../types/core-types";
 import { FORMS_REGEX, FORMS_URL_TEMPL, SHEETS_REGEX, SHEETS_URL_TEMPL } from "./constants";
 import crypto from "crypto";
 
@@ -51,3 +51,16 @@ export function encrypt<T>(data: T, key: string, iv: Buffer): string {
     encrypted += cipher.final("hex");
     return encrypted;
 };
+
+export function verifyMemberPropertyType(value: MemberPropertyValue, type: MemberPropertyType) {
+    if(type.endsWith("?") && value == null) return true;
+
+    const rawType = type.replace("?", "").replace("!", "");
+    const valueType = typeof value;
+    if(rawType == "string") return valueType == "string";
+    if(rawType == "number") return valueType == "number";
+    if(rawType == "boolean") return valueType == "boolean";
+    if(rawType == "date") return valueType == "string" && !isNaN((new Date(value as string)).getTime());
+    
+    return false;
+}

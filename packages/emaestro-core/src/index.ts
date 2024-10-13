@@ -2,12 +2,13 @@
 
 import { ObjectId, PullOperator, PushOperator, UpdateFilter, WithId } from "mongodb";
 import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "./util/constants";
-import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "./types/core-types";
+import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints } from "./types/core-types";
 import { CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "./types/util-types";
 import assert from "assert";
 import { BaseService } from "./services/base-service";
 import { ClientError } from "./util/error";
+import { verifyMemberPropertyType } from "./util/helper";
 
 /**
  * Provides methods for interacting with the Troupe API. The structure of all given parameters will
@@ -472,8 +473,7 @@ export class TroupeApiService extends BaseService {
      * Updates event type in the given troupe and returns event type in public format.
      * 
      * Wait until next sync to:
-     * - Update member points for attendees of events with the corresponding type*
-     * - Update event type titles in the corresponding events
+     * - Retrieve events and attendees from the updated source folder URIs
      */ 
     async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<EventType> {
 
@@ -495,34 +495,68 @@ export class TroupeApiService extends BaseService {
             $pull: {} as UpdateOperator<TroupeSchema, "$pull">
         };
 
+        const eventUpdate = {
+            $set: {} as UpdateOperator<EventSchema, "$set">,
+        };
+        let updateEvents = false;
+
+        eventTypeUpdate.$set.lastUpdated = new Date();
+
         if(request.title) {
             eventTypeUpdate.$set["eventTypes.$[type].title"] = request.title;
-
-            await this.eventColl.updateMany(
-                { troupeId, eventTypeId },
-                { $set: { eventTypeTitle: request.title }}
-            );
+            eventUpdate.$set.eventTypeTitle = request.title;
+            updateEvents = true;
         }
 
         if(request.value) {
             eventTypeUpdate.$set["eventTypes.$[type].value"] = request.value;
 
-            // *FUTURE: Update member points for attendees of events with the corresponding type
+            // Update member points for attendees of events with the corresponding type
+            // Aggregate in the future: https://www.mongodb.com/docs/manual/reference/operator/aggregation/lookup/#use--lookup-with--mergeobjects
             const events = await this.eventColl.find({ troupeId, eventTypeId }).toArray();
             const members = await this.audienceColl.find({ troupeId }).toArray();
+            const eventsAttended = await this.eventsAttendedColl.find({ troupeId }).toArray();
 
-            await this.eventColl.updateMany(
-                { troupeId, eventTypeId },
-                { $set: { value: request.value }}
-            );
-
+            const eventToPointTypesMap: { [eventId: string]: string[] } = {};
+            const eventIds: string[] = [];
+            
+            // Build the event to point types map
             events.forEach(event => {
+                eventIds.push(event._id.toHexString());
                 Object.keys(troupe.pointTypes)
                     .filter(pt => troupe.pointTypes[pt].startDate <= event.startDate && event.startDate <= troupe.pointTypes[pt].endDate)
-                    .forEach(pt => { 
-                        (request.value || 0) - event.value 
-                    });
+                    .forEach(pt => { eventToPointTypesMap[event._id.toHexString()].push(pt) });
             });
+
+            // Update members based on events attended
+            eventsAttended.forEach(bucket => {
+                const member = members.find(m => m._id.toHexString() == bucket.memberId);
+                if(!member) return;
+
+                // Only iterate through event IDs in the map
+                for(const eventId in eventToPointTypesMap) {
+                    const event = bucket.events[eventId];
+                    if(event && event.typeId == eventTypeId) {
+                        for(const pt of eventToPointTypesMap[eventId]) {
+                            member.points[pt] += request.value! - eventType.value;
+                        }
+                    }
+                }
+            });
+
+            // Perform database update
+            await this.eventsAttendedColl.updateMany(
+                { troupeId, [`events.${eventTypeId}`]: { $exists: true } },
+                { $set: { [`events.${eventTypeId}.value`]: request.value }}
+            );
+
+            await this.audienceColl.aggregate([
+                { $documents: members },
+                { $merge: { into: "audience", on: "_id", whenMatched: "replace" } }
+            ]).toArray();
+
+            eventUpdate.$set.value = request.value;
+            updateEvents = true;
         }
 
         // Update source uris, ignoring duplicates, existing source folder URIs, and URIs to be removed
@@ -531,6 +565,7 @@ export class TroupeApiService extends BaseService {
                 && !eventType?.sourceFolderUris.includes(uri)
                 && !request.removeSourceFolderUris?.includes(uri)
         );
+
         newUris && newUris.length > 0 
             ? eventTypeUpdate.$push["eventTypes.$[type].sourceFolderUris"] = { 
                 $each: newUris 
@@ -552,23 +587,32 @@ export class TroupeApiService extends BaseService {
         );
         assert(newEventType, "Failed to update event type");
 
+        if(updateEvents) {
+            await this.eventColl.updateMany({ troupeId, eventTypeId }, eventUpdate);
+        }
+
         return this.getEventType(
             newEventType.eventTypes.find((et) => et._id.toHexString() == eventTypeId)!
         );
     }
 
-    /**
-     * Deletes an event type in the given troupe.
-     * 
-     * Wait until next sync to:
-     * - Update member points for attendees of events with the corresponding type*
-     */
+    /** Deletes an event type in the given troupe. */
     async deleteEventType(troupeId: string, eventTypeId: string): Promise<void> {
+        const troupe = await this.getTroupeSchema(troupeId, true);
+        assert(!troupe.syncLock, new ClientError("Cannot delete event type while sync is in progress"));
+
         const updateEventResult = await this.eventColl.updateMany(
             { troupeId, eventTypeId },
             { $unset: { eventTypeId: "" } }
         );
-        assert(updateEventResult.acknowledged, "Failed to delete events");
+        assert(updateEventResult.acknowledged, "Failed to remove event type from events");
+
+        const updateEventsAttended = await this.eventsAttendedColl.updateMany(
+            { troupeId, [`events.${eventTypeId}`]: { $exists: true } },
+            { $unset: { [`events.${eventTypeId}`]: "" } }
+        );
+        assert(updateEventsAttended.acknowledged && updateEventsAttended.matchedCount == updateEventsAttended.modifiedCount, 
+            "Failed to remove event type from events attended");
 
         const deleteEventTypeResult = await this.troupeColl.updateOne(
             { _id: new ObjectId(troupeId) },
@@ -576,14 +620,40 @@ export class TroupeApiService extends BaseService {
         );
         assert(deleteEventTypeResult.matchedCount, new ClientError("Event type not found in troupe"));
         assert(deleteEventTypeResult.modifiedCount, "Failed to delete event type");
-
-        // *FUTURE: Update member points for attendees of events with the corresponding type
     }
 
-    async createMember(troupeId: string, request: CreateMemberRequest) {
-        
+    /** Creates and returns a new member in the given troupe. */
+    async createMember(troupeId: string, request: CreateMemberRequest): Promise<Member> {
+        const troupe = await this.getTroupeSchema(troupeId, true);
+        assert(!troupe.syncLock, new ClientError("Cannot create member while sync is in progress"));
+
+        const properties: VariableMemberProperties = {};
+
+        for(const prop in troupe.memberPropertyTypes) {
+            assert(prop in request.properties, new ClientError("Missing required member property"));
+            assert(verifyMemberPropertyType(request.properties[prop].value, troupe.memberPropertyTypes[prop]), 
+                new ClientError("Invalid member property type"));
+            properties[prop] = { value: request.properties[prop].value, override: true };
+        }
+
+        const points: VariableMemberPoints = {};
+
+        for(const pt in troupe.pointTypes) { points[pt] = 0 }
+
+        const member: MemberSchema = {
+            troupeId,
+            lastUpdated: new Date(),
+            properties: properties as BaseMemberProperties & VariableMemberProperties,
+            points: points as BaseMemberPoints & VariableMemberPoints,
+        }
+
+        const insertedMember = await this.audienceColl.insertOne(member);
+        assert(insertedMember.acknowledged, "Failed to insert member");
+
+        return this.getMember({ ...member, _id: insertedMember.insertedId });
     }
 
+    /** Retrieve member in public format. */
     async getMember(member: string | WithId<MemberSchema>, troupeId?: string): Promise<Member> {
         assert(typeof member != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event."))
@@ -611,7 +681,7 @@ export class TroupeApiService extends BaseService {
         }
     }
 
-    /** Retrieve all members */ 
+    /** Retrieve all members in public format */ 
     async getAudience(troupeId: string): Promise<Member[]> {
         const audience = await this.audienceColl.find({ troupeId }).toArray();
         return Promise.all(audience.map((m) => this.getMember(m)));
@@ -685,6 +755,10 @@ export class TroupeApiService extends BaseService {
         return this.getMember(newMember);
     }
 
+    /** 
+     * Deletes a member in the given troupe. Member may still be generated on sync; 
+     * this removes the existing data associated with a member. 
+     */
     async deleteMember(troupeId: string, memberId: string): Promise<void> {
         const res = await Promise.all([
             this.audienceColl.deleteOne({ _id: new ObjectId(memberId), troupeId }),
@@ -696,7 +770,7 @@ export class TroupeApiService extends BaseService {
     /** 
      * Places troupe into the sync queue if the lock is disabled. If no ID is provided,
      * all troupes with disabled sync locks are placed into the queue.
-     * */
+     */
     async initiateSync(troupeId?: string) {
 
     }
