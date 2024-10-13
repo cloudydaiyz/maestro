@@ -9,6 +9,23 @@
             "preLaunchTask": "tsc: build - packages/emaestro-core/tsconfig.json",
             "program": "${workspaceFolder}/packages/emaestro-core/src/quick-test.ts",
             "outFiles": ["${workspaceFolder}/packages/emaestro-core/dist/**/*.js"]
+        },
+        {
+            "name": "*.spec.ts | emaestro-core",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/packages/emaestro-core",
+            "preLaunchTask": "tsc: build - packages/emaestro-core/tsconfig.json",
+            "runtimeExecutable": "${workspaceRoot}/packages/emaestro-core/node_modules/.bin/jest",
+            "runtimeArgs": [
+                "${fileBasenameNoExtension}",
+                "--inspect-brk",
+                "--watch",
+                "--coverage=false",
+                "--no-cache"
+            ],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen"
         }
     ]
 }

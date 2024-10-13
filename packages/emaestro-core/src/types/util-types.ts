@@ -1,4 +1,5 @@
-import { MatchKeysAndValues, OnlyFieldsOfType } from "mongodb";
+import { MatchKeysAndValues, OnlyFieldsOfType, UpdateFilter } from "mongodb";
+import { EventSchema } from "./core-types";
 
 /**
  * This creates a version of T (provided type) with the given field (or fields if 
@@ -30,6 +31,8 @@ export type PreviousLastUpdated = { previousLastUpdated: string };
 
 // == MongoDB Types ==
 
-export type SetOperator<T> = Mutable<MatchKeysAndValues<T>>;
+export type UpdateOperator<T, K extends string> = Mutable<Required<UpdateFilter<T>>[K]>;
 
-export type UnsetOperator<T> = Mutable<OnlyFieldsOfType<T, any, '' | true | 1>>;
+export type SetOperator<T> = Mutable<Required<UpdateFilter<EventSchema>>["$set"]>;
+
+export type UnsetOperator<T> = Mutable<Required<UpdateFilter<EventSchema>>["$unset"]>;

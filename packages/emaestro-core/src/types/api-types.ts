@@ -58,6 +58,7 @@ export type UpdateEventRequest = {
     startDate?: string,
     /** Must be a valid {@link EventDataSource}. */
     sourceUri?: string,
+    eventTypeId?: string,
     value?: number,
     /** Updates properties associated with fields. Cannot create new entries. */
     updateProperties?: {

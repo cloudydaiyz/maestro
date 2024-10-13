@@ -1,7 +1,7 @@
 // To help catch and relay client-based errors
-export class MaestroClientError extends Error {
+export class ClientError extends Error {
     constructor(message: string) {
         super(message);
-        this.name = "MaestroClientError";
+        this.name = "ClientError";
     }
 }
