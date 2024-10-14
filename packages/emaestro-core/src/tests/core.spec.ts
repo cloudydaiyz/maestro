@@ -4,7 +4,7 @@ import { TroupeApiService } from "..";
 import { TroupeCoreService } from "../core";
 import { test, describe } from "@jest/globals";
 
-const resources = init();
+const { resources, dbSetup } = init();
 
 describe("basic core operations", () => {
     test("create and delete troupe", async () => {

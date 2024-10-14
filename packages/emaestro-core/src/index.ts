@@ -128,13 +128,10 @@ export class TroupeApiService extends BaseService {
                     startDate: new Date(request.updatePointTypes[key].startDate),
                     endDate: new Date(request.updatePointTypes[key].endDate),
                 }
-                assert(pointType.startDate.toString() != "Invalid Date"
-                    && pointType.endDate.toString() != "Invalid Date", 
+                assert(pointType.startDate.toString() != "Invalid Date" && pointType.endDate.toString() != "Invalid Date", 
                     new ClientError("Invalid date syntax"))
-                assert(!(key in BASE_POINT_TYPES_OBJ), 
-                    new ClientError("Cannot modify base point types"));
-                assert(pointType.startDate < pointType.endDate, 
-                    new ClientError("Invalid point type date range"));
+                assert(!(key in BASE_POINT_TYPES_OBJ), new ClientError("Cannot modify base point types"));
+                assert(pointType.startDate < pointType.endDate, new ClientError("Invalid point type date range"));
 
                 if(!(request.removePointTypes?.includes(key))) {
                     troupeUpdate.$set[`pointTypes.${key}`] = pointType;
@@ -146,6 +143,7 @@ export class TroupeApiService extends BaseService {
                 new ClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`));
             
             // *FUTURE: Update point calculations for members
+
         }
 
         // Remove point types
@@ -229,7 +227,7 @@ export class TroupeApiService extends BaseService {
 
     /** Retrieve all events in public format */ 
     async getEvents(troupeId: string): Promise<PublicEvent[]> {
-        const events = await this.eventColl.find({ troupeId }, { projection: { _id: 0 }}).toArray();
+        const events = await this.eventColl.find({ troupeId }).toArray();
         return Promise.all(events.map((e) => this.getEvent(e)));
     }
 
@@ -362,7 +360,7 @@ export class TroupeApiService extends BaseService {
             const membersToUpdate = await this.eventsAttendedColl
                 .find({ troupeId, [`events.${eventId}`]: { $exists: true } }).toArray()
                 .then(ea => ea.map(e => new ObjectId(e.memberId)));
-
+            
             const updatePoints = await this.audienceColl.updateMany({ troupeId, _id: { $in: membersToUpdate }}, { $inc });
             assert(updatePoints.matchedCount == updatePoints.modifiedCount, "Failed to update member points");
         }
@@ -678,7 +676,7 @@ export class TroupeApiService extends BaseService {
             id: memberId,
             lastUpdated: m.lastUpdated.toISOString(),
             properties,
-        }
+        };
     }
 
     /** Retrieve all members in public format */ 

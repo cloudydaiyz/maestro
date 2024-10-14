@@ -65,7 +65,7 @@ export class TroupeCoreService extends BaseService {
                 this.eventColl.deleteMany({ troupeId })
             ]).then((res) => {
                 assert(res.every((r) => r.acknowledged), "Failed to fully delete troupe");
-                console.log(res.reduce((deletedCount, r) => deletedCount + r.deletedCount, 0));
+                // console.log(res.reduce((deletedCount, r) => deletedCount + r.deletedCount, 0));
             });
         });
     }

@@ -9,12 +9,12 @@ import assert from "assert";
 import { ClientError } from "../util/error";
 
 export class BaseService {
-    protected client: MongoClient;
-    protected troupeColl: Collection<TroupeSchema>;
-    protected dashboardColl: Collection<TroupeDashboardSchema>;
-    protected eventColl: Collection<EventSchema>;
-    protected audienceColl: Collection<MemberSchema>;
-    protected eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
+    client: MongoClient;
+    troupeColl: Collection<TroupeSchema>;
+    dashboardColl: Collection<TroupeDashboardSchema>;
+    eventColl: Collection<EventSchema>;
+    audienceColl: Collection<MemberSchema>;
+    eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
     connection: Promise<MongoClient>;
     
     constructor() {
