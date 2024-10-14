@@ -126,8 +126,7 @@ async function dbSetup(config: DbSetupConfig) {
         events: config.events || {},
         members: config.members || {},
     }
-    const setup = new BaseService();
-    await setup.connection;
+    const setup = await BaseService.create();
 
     const customTroupeIds = Object.keys(config.troupes!);
 
@@ -324,6 +323,10 @@ export default function () {
 
         // Connect to and ping the server to ensure everything is setup
         const client = new MongoClient(uri, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
+        client.on("connecting", () => console.log("Connecting to MongoDB..."));
+        client.on("connected", () => console.log("Connected to MongoDB"));
+        client.on("error", (err) => console.error("Connection error:", err));
+
         await client.connect();
         await client.db("admin").command({ ping: 1 });
         await client.close();
@@ -333,9 +336,8 @@ export default function () {
     
     // Delete all data from the database
     afterEach(async () => {
-        const cleanupService = new BaseService();
+        const cleanupService = await BaseService.create();
         resources.push(cleanupService);
-        await cleanupService.connection;
 
         // Delete all collections
         await Promise.all([

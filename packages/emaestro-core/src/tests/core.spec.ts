@@ -8,10 +8,9 @@ const { resources, dbSetup } = init();
 
 describe("basic core operations", () => {
     test("create and delete troupe", async () => {
-        const core = new TroupeCoreService();
-        const api = new TroupeApiService();
+        const core = await TroupeCoreService.create();
+        const api = await TroupeApiService.create();
         resources.push(core, api);
-        await Promise.all([ core.connection, api.connection ]);
 
         const troupeId = await core.createTroupe({ name: "test" });
 

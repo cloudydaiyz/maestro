@@ -10,7 +10,7 @@ const link = "https://docs.google.com/forms/d/1nG_OyAJQ3ZPCNzzA5wgB66tlbGw6Pc0cL
 
 test("db config", async () => {
     const config = await dbSetup(defaultConfig);
-    const api = new TroupeApiService();
+    const api = await TroupeApiService.create();
     resources.push(api);
 
     expect((await api.getTroupe(config.troupes!["A"].id!)).eventTypes).toHaveLength(3);
@@ -21,13 +21,14 @@ test("db config", async () => {
 describe("basic api operations", () => {
 
     let config: DbSetupConfig;
-    beforeEach(async () => { config = await dbSetup(defaultConfig) });
+    beforeEach(async () => { 
+        config = await dbSetup(defaultConfig);
+    });
 
     test("get troupe", async () => {
-        const core = new TroupeCoreService();
-        const api = new TroupeApiService();
+        const core = await TroupeCoreService.create();
+        const api = await TroupeApiService.create();
         resources.push(core, api);
-        await Promise.all([ core.connection, api.connection ]);
 
         await expect(api.getTroupe("test")).rejects.toThrow();
 
@@ -39,9 +40,8 @@ describe("basic api operations", () => {
     test("create event", async () => {
         const troupeId = config.troupes!["A"].id!;
 
-        const api = new TroupeApiService();
+        const api = await TroupeApiService.create();
         resources.push(api);
-        await api.connection;
 
         const event = await api.createEvent(troupeId, {
             title: "test",
@@ -56,9 +56,8 @@ describe("basic api operations", () => {
         const troupeId = config.troupes!["A"].id!;
         const secondEventId = config.events!["second"].id!;
 
-        const api = new TroupeApiService();
+        const api = await TroupeApiService.create();
         resources.push(api);
-        await api.connection;
 
         const updatedEvent1 = await api.updateEvent(troupeId, secondEventId, {
             title: "test2",
@@ -106,6 +105,38 @@ describe("basic api operations", () => {
             && bucket.events[secondEventId].typeId === newEventTypeId)).toBeTruthy();
     });
 
+    test("update event - varying value across point types", async () => {
+        const troupeId = config.troupes!["A"].id!;
+        const secondEventId = config.events!["second"].id!;
+        const secondEventValue = config.events!["second"].event!.value;
+        const fourthEventId = config.events!["fourth"].id!;
+        const fourthEventValue = config.events!["fourth"].event!.value;
+
+        const api = await TroupeApiService.create();
+        resources.push(api);
+
+        // Observe the impact of updating the event value on attendees (in this case, member 2)
+        const observedMemberId = config.members!["2"].id!;
+        const originalPoints = config.members!["2"].member!.points["Total"];
+        const originalFallPoints = config.members!["2"].member!.points["Fall"];
+
+        // Update an event inside the range of Fall points
+        const updatedEvent1 = await api.updateEvent(troupeId, secondEventId, { value: secondEventValue + 1 });
+        expect(updatedEvent1).toHaveProperty("value", secondEventValue + 1);
+
+        const updatedMember1 = await api.getMember(observedMemberId, troupeId);
+        expect(updatedMember1.points["Total"]).toEqual(originalPoints + 1);
+        expect(updatedMember1.points["Fall"]).toEqual(originalFallPoints + 1);
+
+        // Update an event outside the range of Fall points
+        const updatedEvent2 = await api.updateEvent(troupeId, fourthEventId, { value: fourthEventValue + 1 });
+        expect(updatedEvent2).toHaveProperty("value", fourthEventValue + 1);
+
+        const updatedMember2 = await api.getMember(observedMemberId, troupeId);
+        expect(updatedMember2.points["Total"]).toEqual(originalPoints + 2);
+        expect(updatedMember2.points["Fall"]).toEqual(originalFallPoints + 1);
+    });
+
     test("delete event", async() => {
         const troupeId = config.troupes!["A"].id!;
         const secondEventId = config.events!["second"].id!;
@@ -113,9 +144,8 @@ describe("basic api operations", () => {
         const fourthEventId = config.events!["fourth"].id!;
         const fourthEventValue = config.events!["fourth"].event!.value;
 
-        const api = new TroupeApiService();
+        const api = await TroupeApiService.create();
         resources.push(api);
-        await api.connection;
 
         // Observe the impact of deleting the event on attendees (in this case, member 2)
         const observedMemberId = config.members!["2"].id!;

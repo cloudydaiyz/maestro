@@ -2,7 +2,7 @@
 
 import { Collection, MongoClient, ObjectId, WithId } from "mongodb";
 import { AttendeeSchema, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
-import { MONGODB_PASS, MONGODB_URI, MONGODB_USER } from "../util/env";
+import { MONGODB_PASS, MONGODB_USER } from "../util/env";
 import { DB_NAME } from "../util/constants";
 import { EventMap, MemberMap } from "../types/service-types";
 import assert from "assert";
@@ -15,16 +15,25 @@ export class BaseService {
     eventColl: Collection<EventSchema>;
     audienceColl: Collection<MemberSchema>;
     eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
-    connection: Promise<MongoClient>;
     
     constructor() {
-        this.client = new MongoClient(MONGODB_URI, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
-        this.connection = this.client.connect();
+        // MongoDB URI could be changed from testing -- use the environment variable instead of MONGODB_URI const
+        this.client = new MongoClient(process.env.MONGODB_URI!, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
+        this.client.on("connecting", () => console.log("Connecting to MongoDB..."));
+        this.client.on("connected", () => console.log("Connected to MongoDB"));
+        this.client.on("error", (err) => console.error("Connection error:", err));
+
         this.troupeColl = this.client.db(DB_NAME).collection("troupes");
         this.dashboardColl = this.client.db(DB_NAME).collection("dashboards");
         this.audienceColl = this.client.db(DB_NAME).collection("audience");
         this.eventColl = this.client.db(DB_NAME).collection("events");
         this.eventsAttendedColl = this.client.db(DB_NAME).collection("eventsAttended");
+    }
+
+    static async create<T extends BaseService>(this: new() => T): Promise<T> {
+        const service = new this();
+        await service.client.connect();
+        return service;
     }
 
     async getTroupeSchema(troupeId: string, clientError?: true): Promise<WithId<TroupeSchema>> {
