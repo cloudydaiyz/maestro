@@ -1,2 +1,3 @@
 quick-test*.*
 *.map
+dist/tests

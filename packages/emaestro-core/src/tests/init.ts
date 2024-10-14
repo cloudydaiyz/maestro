@@ -4,7 +4,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { MONGODB_PASS, MONGODB_USER } from '../util/env';
 import { MongoClient, ObjectId, WithId } from 'mongodb';
 import { BaseService } from "../services/base-service";
-import { BaseMemberPoints, BaseMemberProperties, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties } from "../types/core-types";
+import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../types/core-types";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../util/constants";
 import assert from "assert";
 import { randomElement } from "../util/helper";
@@ -15,7 +15,9 @@ import { Id } from "../types/util-types";
  */
 export interface DbSetupConfig {
     troupes?: { 
-        [customTroupeId: string]: Partial<WithId<TroupeSchema> & Id & {
+        [customTroupeId: string]: Partial<Omit<WithId<TroupeSchema>, "pointTypes" | "memberPropertyTypes"> & Id & {
+            memberPropertyTypes: Partial<BaseMemberPropertyTypes> & VariableMemberPropertyTypes,
+            pointTypes: Partial<BasePointTypes> & VariablePointTypes, 
             troupe: WithId<TroupeSchema>,
         }>
     };
@@ -45,6 +47,73 @@ export interface DbSetupConfig {
         }> 
     };
 }
+
+export const defaultConfig: DbSetupConfig = {
+    troupes: { 
+        "A": { 
+            name: "test troupe", 
+            pointTypes: { 
+                "Fall": { startDate: new Date(1728870141961), endDate: new Date(1733017341961) },
+            },
+        } 
+    },
+    eventTypes: {
+        "cool events": { value: 10 },
+        "alright events": { value: 3 },
+        "uncool events": { value: -7 },
+    },
+    events: { 
+        "first": { title: "test event 1", customTroupeId: "A", customEventTypeId: "cool events" }, 
+        "second": { title: "test event 2", customTroupeId: "A", customEventTypeId: "alright events", startDate: new Date(1728880141961) },
+        "third": { title: "test event 3", customTroupeId: "A", customEventTypeId: "uncool events" },
+        "fourth": { title: "test event 4 (special)", customTroupeId: "A", value: 4, startDate: new Date(1728850141961) },
+        "fifth": { title: "test event 5", customTroupeId: "A", customEventTypeId: "alright events" },
+        "sixth": { title: "test event 4 (special)", customTroupeId: "A", value: -2 },
+        "seventh": { title: "test event 4 (special)", customTroupeId: "A", value: 7 },
+    },
+    members: {
+        "1": { 
+            properties: { 
+                "First Name": { value: "John", override: false }, 
+                "Last Name": { value: "Doe", override: false }, 
+            }, 
+            customTroupeId: "A", 
+            customEventAttendedIds: ["first", "third"],
+        },
+        "2": { 
+            properties: { 
+                "First Name": { value: "Hello", override: false }, 
+                "Last Name": { value: "World", override: false }, 
+            }, 
+            customTroupeId: "A", 
+            customEventAttendedIds: ["first", "second", "third", "fourth", "fifth"],
+        },
+        "3": { 
+            properties: { 
+                "First Name": { value: "Hello", override: false }, 
+                "Last Name": { value: "World", override: false }, 
+            }, 
+            customTroupeId: "A", 
+            customEventAttendedIds: ["second", "fourth", "seventh"],
+        },
+        "4": { 
+            properties: { 
+                "First Name": { value: "Hello", override: false }, 
+                "Last Name": { value: "World", override: false }, 
+            }, 
+            customTroupeId: "A", 
+            customEventAttendedIds: ["third", "fourth", "fifth", "sixth"],
+        },
+        "5": { 
+            properties: { 
+                "First Name": { value: "Hello", override: false }, 
+                "Last Name": { value: "World", override: false }, 
+            }, 
+            customTroupeId: "A", 
+            customEventAttendedIds: ["first", "second", "third", "fourth", "fifth", "sixth", "seventh"],
+        },
+    }
+};
 
 /**
  * Setup the database with the given configuration, opting out of interaction with
@@ -76,9 +145,9 @@ async function dbSetup(config: DbSetupConfig) {
             logSheetUri: request.logSheetUri || "https://example.com",
             syncLock: request.syncLock || false,
             eventTypes: [],
-            memberPropertyTypes: request.memberPropertyTypes || BASE_MEMBER_PROPERTY_TYPES,
+            memberPropertyTypes: { ...BASE_MEMBER_PROPERTY_TYPES, ...request.memberPropertyTypes },
             synchronizedMemberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
-            pointTypes: request.pointTypes || BASE_POINT_TYPES_OBJ,
+            pointTypes: { ...BASE_POINT_TYPES_OBJ, ...request.pointTypes },
             synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
         };
 

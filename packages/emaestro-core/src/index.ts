@@ -290,6 +290,7 @@ export class TroupeApiService extends BaseService {
         if(request.eventTypeId) {
             const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == request.eventTypeId);
             assert(eventType, new ClientError("Invalid event type ID"));
+            value = eventType.value;
 
             eventUpdate.$set.eventTypeId = request.eventTypeId;
             eventUpdate.$set.eventTypeTitle = eventType.title;
@@ -297,7 +298,6 @@ export class TroupeApiService extends BaseService {
             eventsAttendedUpdate.$set[`events.${eventId}.typeId`] = request.eventTypeId;
             eventsAttendedUpdate.$set[`events.${eventId}.value`] = value;
 
-            value = eventType.value;
             updateMemberPoints = true;
         } else if(request.eventTypeId === "") {
             eventUpdate.$unset.eventTypeId = "";
@@ -307,7 +307,7 @@ export class TroupeApiService extends BaseService {
             updateEventsAttended = true;
         }
 
-        if(request.value && request.value != oldEvent.value) {
+        if(request.value) {
             eventUpdate.$set.value = request.value;
             eventUpdate.$unset.eventTypeId = "";
             eventsAttendedUpdate.$unset[`events.${eventId}.typeId`] = "";
