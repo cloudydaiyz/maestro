@@ -8,7 +8,7 @@ import { Mutable, Replace, SetOperator, UnsetOperator, UpdateOperator, WeakParti
 import assert from "assert";
 import { BaseService } from "./services/base-service";
 import { ClientError } from "./util/error";
-import { verifyMemberPropertyType } from "./util/helper";
+import { verifyApiMemberPropertyType } from "./util/helper";
 
 /**
  * Provides methods for interacting with the Troupe API. The structure of all given parameters will
@@ -662,7 +662,7 @@ export class TroupeApiService extends BaseService {
 
         for(const prop in troupe.memberPropertyTypes) {
             assert(prop in request.properties, new ClientError("Missing required member property"));
-            assert(verifyMemberPropertyType(request.properties[prop].value, troupe.memberPropertyTypes[prop]), 
+            assert(verifyApiMemberPropertyType(request.properties[prop].value, troupe.memberPropertyTypes[prop]), 
                 new ClientError("Invalid member property type"));
             properties[prop] = { value: request.properties[prop].value, override: true };
         }

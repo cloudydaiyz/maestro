@@ -1,15 +1,15 @@
 import "dotenv/config";
 
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { MONGODB_PASS, MONGODB_USER } from '../util/env';
+import { MONGODB_PASS, MONGODB_USER } from '../../util/env';
 import { MongoClient, ObjectId, WithId } from 'mongodb';
-import { BaseService } from "../services/base-service";
-import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../types/core-types";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../util/constants";
+import { BaseService } from "../../services/base-service";
+import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../../util/constants";
 import assert from "assert";
-import { randomElement } from "../util/helper";
-import { Id } from "../types/util-types";
-import { TroupeApiService } from "..";
+import { randomElement } from "../../util/helper";
+import { Id } from "../../types/util-types";
+import { TroupeApiService } from "../..";
 import { DbSetupConfig, defaultConfig } from "./db-config";
 
 /**
@@ -245,6 +245,12 @@ export default function () {
     let mongod: MongoMemoryReplSet;
     const resources: BaseService[] = [];
 
+    /** Helper to chain resource creation with adding to the list of resources to cleanup */
+    function addResource<T extends BaseService>(resource: T): T {
+        resources.push(resource);
+        return resource;
+    }
+
     // Start the server
     beforeAll(async () => {
         mongod = await MongoMemoryReplSet.create({ replSet: { auth: { enable: true, customRootName: MONGODB_USER, customRootPwd: MONGODB_PASS } } });
@@ -296,5 +302,5 @@ export default function () {
         await mongod.stop();
     });
 
-    return { resources, dbSetup };
+    return { addResource, dbSetup };
 };

@@ -38,7 +38,7 @@ export type GoogleSheetsQuestionToTypeMap = {
     }
 }
 
-export interface EventMap { 
+export interface EventDataMap { 
     [sourceUri: string]: {
         event: WithId<EventSchema>,
         delete: boolean,
@@ -46,7 +46,7 @@ export interface EventMap {
     }
 }
 
-export interface MemberMap { 
+export interface AttendeeDataMap { 
     [memberId: string]: {
         member: WithId<MemberSchema>,
         eventsAttended: (EventsAttendedBucketSchema["events"][string] & { eventId: string })[],

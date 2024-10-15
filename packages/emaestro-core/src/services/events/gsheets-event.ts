@@ -2,7 +2,7 @@
 
 import { ObjectId, WithId } from "mongodb";
 import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "../../types/core-types";
-import { EventMap, GoogleSheetsQuestionToTypeMap, MemberMap } from "../../types/service-types";
+import { EventDataMap, GoogleSheetsQuestionToTypeMap, AttendeeDataMap } from "../../types/service-types";
 import { SHEETS_REGEX } from "../../util/constants";
 
 import { parse } from "csv-parse";
@@ -15,7 +15,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
     columnToTypeMap?: GoogleSheetsQuestionToTypeMap;
     containsMemberId?: boolean;
     
-    constructor(troupe: WithId<TroupeSchema>, events: EventMap, members: MemberMap) {
+    constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap) {
         super(troupe, events, members);
     }
 

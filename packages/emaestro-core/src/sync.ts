@@ -4,7 +4,7 @@ import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBu
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getDataSourceUrl } from "./util/helper";
-import { DiscoveryEventType, EventMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, MemberMap } from "./types/service-types";
+import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "./types/util-types";
 import { GoogleFormsEventDataService } from "./services/events/gforms-event";
@@ -13,11 +13,24 @@ import { BaseService, EventDataService } from "./services/base-service";
 import assert from "assert";
 import { GoogleSheetsLogService } from "./services/logs/gsheets-log";
 
-// Get event fields helper
-export async function populateEventFields(troupeId: string, eventId: string) {
-
+// Forgot why I made this. Should come back to me as I'm reviewing the code.
+function initEventMap(events: WithId<EventSchema>[], fromColl?: boolean): EventDataMap {
+    const map: EventDataMap = {};
+    fromColl = fromColl == undefined ? true : fromColl;
+    for(const event of events) {
+        map[event.sourceUri] = { event, delete: false, fromColl };
+    }
+    return map;
 }
 
+/**
+ * Synchronizes the troupe with its source uris for events and event types, then updates the
+ * audience and log sheet with the new information.
+ * 
+ * - Doesn't delete events previously discovered, even if not found in parent event type folder
+ * - Delete members that are no longer in the source folder & have no overridden properties
+ * - NOTE: Populate local variables with synchronized information to update the database
+ */
 export class TroupeSyncService extends BaseService {
     ready: Promise<void>;
     drive!: drive_v3.Drive;
@@ -27,8 +40,8 @@ export class TroupeSyncService extends BaseService {
     // Output variables
     troupe: WithId<TroupeSchema> | null;
     dashboard: WithId<TroupeDashboardSchema> | null;
-    events: EventMap;
-    members: MemberMap;
+    events: EventDataMap;
+    members: AttendeeDataMap;
 
     constructor() {
         super();
@@ -54,9 +67,8 @@ export class TroupeSyncService extends BaseService {
      * - Delete members that are no longer in the source folder & have no overridden properties
      * - NOTE: Populate local variables with synchronized information to update the database
      */
-    async sync(troupeId: string): Promise<void> {
-        assert(!(await this.getTroupeSchema(troupeId)).syncLock, 
-            "Troupe is already being synced");
+    async sync(troupeId: string, skipLogPublish?: true): Promise<void> {
+        assert(!(await this.getTroupeSchema(troupeId)).syncLock, "Troupe is already being synced");
 
         // Lock the troupe
         this.troupe = await this.troupeColl.findOneAndUpdate(
@@ -73,7 +85,7 @@ export class TroupeSyncService extends BaseService {
         await this.discoverEvents()
             .then(this.discoverAndRefreshAudience)
             .then(this.persistSync)
-            .then(this.refreshLogSheet);
+            .then(() => skipLogPublish ?? this.refreshLogSheet);
         
         // Unlock the troupe
         const unlockResult = await this.troupeColl.updateOne(

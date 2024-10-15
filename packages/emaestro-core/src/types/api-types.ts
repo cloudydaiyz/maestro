@@ -91,7 +91,7 @@ export type UpdateEventTypeRequest = {
  * Creates a new member. All required member properties defined by the troupe must be set.
  */
 export type CreateMemberRequest = Pick<
-    MemberSchema,
+    Member,
     "properties"
 >;
 

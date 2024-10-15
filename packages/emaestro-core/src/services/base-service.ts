@@ -4,7 +4,7 @@ import { Collection, MongoClient, ObjectId, WithId } from "mongodb";
 import { AttendeeSchema, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
 import { MONGODB_PASS, MONGODB_USER } from "../util/env";
 import { DB_NAME } from "../util/constants";
-import { EventMap, MemberMap } from "../types/service-types";
+import { EventDataMap, AttendeeDataMap } from "../types/service-types";
 import assert from "assert";
 import { ClientError } from "../util/error";
 
@@ -68,10 +68,10 @@ export class BaseService {
 export abstract class EventDataService {
     ready: Promise<void>;
     troupe: WithId<TroupeSchema>;
-    events: EventMap;
-    members: MemberMap;
+    events: EventDataMap;
+    members: AttendeeDataMap;
 
-    constructor(troupe: WithId<TroupeSchema>, events: EventMap, members: MemberMap) {
+    constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap) {
         this.troupe = troupe;
         this.events = events;
         this.members = members;

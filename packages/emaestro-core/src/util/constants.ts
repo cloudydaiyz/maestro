@@ -1,5 +1,3 @@
-import { BaseMemberPropertyTypes } from "../types/core-types";
-
 export const DB_NAME = "maestro";
 
 export const FULL_DAY = 1000 * 60 * 60 * 24;
@@ -10,14 +8,14 @@ export const MAX_EVENT_TYPES = 10;
 export const MAX_PAGE_SIZE = 30;
 
 // == Constants for event source URLs ==
-export const DRIVE_FOLDER_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/(?<folderId>[^\/&?#]+)/;
+export const DRIVE_FOLDER_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/(?<folderId>[^\/&?#]+).*/;
 export const DRIVE_FOLDER_URL_TEMPL = "https://drive.google.com/drive/folders/<id>?nsldnadsnj";
 export const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
 
-export const SHEETS_REGEX = /https:\/\/docs.google.com\/spreadsheets\/d\/(?<spreadsheetId>[^/]+)\/.*/;
+export const SHEETS_REGEX = /https:\/\/docs.google.com\/spreadsheets\/d\/(?<spreadsheetId>[^\/&?#]+).*/;
 export const SHEETS_URL_TEMPL = "https://docs.google.com/spreadsheets/d/<id>";
 
-export const FORMS_REGEX = /https:\/\/docs.google.com\/forms\/d\/(?<formId>[^/]+)\/.*/;
+export const FORMS_REGEX = /https:\/\/docs.google.com\/forms\/d\/(?<formId>[^\/&?#]+).*/;
 export const FORMS_URL_TEMPL = "https://docs.google.com/forms/d/<id>";
 
 // == Constants for the core types ==

@@ -1,7 +1,7 @@
 // Google Forms data source
 
 import { ObjectId, WithId } from "mongodb";
-import { EventMap, GoogleFormsQuestionToTypeMap, MemberMap } from "../../types/service-types";
+import { EventDataMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "../../types/service-types";
 import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "../../types/core-types";
 import { FORMS_REGEX } from "../../util/constants";
 import { forms_v1 } from "googleapis";
@@ -17,7 +17,7 @@ export class GoogleFormsEventDataService extends EventDataService {
     responseData?: GaxiosResponse<forms_v1.Schema$ListFormResponsesResponse>;
     containsMemberId?: true;
 
-    constructor(troupe: WithId<TroupeSchema>, events: EventMap, members: MemberMap) { 
+    constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap) { 
         super(troupe, events, members);
     };
 
@@ -29,6 +29,7 @@ export class GoogleFormsEventDataService extends EventDataService {
         const formId = FORMS_REGEX.exec(event.sourceUri)!.groups!["formId"];
         const questionToTypeMap: GoogleFormsQuestionToTypeMap = {};
         const eventData = this.events[event.sourceUri];
+        assert(eventData, "Improperly structured event data");
 
         // Retrieve form data
         try {
@@ -77,8 +78,8 @@ export class GoogleFormsEventDataService extends EventDataService {
             includedFields.push(fieldId);
             if(!property) continue;
 
-            // Ensure the given property is valid for the question, otherwise
-            // set the event property to null
+            // Ensure the given property is valid for the question, otherwise set the event property to null
+            questionToTypeMap[fieldId] = {};
             const propertyType = this.troupe.memberPropertyTypes[property].slice(0, -1);
             if(question.question.textQuestion) {
                 // Allowed types: string
