@@ -1,29 +1,17 @@
-import init, { DbSetupConfig, defaultConfig } from "./init";
+import init from "./init";
+import { DbSetupConfig, defaultConfig } from "./db-config";
 
 import { TroupeApiService } from "..";
 import { TroupeCoreService } from "../core";
 import { test, describe } from "@jest/globals";
+import { ObjectId } from "mongodb";
 
 const { resources, dbSetup } = init();
 
-const link = "https://docs.google.com/forms/d/1nG_OyAJQ3ZPCNzzA5wgB66tlbGw6Pc0cLBV3i4GLJNY/edit";
-
-test("db config", async () => {
-    const config = await dbSetup(defaultConfig);
-    const api = await TroupeApiService.create();
-    resources.push(api);
-
-    expect((await api.getTroupe(config.troupes!["A"].id!)).eventTypes).toHaveLength(3);
-    expect(api.getEvents(config.troupes!["A"].id!)).resolves.toHaveLength(7);
-    expect(api.getAudience(config.troupes!["A"].id!)).resolves.toHaveLength(5);
-});
-
 describe("basic api operations", () => {
-
     let config: DbSetupConfig;
-    beforeEach(async () => { 
-        config = await dbSetup(defaultConfig);
-    });
+
+    beforeEach(async () => { config = await dbSetup(defaultConfig) });
 
     test("get troupe", async () => {
         const core = await TroupeCoreService.create();
@@ -46,7 +34,7 @@ describe("basic api operations", () => {
         const event = await api.createEvent(troupeId, {
             title: "test",
             startDate: (new Date()).toISOString(),
-            sourceUri: link,
+            sourceUri: "https://docs.google.com/forms/d/1nG_OyAJQ3ZPCNzzA5wgB66tlbGw6Pc0cLBV3i4GLJNY/edit",
         });
 
         expect(await api.getEvent(event.id, troupeId)).toHaveProperty("title", "test");
@@ -54,6 +42,7 @@ describe("basic api operations", () => {
 
     test("update event - event type & value", async () => {
         const troupeId = config.troupes!["A"].id!;
+        const observedMemberId = config.members!["2"].id!;
         const secondEventId = config.events!["second"].id!;
 
         const api = await TroupeApiService.create();
@@ -65,7 +54,6 @@ describe("basic api operations", () => {
         expect(updatedEvent1).toHaveProperty("title", "test2");
 
         // Observe the impact of updating the event type on event and attendee(s) (in this case, member 2)
-        const observedMemberId = config.members!["2"].id!;
         const originalPoints = config.members!["2"].member!.points["Total"];
         const originalSecondEventValue = config.events!["second"].event!.value;
 
@@ -129,16 +117,17 @@ describe("basic api operations", () => {
         expect(updatedMember1.points["Fall"]).toEqual(originalFallPoints + 1);
 
         // Update an event outside the range of Fall points
-        const updatedEvent2 = await api.updateEvent(troupeId, fourthEventId, { value: fourthEventValue + 1 });
-        expect(updatedEvent2).toHaveProperty("value", fourthEventValue + 1);
+        const updatedEvent2 = await api.updateEvent(troupeId, fourthEventId, { value: fourthEventValue + 4 });
+        expect(updatedEvent2).toHaveProperty("value", fourthEventValue + 4);
 
         const updatedMember2 = await api.getMember(observedMemberId, troupeId);
-        expect(updatedMember2.points["Total"]).toEqual(originalPoints + 2);
+        expect(updatedMember2.points["Total"]).toEqual(originalPoints + 5);
         expect(updatedMember2.points["Fall"]).toEqual(originalFallPoints + 1);
     });
 
     test("delete event", async() => {
         const troupeId = config.troupes!["A"].id!;
+        const observedMemberId = config.members!["2"].id!;
         const secondEventId = config.events!["second"].id!;
         const secondEventValue = config.events!["second"].event!.value;
         const fourthEventId = config.events!["fourth"].id!;
@@ -148,7 +137,6 @@ describe("basic api operations", () => {
         resources.push(api);
 
         // Observe the impact of deleting the event on attendees (in this case, member 2)
-        const observedMemberId = config.members!["2"].id!;
         const originalPoints = config.members!["2"].member!.points["Total"];
         const originalFallPoints = config.members!["2"].member!.points["Fall"];
 
@@ -167,5 +155,132 @@ describe("basic api operations", () => {
         const updatedMember2 = await api.getMember(observedMemberId, troupeId);
         expect(updatedMember2.points["Total"]).toEqual(originalPoints - secondEventValue - fourthEventValue);
         expect(updatedMember2.points["Fall"]).toEqual(originalFallPoints - secondEventValue);
+    });
+
+    test("update event type - title & value", async () => {
+        const troupeId = config.troupes!["A"].id!;
+        const observedMemberId = config.members!["2"].id!;
+        const eventTypeId = config.eventTypes!["alright events"].id!;
+        const secondEventId = config.events!["second"].id!;
+        const fifthEventId = config.events!["fifth"].id!;
+
+        const api = await TroupeApiService.create();
+        resources.push(api);
+
+        const originalValue = config.eventTypes!["alright events"].value!;
+        const originalPoints = config.members!["2"].member!.points["Total"];
+        const originalFallPoints = config.members!["2"].member!.points["Fall"];
+
+        await api.updateEventType(troupeId, eventTypeId, {
+            title: "very alright events",
+            value: originalValue + 5,
+        });
+
+        // Check values and event type title for events
+        const events = await api.eventColl.find({ troupeId, eventTypeId }).toArray();
+        expect(events.every(event => event.value == originalValue + 5 && event.eventTypeTitle == "very alright events"))
+            .toBeTruthy();
+        
+        // Check values for events attended buckets
+        const eventsAttended = await api.eventsAttendedColl.find({ 
+            troupeId, 
+            $or: [
+                {[`events.${secondEventId}`]: { $exists: true } },
+                {[`events.${fifthEventId}`]: { $exists: true } },
+            ],
+        }).toArray();
+
+        expect(eventsAttended.every(bucket => !bucket.events[secondEventId] || bucket.events[secondEventId].value == originalValue + 5))
+            .toBeTruthy();
+        expect(eventsAttended.every(bucket => !bucket.events[fifthEventId] || bucket.events[fifthEventId].value == originalValue + 5))
+            .toBeTruthy();
+
+        // Check updated points for member
+        const member = await api.getMember(observedMemberId, troupeId);
+        expect(member.points["Total"]).toEqual(originalPoints + 10);
+        expect(member.points["Fall"]).toEqual(originalFallPoints + 5);
+    });
+
+    test("delete event type", async () => {
+        const troupeId = config.troupes!["A"].id!;
+        const observedMemberId = config.members!["2"].id!;
+        const eventTypeId = config.eventTypes!["alright events"].id!;
+        const secondEventId = config.events!["second"].id!;
+        const fifthEventId = config.events!["fifth"].id!;
+
+        const api = await TroupeApiService.create();
+        resources.push(api);
+
+        const originalValue = config.eventTypes!["alright events"].value!;
+        const originalPoints = config.members!["2"].member!.points["Total"];
+        const originalFallPoints = config.members!["2"].member!.points["Fall"];
+
+        await api.deleteEventType(troupeId, eventTypeId);
+
+        // Check values and event type id and title for events
+        const events = await api.eventColl.find({ troupeId, eventTypeId }).toArray();
+        expect(events.every(event => event.value == originalValue && event.eventTypeId == undefined 
+            && event.eventTypeTitle == undefined))
+            .toBeTruthy();
+        
+        // Check values and event type id for events attended buckets
+        const eventsAttended = await api.eventsAttendedColl.find({ 
+            troupeId, 
+            $or: [
+                {[`events.${secondEventId}`]: { $exists: true } },
+                {[`events.${fifthEventId}`]: { $exists: true } },
+            ],
+        }).toArray();
+
+        expect(eventsAttended.every(bucket => !bucket.events[secondEventId] || bucket.events[secondEventId].value == originalValue 
+            && bucket.events[secondEventId].typeId == undefined))
+            .toBeTruthy();
+        expect(eventsAttended.every(bucket => !bucket.events[fifthEventId] || bucket.events[fifthEventId].value == originalValue 
+            && bucket.events[fifthEventId].typeId == undefined))
+            .toBeTruthy();
+        
+        // Check updated points for member
+        const member = await api.getMember(observedMemberId, troupeId);
+        expect(member.points["Total"]).toEqual(originalPoints );
+        expect(member.points["Fall"]).toEqual(originalFallPoints);
+    });
+
+    test("update member", async () => {
+        const troupeId = config.troupes!["A"].id!;
+        const observedMemberId = config.members!["2"].id!;
+
+        const api = await TroupeApiService.create();
+        resources.push(api);
+
+        await expect(api.updateMember(troupeId, observedMemberId, {
+            removeProperties: ["Last Name"],
+        })).rejects.toThrow();
+
+        const updatedMember = await api.updateMember(troupeId, observedMemberId, {
+            updateProperties: {
+                "First Name": { value: "Hi" },
+                "Last Name": { value: "World", override: true },
+                "New Prop": { value: "new value", override: false },
+            },
+        });
+
+        // Check property value and override
+        expect(updatedMember.properties["First Name"]).toMatchObject({ value: "Hi", override: true });
+        expect(updatedMember.properties["Last Name"]).toMatchObject({ value: "World", override: true });
+        expect(updatedMember.properties["New Prop"]).toMatchObject({ value: "new value", override: false });
+    });
+
+    test("delete member", async () => {
+        const troupeId = config.troupes!["A"].id!;
+        const observedMemberId = config.members!["2"].id!;
+
+        // Check if member and buckets are deleted
+        const api = await TroupeApiService.create();
+        resources.push(api);
+
+        await api.deleteMember(troupeId, observedMemberId);
+
+        await expect(api.getMember(observedMemberId, troupeId)).rejects.toThrow();
+        await expect(api.eventsAttendedColl.findOne({ troupeId, memberId: observedMemberId })).resolves.toBeNull();
     });
 });

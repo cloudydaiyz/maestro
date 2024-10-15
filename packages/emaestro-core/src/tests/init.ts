@@ -9,111 +9,8 @@ import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from 
 import assert from "assert";
 import { randomElement } from "../util/helper";
 import { Id } from "../types/util-types";
-
-/**
- * Configuration for setting up the database with test data
- */
-export interface DbSetupConfig {
-    troupes?: { 
-        [customTroupeId: string]: Partial<Omit<WithId<TroupeSchema>, "pointTypes" | "memberPropertyTypes"> & Id & {
-            memberPropertyTypes: Partial<BaseMemberPropertyTypes> & VariableMemberPropertyTypes,
-            pointTypes: Partial<BasePointTypes> & VariablePointTypes, 
-            troupe: WithId<TroupeSchema>,
-        }>
-    };
-    eventTypes?: { 
-        [customEventTypeId: string]: Partial<WithId<EventTypeSchema> & Id & { 
-            customTroupeId: string,
-            eventType: WithId<EventTypeSchema>,
-        }> 
-    };
-    events?: { 
-        [customEventId: string]: Partial<WithId<EventSchema> & Id & {
-            customTroupeId: string,
-            customEventTypeId: string,
-            event: WithId<EventSchema>,
-        }>
-    };
-    members?: { 
-        [customMemberId: string]: Partial<Omit<WithId<MemberSchema>, "properties" | "points"> & Id & { 
-            customTroupeId: string,
-            properties: Partial<BaseMemberProperties> & VariableMemberProperties,
-            points: Partial<BaseMemberPoints> & VariableMemberPoints,
-            customEventAttendedIds: string[],
-
-            /** Uses custom event IDs as keys */
-            eventsAttended: EventsAttendedBucketSchema["events"]
-            member: WithId<MemberSchema>,
-        }> 
-    };
-}
-
-export const defaultConfig: DbSetupConfig = {
-    troupes: { 
-        "A": { 
-            name: "test troupe", 
-            pointTypes: { 
-                "Fall": { startDate: new Date(1728870141961), endDate: new Date(1733017341961) },
-            },
-        } 
-    },
-    eventTypes: {
-        "cool events": { value: 10 },
-        "alright events": { value: 3 },
-        "uncool events": { value: -7 },
-    },
-    events: { 
-        "first": { title: "test event 1", customTroupeId: "A", customEventTypeId: "cool events" }, 
-        "second": { title: "test event 2", customTroupeId: "A", customEventTypeId: "alright events", startDate: new Date(1728880141961) },
-        "third": { title: "test event 3", customTroupeId: "A", customEventTypeId: "uncool events" },
-        "fourth": { title: "test event 4 (special)", customTroupeId: "A", value: 4, startDate: new Date(1728850141961) },
-        "fifth": { title: "test event 5", customTroupeId: "A", customEventTypeId: "alright events" },
-        "sixth": { title: "test event 4 (special)", customTroupeId: "A", value: -2 },
-        "seventh": { title: "test event 4 (special)", customTroupeId: "A", value: 7 },
-    },
-    members: {
-        "1": { 
-            properties: { 
-                "First Name": { value: "John", override: false }, 
-                "Last Name": { value: "Doe", override: false }, 
-            }, 
-            customTroupeId: "A", 
-            customEventAttendedIds: ["first", "third"],
-        },
-        "2": { 
-            properties: { 
-                "First Name": { value: "Hello", override: false }, 
-                "Last Name": { value: "World", override: false }, 
-            }, 
-            customTroupeId: "A", 
-            customEventAttendedIds: ["first", "second", "third", "fourth", "fifth"],
-        },
-        "3": { 
-            properties: { 
-                "First Name": { value: "Hello", override: false }, 
-                "Last Name": { value: "World", override: false }, 
-            }, 
-            customTroupeId: "A", 
-            customEventAttendedIds: ["second", "fourth", "seventh"],
-        },
-        "4": { 
-            properties: { 
-                "First Name": { value: "Hello", override: false }, 
-                "Last Name": { value: "World", override: false }, 
-            }, 
-            customTroupeId: "A", 
-            customEventAttendedIds: ["third", "fourth", "fifth", "sixth"],
-        },
-        "5": { 
-            properties: { 
-                "First Name": { value: "Hello", override: false }, 
-                "Last Name": { value: "World", override: false }, 
-            }, 
-            customTroupeId: "A", 
-            customEventAttendedIds: ["first", "second", "third", "fourth", "fifth", "sixth", "seventh"],
-        },
-    }
-};
+import { TroupeApiService } from "..";
+import { DbSetupConfig, defaultConfig } from "./db-config";
 
 /**
  * Setup the database with the given configuration, opting out of interaction with
@@ -220,6 +117,38 @@ async function dbSetup(config: DbSetupConfig) {
         const customTroupeId = request.customTroupeId || randomElement(customTroupeIds);
         const troupe = config.troupes![customTroupeId]?.troupe;
         assert(troupe, `Invalid troupe ID specified for test config. Member ID: ${customMemberId}, Troupe ID: ${customTroupeId}`);
+
+        // Ensure the request has the correct properties if additional are specified by troupe config
+        // Point calculations happen further down
+        request.points = request.points || {};
+        for(const pointType in troupe.pointTypes) {
+            request.points[pointType] = request.points[pointType] || 0;
+        }
+        
+        // Ensure the request has the correct properties if additional are specified by troupe config
+        request.properties = request.properties || {};
+        for(const property in troupe.memberPropertyTypes) {
+            const propertyType = troupe.memberPropertyTypes[property].slice(0, -1);
+            const required = troupe.memberPropertyTypes[property].endsWith("!");
+            const currentMemberProperty = request.properties[property];
+
+            if(currentMemberProperty) {
+                assert(typeof currentMemberProperty.value == propertyType 
+                    || !required && currentMemberProperty.value == null
+                    || currentMemberProperty.value instanceof Date && propertyType == "date", 
+                    "Invalid specified member property"
+                );
+            }
+
+            request.properties[property] = currentMemberProperty || { 
+                value: !required ? null 
+                    : propertyType == "string" ? "" 
+                    : propertyType == "number" ? 0
+                    : propertyType == "date" ? new Date()
+                    : propertyType == "boolean" ? false : null, 
+                override: false 
+            };
+        }
 
         // Initialize the new member and add it to the test documents
         const newMember: WithId<MemberSchema> = {
@@ -332,6 +261,17 @@ export default function () {
         await client.close();
 
         process.env.MONGODB_URI = uri;
+
+        // Test that the default config is working properly
+        const config = await dbSetup(defaultConfig);
+        const api = await TroupeApiService.create();
+        
+        await Promise.all([
+            expect(api.getTroupe(config.troupes!["A"].id!).then(t => t.eventTypes)).resolves.toHaveLength(3),
+            expect(api.getEvents(config.troupes!["A"].id!)).resolves.toHaveLength(7),
+            expect(api.getAudience(config.troupes!["A"].id!)).resolves.toHaveLength(5),
+        ]);
+        api.close();
     });
     
     // Delete all data from the database

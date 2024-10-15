@@ -1,6 +1,6 @@
 // Implementation for client-facing controller methods
 
-import { ObjectId, PullOperator, PushOperator, UpdateFilter, WithId } from "mongodb";
+import { AnyBulkWriteOperation, ObjectId, PullOperator, PushOperator, UpdateFilter, WithId } from "mongodb";
 import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "./util/constants";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints } from "./types/core-types";
 import { CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
@@ -523,35 +523,56 @@ export class TroupeApiService extends BaseService {
                 eventIds.push(event._id.toHexString());
                 Object.keys(troupe.pointTypes)
                     .filter(pt => troupe.pointTypes[pt].startDate <= event.startDate && event.startDate <= troupe.pointTypes[pt].endDate)
-                    .forEach(pt => { eventToPointTypesMap[event._id.toHexString()].push(pt) });
+                    .forEach(pt => { 
+                        const eventId = event._id.toHexString();
+                        eventToPointTypesMap[eventId] 
+                            ? eventToPointTypesMap[eventId].push(pt) 
+                            : eventToPointTypesMap[eventId] = [pt];
+                    });
             });
 
             // Update members based on events attended
+            const bulkEventsAttendedUpdate: AnyBulkWriteOperation<EventsAttendedBucketSchema>[] = [];
             eventsAttended.forEach(bucket => {
                 const member = members.find(m => m._id.toHexString() == bucket.memberId);
                 if(!member) return;
+
+                const bucketUpdate: UpdateOperator<EventsAttendedBucketSchema, "$set"> = {};
 
                 // Only iterate through event IDs in the map
                 for(const eventId in eventToPointTypesMap) {
                     const event = bucket.events[eventId];
                     if(event && event.typeId == eventTypeId) {
+                        bucketUpdate[`events.${eventId}.value`] = request.value!;
+
+                        // Update the member's points for each point type
                         for(const pt of eventToPointTypesMap[eventId]) {
+                            const prev = member.points[pt];
                             member.points[pt] += request.value! - eventType.value;
                         }
                     }
                 }
+
+                bulkEventsAttendedUpdate.push({
+                    updateOne: {
+                        filter: { _id: bucket._id },
+                        update: { $set: bucketUpdate }
+                    }
+                });
             });
 
             // Perform database update
-            await this.eventsAttendedColl.updateMany(
-                { troupeId, [`events.${eventTypeId}`]: { $exists: true } },
-                { $set: { [`events.${eventTypeId}.value`]: request.value }}
-            );
+            const eventsAttendedUpdate = await this.eventsAttendedColl.bulkWrite(bulkEventsAttendedUpdate);
+            assert(eventsAttendedUpdate.isOk(), "Failed to update events attended");
 
-            await this.audienceColl.aggregate([
-                { $documents: members },
-                { $merge: { into: "audience", on: "_id", whenMatched: "replace" } }
-            ]).toArray();
+            const bulkAudienceUpdate = members.map(member => ({
+                updateOne: {
+                    filter: { _id: member._id },
+                    update: { $set: member },
+                }
+            } as AnyBulkWriteOperation<MemberSchema>));
+            const audienceUpdate = await this.audienceColl.bulkWrite(bulkAudienceUpdate);
+            assert(audienceUpdate.isOk(), "Failed to update member points");
 
             eventUpdate.$set.value = request.value;
             updateEvents = true;
@@ -582,16 +603,12 @@ export class TroupeApiService extends BaseService {
             { _id: new ObjectId(troupeId) },
             eventTypeUpdate,
             { arrayFilters: [{ "type._id": new ObjectId(eventTypeId) }]}
-        );
+        ).then(troupe => troupe?.eventTypes.find((et) => et._id.toHexString() == eventTypeId));
         assert(newEventType, "Failed to update event type");
 
-        if(updateEvents) {
-            await this.eventColl.updateMany({ troupeId, eventTypeId }, eventUpdate);
-        }
+        if(updateEvents) await this.eventColl.updateMany({ troupeId, eventTypeId }, eventUpdate);
 
-        return this.getEventType(
-            newEventType.eventTypes.find((et) => et._id.toHexString() == eventTypeId)!
-        );
+        return this.getEventType(newEventType);
     }
 
     /** Deletes an event type in the given troupe. */
@@ -599,19 +616,35 @@ export class TroupeApiService extends BaseService {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot delete event type while sync is in progress"));
 
+        // Update events
         const updateEventResult = await this.eventColl.updateMany(
             { troupeId, eventTypeId },
             { $unset: { eventTypeId: "" } }
         );
         assert(updateEventResult.acknowledged, "Failed to remove event type from events");
 
-        const updateEventsAttended = await this.eventsAttendedColl.updateMany(
-            { troupeId, [`events.${eventTypeId}`]: { $exists: true } },
-            { $unset: { [`events.${eventTypeId}`]: "" } }
-        );
-        assert(updateEventsAttended.acknowledged && updateEventsAttended.matchedCount == updateEventsAttended.modifiedCount, 
-            "Failed to remove event type from events attended");
+        // Update events attended
+        const bulkEventsAttendedUpdate: AnyBulkWriteOperation<EventsAttendedBucketSchema>[] = [];
+        const buckets = await this.eventsAttendedColl.find({ troupeId }).toArray();
+        buckets.forEach(bucket => {
+            const bucketUpdate: UpdateOperator<EventsAttendedBucketSchema, "$unset"> = {};
+            for(const eventId in bucket.events) {
+                if(bucket.events[eventId].typeId == eventTypeId) {
+                    bucketUpdate[`events.${eventId}`] = "";
+                }
+            }
+            bulkEventsAttendedUpdate.push({
+                updateOne: {
+                    filter: { _id: bucket._id },
+                    update: { $unset: bucketUpdate }
+                }
+            });
+        });
 
+        const updateEventsUpdate = await this.eventsAttendedColl.bulkWrite(bulkEventsAttendedUpdate);
+        assert(updateEventsUpdate.isOk(), "Failed to remove event type from events attended");
+
+        // Remove the event type from the troupe
         const deleteEventTypeResult = await this.troupeColl.updateOne(
             { _id: new ObjectId(troupeId) },
             { $pull: { eventTypes: { _id: new ObjectId(eventTypeId) }}}
@@ -703,7 +736,7 @@ export class TroupeApiService extends BaseService {
         // Update existing properties for the member
         if(request.updateProperties) {
             for(const key in request.updateProperties) {
-                const newValue = member.properties[key];
+                const newValue = request.updateProperties[key];
                 assert(newValue, new ClientError("Invalid property ID"));
 
                 // Update the property if it's not to be removed
@@ -711,16 +744,14 @@ export class TroupeApiService extends BaseService {
 
                     // Check if the value is valid and update the property
                     if(request.updateProperties[key].value) {
-                        const propertyType = troupe.memberPropertyTypes[key].substring(0, -1);
+                        const propertyType = troupe.memberPropertyTypes[key].slice(0, -1);
 
                         if(propertyType == "date") {
                             const newDate = new Date(newValue.value as string);
-                            assert(typeof newValue.value == "string" && newDate.toString() != "Invalid Date", 
-                                new ClientError("Invalid input"));
+                            assert(typeof newValue.value == "string" && newDate.toString() != "Invalid Date", new ClientError(`Invalid input: ${key}`));
                             memberUpdate.$set[`properties.${key}.value`] = newDate;
                         } else {
-                            assert(typeof newValue.value == propertyType, 
-                                new ClientError("Invalid input"));
+                            assert(typeof newValue.value == propertyType, new ClientError(`Invalid input: ${key}`));
                             memberUpdate.$set[`properties.${key}.value`] = newValue.value;
                         }
                     }
@@ -737,6 +768,9 @@ export class TroupeApiService extends BaseService {
         // Remove properties
         if(request.removeProperties) {
             for(const key of request.removeProperties) {
+                if(troupe.memberPropertyTypes[key].endsWith("!")) {
+                    throw new ClientError("Cannot remove required property");
+                }
                 memberUpdate.$set[`properties.${key}.value`] = null;
                 memberUpdate.$set[`properties.${key}.override`] = true;
             }
