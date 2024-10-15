@@ -41,9 +41,12 @@ export class GoogleSheetsEventDataService extends EventDataService {
             this.columnToTypeMap = {};
 
             // Pipe the readable stream into the CSV parser
-            readableStream.pipe(parse({ delimiter: "," }))
+            await new Promise((resolve, reject) => {
+                readableStream.pipe(parse({ delimiter: "," }))
                 .on('data', row => this.synchronizeEvent(event, row))
-                .on('end', () => this.synchronizeAudience(event, lastUpdated));
+                .on('end', () => { this.synchronizeAudience(event, lastUpdated); resolve(null) })
+                .on('error', reject);
+            });
         } catch(e) {
             this.events[event.sourceUri].delete = true;
         }
@@ -57,7 +60,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
         if(this.results.length == 0) {
             row.forEach((label, i) => {
                 const property = event.fieldToPropertyMap[i]?.property;
-                event.fieldToPropertyMap[i] = { field: label.trim(), property };
+                event.fieldToPropertyMap[i] = { field: label.trim(), property: null };
                 if(!property) return;
                 else if(property == "Member ID") this.containsMemberId = true;
 
@@ -66,6 +69,8 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 if(propertyType == "string") columnToTypeMap[i] = { string: true };
                 else if(propertyType == "number") columnToTypeMap[i] = { number: true };
                 else if(propertyType == "date") columnToTypeMap[i] = { date: true };
+
+                event.fieldToPropertyMap[i].property = property;
             });
         } else {
             row.forEach((value, i) => {

@@ -33,29 +33,31 @@ describe("google forms event service", () => {
         const service = new GoogleFormsEventDataService(troupe, eventMap, memberMap);
         await service.init();
 
-        // Discover audience from the event for the first time -- should populate 
-        // the event's field to property map
+        // Discover audience from the event for the first time
+        // This should populate the event's field to property map
         const lastUpdated = new Date();
         await service.discoverAudience(observedEvent, lastUpdated);
-        console.log(config.events!["first"].event!.sourceUri, "\n", JSON.stringify(observedEvent.fieldToPropertyMap, null, 4));
+        // console.log(observedEvent.sourceUri, "\n", JSON.stringify(observedEvent.fieldToPropertyMap, null, 4));
 
         const fieldIds = Object.keys(observedEvent.fieldToPropertyMap);
         expect(fieldIds.length).toBeGreaterThan(0);
         expect(fieldIds.every(id => observedEvent.fieldToPropertyMap[id].property == null)).toBeTruthy();
         
-        // Update property mappings; assigning random property types to each field
+        // Update property mappings
         const indicies = fieldIds.map((id, i) => i);
         for(const property in troupe.memberPropertyTypes) {
             if(indicies.length == 0) break;
+
+            // Assign random property types to each field
             const randomIndex = indicies.splice(Math.floor(Math.random() * indicies.length), 1)[0];
             const randomFieldId = fieldIds[randomIndex];
             observedEvent.fieldToPropertyMap[randomFieldId].property = property;
         }
-        console.log(config.events!["first"].event!.sourceUri, "\n", JSON.stringify(observedEvent.fieldToPropertyMap, null, 4));
+        // console.log(observedEvent.sourceUri, "\n", JSON.stringify(observedEvent.fieldToPropertyMap, null, 4));
 
         // Discover audience from the event again -- should populate member map
         await service.discoverAudience(observedEvent, lastUpdated);
-        console.log(JSON.stringify(memberMap, null, 4));
+        // console.log(JSON.stringify(memberMap, null, 4));
 
         const populatedProperties = objectToArray(observedEvent.fieldToPropertyMap, (fieldId, mapped) => mapped.property)
             .filter(p => p != null);

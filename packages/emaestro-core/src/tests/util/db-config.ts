@@ -129,7 +129,7 @@ export const noMembersConfig: DbSetupConfig = {
     },
     events: { 
         "first": { title: "test event 1", customTroupeId: "A", customEventTypeId: "cool events", source: "Google Forms", sourceUri: "https://docs.google.com/forms/d/1zmXsG53ymMTY16OoPR0VD7mqqP94HcPILskiOA7lOA4" }, 
-        "second": { title: "test event 2", customTroupeId: "A", customEventTypeId: "alright events", startDate: new Date(1728880141961) },
+        "second": { title: "test event 2", customTroupeId: "A", customEventTypeId: "alright events", startDate: new Date(1728880141961), source: "Google Sheets", sourceUri: "https://docs.google.com/spreadsheets/d/1Ita-QOxFBd37i-_7xxKtTOh4FghBknFY5WO9Yrqc2nE/edit" },
         "third": { title: "test event 3", customTroupeId: "A", customEventTypeId: "uncool events" },
         "fourth": { title: "test event 4 (special)", customTroupeId: "A", value: 4, startDate: new Date(1728850141961) },
         "fifth": { title: "test event 5", customTroupeId: "A", customEventTypeId: "alright events", startDate: new Date(1728850141961) },
