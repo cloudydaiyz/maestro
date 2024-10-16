@@ -97,7 +97,7 @@ export abstract class TroupeLogService {
     abstract deleteLog(uri: string): Promise<void>;
 
     /** Updates the log for the provided troupe with the provided events and audience */
-    abstract updateLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void>;
+    abstract updateLog(uri: string, troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void>;
 
     /** 
      * Validates the log at the provided URI. The parameters and log sheet should pass the following checks:

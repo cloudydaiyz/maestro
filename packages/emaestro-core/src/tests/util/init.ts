@@ -4,7 +4,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { MONGODB_PASS, MONGODB_USER } from '../../util/env';
 import { MongoClient, ObjectId, WithId } from 'mongodb';
 import { BaseService } from "../../services/base-service";
-import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
+import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../../util/constants";
 import assert from "assert";
 import { randomElement } from "../../util/helper";
@@ -87,7 +87,7 @@ async function dbSetup(config: DbSetupConfig) {
         events: config.events || {},
         members: config.members || {},
     }
-    const setup = await BaseService.create();
+    const db = await BaseService.create();
 
     const customTroupeIds = Object.keys(config.troupes!);
 
@@ -190,6 +190,14 @@ async function dbSetup(config: DbSetupConfig) {
         }
         
         // Ensure the request has the correct properties if additional are specified by troupe config
+        const baseMemberPropertyDefaults: {[key: string]: MemberPropertyValue} = {
+            "Member ID": customMemberId,
+            "First Name": "Member",
+            "Last Name": crypto.randomUUID(),
+            "Email": customMemberId + "@emaestro.com",
+            "Birthday": new Date(),
+        };
+
         request.properties = request.properties || {};
         for(const property in troupe.memberPropertyTypes) {
             const propertyType = troupe.memberPropertyTypes[property].slice(0, -1);
@@ -205,11 +213,13 @@ async function dbSetup(config: DbSetupConfig) {
             }
 
             request.properties[property] = currentMemberProperty || { 
-                value: !required ? null 
-                    : propertyType == "string" ? "" 
+                value: property in baseMemberPropertyDefaults ? baseMemberPropertyDefaults[property]
+                    : required 
+                    ? propertyType == "string" ? "" 
                     : propertyType == "number" ? 0
                     : propertyType == "date" ? new Date()
-                    : propertyType == "boolean" ? false : null, 
+                    : propertyType == "boolean" ? false : null
+                    : null, 
                 override: false 
             };
         }
@@ -232,7 +242,6 @@ async function dbSetup(config: DbSetupConfig) {
                 "Total": request.points?.["Total"] || 0,
             },
         };
-
         request.member = newMember;
         testAudience.push(newMember);
 
@@ -240,14 +249,15 @@ async function dbSetup(config: DbSetupConfig) {
         request.eventsAttended = {};
         const customEventsAttended = request.customEventAttendedIds || [];
 
-        const customEventIds: string[] = [];
+        const eventIds: string[] = [];
         for(const customEventId of customEventsAttended) {
             const event = config.events![customEventId]?.event;
-            assert(event, `Invalid event attended specified for test config. Member ID: ${customMemberId}, Event ID: ${customEventId}`);
+            assert(event, `Invalid event attended specified for test config. Member ID: ${customMemberId}, Custom Event ID: ${customEventId}`);
                 
             // Update the events attended and increment the member's points if the event is not already in the list
-            if(!(customEventId in request.eventsAttended)) {
-                request.eventsAttended[customEventId] = {
+            const eventId = event._id.toHexString();
+            if(!(eventId in request.eventsAttended)) {
+                request.eventsAttended[eventId] = {
                     typeId: event.eventTypeId,
                     value: event.value,
                     startDate: event.startDate,
@@ -260,7 +270,7 @@ async function dbSetup(config: DbSetupConfig) {
                     }
                 }
             }
-            customEventIds.push(customEventId);
+            eventIds.push(eventId);
         }
 
         // Split the collected events into separate buckets and add them to the test documents
@@ -273,9 +283,8 @@ async function dbSetup(config: DbSetupConfig) {
         };
         let pageSize = 0;
 
-        for(const customEventId of customEventIds) {
-            const eventId = config.events![customEventId].id!;
-            newEventsAttended.events[eventId] = request.eventsAttended[customEventId];
+        for(const eventId of eventIds) {
+            newEventsAttended.events[eventId] = request.eventsAttended[eventId];
             pageSize++;
 
             if(pageSize == MAX_PAGE_SIZE) {
@@ -295,12 +304,11 @@ async function dbSetup(config: DbSetupConfig) {
     }
 
     const operations: Promise<any>[] = [];
-    if(testTroupes.length > 0) operations.push(setup.troupeColl.insertMany(testTroupes));
-    if(testEvents.length > 0) operations.push(setup.eventColl.insertMany(testEvents));
-    if(testAudience.length > 0) operations.push(setup.audienceColl.insertMany(testAudience));
-    if(testEventsAttended.length > 0) operations.push(setup.eventsAttendedColl.insertMany(testEventsAttended));
+    if(testTroupes.length > 0) operations.push(db.troupeColl.insertMany(testTroupes));
+    if(testEvents.length > 0) operations.push(db.eventColl.insertMany(testEvents));
+    if(testAudience.length > 0) operations.push(db.audienceColl.insertMany(testAudience));
+    if(testEventsAttended.length > 0) operations.push(db.eventsAttendedColl.insertMany(testEventsAttended));
 
-    await Promise.all(operations);
-    await setup.close();
+    await Promise.all(operations).then(() => db.close());
     return config;
 }

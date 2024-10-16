@@ -9,6 +9,7 @@ import { parse } from "csv-parse";
 import { Readable } from "stream";
 import assert from "assert";
 import { EventDataService } from "../base-service";
+import { getDataSourceId } from "../../util/helper";
 
 export class GoogleSheetsEventDataService extends EventDataService {
     results?: string[][];
@@ -25,7 +26,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
 
     async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
         const troupeId = this.troupe._id.toHexString();
-        const spreadsheetId = SHEETS_REGEX.exec(event.sourceUri)!.groups!["spreadsheetId"];
+        const spreadsheetId = getDataSourceId("Google Sheets", event.sourceUri)!;
         const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`;
         
         try {

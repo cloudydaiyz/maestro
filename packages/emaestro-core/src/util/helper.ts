@@ -23,6 +23,7 @@ export function getDataSourceId(dataSource: EventDataSource, url: string): strin
     let regex: RegExp;
     if(dataSource == "Google Sheets") regex = SHEETS_REGEX;
     else if(dataSource == "Google Forms") regex = FORMS_REGEX;
+    else if(dataSource == "Google Drive Folder") regex = FORMS_REGEX;
     else return undefined;
     return regex.exec(url)?.groups?.["id"];
 }

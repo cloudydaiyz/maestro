@@ -13,11 +13,19 @@ import { LOG_SHEET_DRIVE_ID } from "../../util/env";
 import { GaxiosResponse } from "gaxios";
 
 namespace Colors {
+    const error = 0.01;
+
     function rgb(hex: string): sheets_v4.Schema$Color {
         const red: number = Number.parseInt(hex.slice(0, 2), 16) / 255;
         const green: number = Number.parseInt(hex.slice(2, 4), 16) / 255; 
         const blue: number = Number.parseInt(hex.slice(4, 6), 16) / 255;
         return { red, green, blue };
+    }
+
+    export function equals(color1: sheets_v4.Schema$Color, color2: sheets_v4.Schema$Color): boolean {
+        return Math.abs(color1.red! - color2.red!) < error
+            && Math.abs(color1.green! - color2.green!) < error
+            && Math.abs(color1.blue! - color2.blue!) < error;
     }
 
     export const yellow = rgb("FFD966");
@@ -118,7 +126,6 @@ export class GoogleSheetsLogService extends TroupeLogService {
             }
         });
         assert(createSheet.data.spreadsheetId && createSheet.data.spreadsheetUrl, "Failed to create log sheet");
-        console.log(createSheet.data.spreadsheetId);
 
         const postCreationOps: Promise<any>[] = [];
         
@@ -209,7 +216,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             return {
                 values: [
                     ...this.cellBuilder([
-                        i.toString(), event.eventTypeId || "", eventTypeNo > -1 ? `${eventTypeNo}` : "", event.eventTypeTitle || "", 
+                        i.toString(), event._id.toHexString(), eventTypeNo > -1 ? `${eventTypeNo}` : "", event.eventTypeTitle || "", 
                         event.title, event.startDate.toISOString(), event.value.toString(), event.source, event.sourceUri, ""
                     ]),
                 ]
@@ -315,18 +322,18 @@ export class GoogleSheetsLogService extends TroupeLogService {
 
         const audienceLogData: sheets_v4.Schema$RowData[] = audience.map((member, i) => {
 
-            const memberProperties = memberInformationSection.map((prop, i) => {
+            const memberProperties = memberInformationSection.map((prop, j) => {
                 const data = prop == "Member No." 
                     ? i.toString()
                     : member.properties[prop].value?.toString() || "";
-                if(data.length > audienceLogMaxCharacters[i]) audienceLogMaxCharacters[i] = data.length;
+                if(data.length > audienceLogMaxCharacters[j]) audienceLogMaxCharacters[j] = data.length;
                 return data;
             });
 
-            const memberPoints = membershipPointsSection.map((point, i) => {
+            const memberPoints = membershipPointsSection.map((point, j) => {
                 const data = member.points[point].toString();
-                if(data.length > audienceLogMaxCharacters[i + memberInformationSection.length + 1]) {
-                    audienceLogMaxCharacters[i + memberInformationSection.length + 1] = data.length;
+                if(data.length > audienceLogMaxCharacters[j + memberInformationSection.length + 1]) {
+                    audienceLogMaxCharacters[j + memberInformationSection.length + 1] = data.length;
                 }
                 return data;
             });
@@ -351,9 +358,6 @@ export class GoogleSheetsLogService extends TroupeLogService {
             else if(maxCharacters > 2) pixelSize = 29;
             return { pixelSize };
         });
-        console.log(JSON.stringify(audienceLogSubheaders, null, 4));
-        console.log(audienceLogMaxCharacters);
-        console.log(columnMetadata);
         
         const audienceLogSheet: sheets_v4.Schema$Sheet = {
             properties: {
@@ -397,12 +401,11 @@ export class GoogleSheetsLogService extends TroupeLogService {
         if(fileId) await forDrive.then(drive => drive.files.delete({ fileId }));
     }
 
-    async updateLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void> {
+    async updateLog(uri: string, troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void> {
         const sheets = await getSheets();
-        const spreadsheetId = getDataSourceId("Google Sheets", troupe.logSheetUri);
+        const spreadsheetId = getDataSourceId("Google Sheets", uri);
         assert(spreadsheetId, "Invalid log sheet URI");
 
-        const updateRequests: sheets_v4.Schema$Request[] = [];
         const currentData = await sheets.spreadsheets.values.batchGet({ 
             spreadsheetId, 
             ranges: ["Event Type Log!A3:D", "Event Log!A3:I", "Member Log!A1:2"],
@@ -410,12 +413,13 @@ export class GoogleSheetsLogService extends TroupeLogService {
 
         const currentAudienceData = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: new A1Notation("Member Log", 1, 1, (currentData.data.valueRanges?.[2].values?.length || 0) + 1).toString(),
+            range: new A1Notation("Member Log", 1, 1, (currentData.data.valueRanges?.[2].values?.[0]?.length || 0) + 1).toString(),
         });
-
-        updateRequests.concat(this.updateEventTypeLog(currentData.data.valueRanges?.[0].values || [], troupe));
-        updateRequests.concat(this.updateEventLog(currentData.data.valueRanges?.[1].values || [], events));
-        updateRequests.concat(this.updateAudienceLog(currentAudienceData.data.values || [], troupe, events, audience));
+        
+        let updateRequests: sheets_v4.Schema$Request[] = [];
+        updateRequests = updateRequests.concat(this.updateEventTypeLog(currentData.data.valueRanges?.[0].values || [], troupe))
+            .concat(this.updateEventLog(currentData.data.valueRanges?.[1].values || [], troupe, events))
+            .concat(this.updateAudienceLog(currentAudienceData.data.values || [], troupe, events, audience));
 
         if(updateRequests.length > 0) {
             await sheets.spreadsheets.batchUpdate({ spreadsheetId, requestBody: { requests: updateRequests } });
@@ -450,13 +454,13 @@ export class GoogleSheetsLogService extends TroupeLogService {
 
         // Update the rows that have changed
         const updatedRows: sheets_v4.Schema$RowData[] = [];
-        for(let i = 0; i <= desiredData.length; i++) {
+        for(let i = 0; i < desiredData.length; i++) {
             let addRow = false;
             const row = desiredData[i];
 
             // Check the row to see if any cells have changed and, if so, add the row to the updated rows
             for(let j = 0; !addRow && j <= row.values!.length; j++) {
-                const desiredCell = row.values![j].effectiveValue!.stringValue;
+                const desiredCell = row.values![j].effectiveValue?.stringValue || "";
                 if(desiredCell != currentData[i][j]) {
                     updatedRows.push(row);
                     addRow = true;
@@ -484,15 +488,16 @@ export class GoogleSheetsLogService extends TroupeLogService {
         return requests;
     }
 
-    protected updateEventLog(currentData: string[][], events: WithId<EventSchema>[]): sheets_v4.Schema$Request[] {
+    protected updateEventLog(currentData: string[][], troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[]): sheets_v4.Schema$Request[] {
         const requests: sheets_v4.Schema$Request[] = [];
 
         // Obtain the desired state
         const desiredData: sheets_v4.Schema$RowData[] = events.map((event, i) => {
+            const eventTypeNo = troupe.eventTypes.findIndex(et => et._id.toHexString() == event.eventTypeId);
             return {
                 values: [
                     ...this.cellBuilder([
-                        i.toString(), event._id.toHexString(), event.eventTypeId || "", event.eventTypeTitle || "", 
+                        i.toString(), event._id.toHexString(), eventTypeNo > -1 ? `${eventTypeNo}` : "", event.eventTypeTitle || "", 
                         event.title, event.startDate.toISOString(), event.value.toString(), event.source, event.sourceUri, ""
                     ]),
                 ]
@@ -515,13 +520,13 @@ export class GoogleSheetsLogService extends TroupeLogService {
 
         // Update the rows that have changed
         const updatedRows: sheets_v4.Schema$RowData[] = [];
-        for(let i = 0; i <= desiredData.length; i++) {
+        for(let i = 0; i < desiredData.length; i++) {
             let addRow = false;
             const row = desiredData[i];
 
             // Check the row to see if any cells have changed and, if so, add the row to the updated rows
             for(let j = 0; !addRow && j <= row.values!.length; j++) {
-                const desiredCell = row.values![j].effectiveValue!.stringValue;
+                const desiredCell = row.values![j].effectiveValue?.stringValue || "";
                 if(desiredCell != currentData[i][j]) {
                     updatedRows.push(row);
                     addRow = true;
@@ -609,14 +614,14 @@ export class GoogleSheetsLogService extends TroupeLogService {
         }
 
         // Delete extra rows in the current sheet
-        if(desiredSheet.data![0].rowData![0].values!.length < currentData[0].length) {
+        if(desiredSheet.data![0].rowData!.length < currentData.length) {
             requests.push({
                 deleteDimension: {
                     range: {
                         sheetId: 2,
-                        dimension: "COLUMNS",
-                        startIndex: desiredSheet.data![0].rowData![0].values!.length,
-                        endIndex: currentData[0].length,
+                        dimension: "ROWS",
+                        startIndex: desiredSheet.data![0].rowData!.length,
+                        endIndex: currentData.length,
                     }
                 }
             });
@@ -633,14 +638,15 @@ export class GoogleSheetsLogService extends TroupeLogService {
         });
 
         // Resize the columns
-        requests.push(...desiredSheet.data![0].columnMetadata!.map((properties) => ({ 
+        requests.push(...desiredSheet.data![0].columnMetadata!.map((properties, i) => ({ 
             updateDimensionProperties: { 
                 range: { 
                     sheetId: 2, 
                     dimension: "COLUMNS", 
-                    startIndex: 0, 
-                    endIndex: desiredSheet.data![0].rowData![0].values!.length 
+                    startIndex: i, 
+                    endIndex: i + 1
                 }, 
+                fields: "pixelSize",
                 properties
             } as sheets_v4.Schema$UpdateDimensionPropertiesRequest
         })));
@@ -710,7 +716,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             // Ensure member log has the correct amount of rows
             currentAudienceData = await sheets.spreadsheets.values.get({
                 spreadsheetId,
-                range: new A1Notation("Member Log", 1, 1, (currentData.data.valueRanges?.[2].values?.length || 0) + 1).toString(),
+                range: new A1Notation("Member Log", 1, 1, (currentData.data.valueRanges?.[2].values?.[0]?.length || 0) + 1).toString(),
             });
             assert(currentAudienceData.data.values?.length == audience.length + 2);
         } catch(e) {
@@ -720,9 +726,8 @@ export class GoogleSheetsLogService extends TroupeLogService {
 
         // Ensure that the values are correct for Event Type Log
         const eventTypeLog = currentData.data.valueRanges?.[0].values;
-        const eventTypeLogHeaderValues = ["Type No.", "Type ID", "Title", "Value", ""]
-        if(
-            eventTypeLog[0]?.[0] == "EVENT TYPES" 
+        const eventTypeLogHeaderValues = ["Type No.", "Type ID", "Title", "Value"] as const;
+        const eventTypeLogValuesValid = eventTypeLog[0]?.[0] == "EVENT TYPES" 
             && eventTypeLog[1]?.every((cell, i) => cell == eventTypeLogHeaderValues[i])
             && eventTypeLog.slice(2).every((row, i) =>
                 row[0] == i.toString()
@@ -730,50 +735,52 @@ export class GoogleSheetsLogService extends TroupeLogService {
                 && row[2] == troupe.eventTypes[i].title
                 && row[3] == troupe.eventTypes[i].value.toString()
             )
-        ) return false;
+        if(!eventTypeLogValuesValid) return false;
 
         // Ensure that the values are correct for Event Log
         const eventLog = currentData.data.valueRanges?.[1].values;
-        const eventLogHeaderValues = ["Event No.", "Event ID", "Event Type No.", "Event Type Title", "Title", "Start Date", "Value", "Source", "Source URI"];
-        if(
-            eventLog[0]?.[0] == "EVENTS"
+        const eventLogHeaderValues = ["Event No.", "Event ID", "Event Type No.", "Event Type Title", "Title", "Start Date", "Value", "Source", "Source URI"] as const;
+        const eventLogValuesValid = eventLog[0]?.[0] == "EVENTS"
             && eventLog[1]?.every((cell, i) => cell == eventLogHeaderValues[i])
-            && eventLog.slice(2).every((row, i) =>
-                row[0] == i.toString()
-                && row[1] == events[i]._id.toHexString()
-                && row[2] == troupe.eventTypes.findIndex(et => et._id.toHexString() == events[i].eventTypeId).toString()
-                && row[3] == events[i].eventTypeTitle
-                && row[4] == events[i].title
-                && row[5] == events[i].startDate.toISOString()
-                && row[6] == events[i].value.toString()
-                && row[7] == events[i].source
-                && row[8] == events[i].sourceUri
-            )
-        ) return false;
+            && eventLog.slice(2).every((row, i) => {
+                    const eventTypeNo = troupe.eventTypes.findIndex(et => et._id.toHexString() == events[i].eventTypeId);
+                    return (
+                        row[0] == i.toString()
+                        && row[1] == events[i]._id.toHexString()
+                        && row[2] == (eventTypeNo == -1 ? "" : eventTypeNo.toString())
+                        && row[3] == (events[i].eventTypeTitle || "")
+                        && row[4] == events[i].title
+                        && row[5] == events[i].startDate.toISOString()
+                        && row[6] == events[i].value.toString()
+                        && row[7] == events[i].source
+                        && row[8] == events[i].sourceUri
+                    );
+                }
+            );
+        if(!eventLogValuesValid) return false;
 
         // Ensure that the header values are correct for Member Log
         const audienceLog = currentAudienceData.data.values;
-        if(
-            audienceLog[0]?.[0] == "MEMBER INFORMATION" 
+        const audienceLogHeaderValuesValid = audienceLog[0]?.[0] == "MEMBER INFORMATION" 
             && audienceLog[0]?.[memberInformationSection.length + 1] == "MEMBERSHIP POINTS"
             && events.every((event, i) => audienceLog[0]?.[memberInformationSection.length + membershipPointsSection.length + i + 2] == event.title)
-        ) return false;
+        if(!audienceLogHeaderValuesValid) return false;
 
         // Ensure that the subheader values are correct for Member Log
-        if(
-            memberInformationSection.every((prop, i) => audienceLog[1]?.[i] == prop)
+        const audienceLogSubheaderValuesValid = memberInformationSection.every((prop, i) => audienceLog[1]?.[i] == prop)
             && membershipPointsSection.every((point, i) => audienceLog[1]?.[memberInformationSection.length + 1 + i] == point)
             && eventNumbersSection.every((event, i) => audienceLog[1]?.[memberInformationSection.length + membershipPointsSection.length + 2 + i] == event)
-        ) return false;
+        if(!audienceLogSubheaderValuesValid) return false;
 
         // Ensure that the values are correct for Member Log
         const audienceLogValues = audienceLog.slice(2);
-        if(audienceLogValues.every((row, i) => 
+        const audienceLogValuesValid = audienceLogValues.every((row, i) => 
             row[0] == i.toString()
-            && row.slice(1, memberInformationSection.length + 1).every((prop, j) => prop == audience[i].properties[memberInformationSection[j]].value?.toString())
-            && row.slice(memberInformationSection.length + 2, memberInformationSection.length + membershipPointsSection.length + 2).every((point, j) => point == audience[i].points[membershipPointsSection[j]].toString())
-            && row.slice(memberInformationSection.length + membershipPointsSection.length + 3).every((event, j) => audience[i].eventsAttended[events[j]._id.toHexString()] ? "X" : "")
-        )) return false;
+            && row.slice(1, memberInformationSection.length + 1).every((prop, j) => prop == (audience[i].properties[memberInformationSection[j + 1]]?.value?.toString() ?? ""))
+            && row.slice(memberInformationSection.length + 1, memberInformationSection.length + membershipPointsSection.length + 1).every((point, j) => point == audience[i].points[membershipPointsSection[j]]?.toString())
+            && row.slice(memberInformationSection.length + membershipPointsSection.length + 2).every((event, j) => event == (audience[i].eventsAttended[events[j]._id.toHexString()] ? "X" : ""))
+        ) 
+        if(!audienceLogValuesValid) return false;
 
         // Ensure that the headers are properly formatted
         let currentHeaders: GaxiosResponse<sheets_v4.Schema$Spreadsheet>;
@@ -806,9 +813,8 @@ export class GoogleSheetsLogService extends TroupeLogService {
                 let validWeight = true;
                 if(i == 0) validWeight = header.effectiveFormat?.textFormat?.bold == true;
 
-                const validColor = header.effectiveFormat?.backgroundColor?.red == Colors.orange.red
-                    && header.effectiveFormat?.backgroundColor?.green == Colors.orange.green
-                    && header.effectiveFormat?.backgroundColor?.blue == Colors.orange.blue;
+                const validColor = header.effectiveFormat?.backgroundColor 
+                    && i == 0 ? Colors.equals(header.effectiveFormat?.backgroundColor, Colors.orange) : true;
                 
                 return validWeight && validColor;
             });
@@ -818,17 +824,13 @@ export class GoogleSheetsLogService extends TroupeLogService {
                 let validWeight = true;
                 if(i < eventTypeLogSubheaders.length - 1) validWeight = subheader.effectiveFormat?.textFormat?.bold == true;
 
-                const validColor = subheader.effectiveFormat?.backgroundColor?.red == Colors.lightOrange.red
-                    && subheader.effectiveFormat?.backgroundColor?.green == Colors.lightOrange.green
-                    && subheader.effectiveFormat?.backgroundColor?.blue == Colors.lightOrange.blue;
+                const validColor = subheader.effectiveFormat?.backgroundColor 
+                    && Colors.equals(subheader.effectiveFormat?.backgroundColor, Colors.lightOrange);
                 
                 const borders = subheader.effectiveFormat?.borders;
                 const onlyBottomBorder = borders?.bottom && !borders?.top && !borders?.left && !borders?.right;
 
-                const bottomBorder = borders?.bottom?.style == "SOLID"
-                    && borders?.bottom?.color?.red == Colors.black.red
-                    && borders?.bottom?.color?.green == Colors.black.green
-                    && borders?.bottom?.color?.blue == Colors.black.blue;
+                const bottomBorder = borders?.bottom?.style == "SOLID";
 
                 return validWeight && validColor && onlyBottomBorder && bottomBorder;
             });
@@ -850,9 +852,8 @@ export class GoogleSheetsLogService extends TroupeLogService {
                 let validWeight = true;
                 if(i == 0) validWeight = header.effectiveFormat?.textFormat?.bold == true;
 
-                const validColor = header.effectiveFormat?.backgroundColor?.red == Colors.yellow.red
-                    && header.effectiveFormat?.backgroundColor?.green == Colors.yellow.green
-                    && header.effectiveFormat?.backgroundColor?.blue == Colors.yellow.blue;
+                const validColor = header.effectiveFormat?.backgroundColor
+                    && i == 0 ? Colors.equals(header.effectiveFormat?.backgroundColor, Colors.yellow) : true;
                 
                 return validWeight && validColor;
             });
@@ -862,17 +863,13 @@ export class GoogleSheetsLogService extends TroupeLogService {
                 let validWeight = true;
                 if(i < eventLogSubheaders.length - 1) validWeight = subheader.effectiveFormat?.textFormat?.bold == true;
 
-                const validColor = subheader.effectiveFormat?.backgroundColor?.red == Colors.lightYellow.red
-                    && subheader.effectiveFormat?.backgroundColor?.green == Colors.lightYellow.green
-                    && subheader.effectiveFormat?.backgroundColor?.blue == Colors.lightYellow.blue;
+                const validColor = subheader.effectiveFormat?.backgroundColor 
+                    && Colors.equals(subheader.effectiveFormat?.backgroundColor, Colors.lightYellow);
                 
                 const borders = subheader.effectiveFormat?.borders;
                 const onlyBottomBorder = borders?.bottom && !borders?.top && !borders?.left && !borders?.right;
 
-                const bottomBorder = borders?.bottom?.style == "SOLID"
-                    && borders?.bottom?.color?.red == Colors.black.red
-                    && borders?.bottom?.color?.green == Colors.black.green
-                    && borders?.bottom?.color?.blue == Colors.black.blue;
+                const bottomBorder = borders?.bottom?.style == "SOLID";
 
                 return validWeight && validColor && onlyBottomBorder && bottomBorder;
             });
@@ -889,23 +886,22 @@ export class GoogleSheetsLogService extends TroupeLogService {
         audienceLogValidation = audienceLogValidation 
             && audienceLogHeaders.every((header, i) => {
                 let validWeight = true;
+                let validColor = header.effectiveFormat?.backgroundColor != undefined;
                 if(i == 0 
                     || i == memberInformationSection.length + 1
                     || i >= memberInformationSection.length + membershipPointsSection.length + 2
                     && i < audienceLogHeaders.length - 1
-                ) validWeight = header.effectiveFormat?.textFormat?.bold == true;
+                ) {
+                    validWeight = header.effectiveFormat?.textFormat?.bold == true;
+                    validColor = validColor && Colors.equals(header.effectiveFormat?.backgroundColor!, Colors.green);
+                }
 
-                const validColor = header.effectiveFormat?.backgroundColor?.red == Colors.green.red
-                    && header.effectiveFormat?.backgroundColor?.green == Colors.green.green
-                    && header.effectiveFormat?.backgroundColor?.blue == Colors.green.blue;
-                
                 let validAlignment = true;
                 if(i >= memberInformationSection.length + membershipPointsSection.length + 2
                     && i < audienceLogSubheaders.length - 1
                 ) {
                     validAlignment = header.effectiveFormat?.horizontalAlignment == "CENTER"
-                    && header.effectiveFormat?.wrapStrategy == "WRAP"
-                    && header.effectiveFormat?.textRotation?.angle == 90
+                    && header.effectiveFormat?.wrapStrategy == "CLIP"
                     && header.effectiveFormat?.verticalAlignment == "TOP";
                 }
                 
@@ -920,17 +916,13 @@ export class GoogleSheetsLogService extends TroupeLogService {
                     && i != memberInformationSection.length + membershipPointsSection.length + 1) 
                     validWeight = subheader.effectiveFormat?.textFormat?.bold == true;
                 
-                const validColor = subheader.effectiveFormat?.backgroundColor?.red == Colors.lightGreen.red
-                    && subheader.effectiveFormat?.backgroundColor?.green == Colors.lightGreen.green
-                    && subheader.effectiveFormat?.backgroundColor?.blue == Colors.lightGreen.blue
+                const validColor = subheader.effectiveFormat?.backgroundColor
+                    && Colors.equals(subheader.effectiveFormat?.backgroundColor, Colors.lightGreen);
                 
                 const borders = subheader.effectiveFormat?.borders;
                 const onlyBottomBorder = borders?.bottom && !borders?.top && !borders?.left && !borders?.right;
 
-                const bottomBorder = borders?.bottom?.style == "SOLID"
-                    && borders?.bottom?.color?.red == Colors.black.red
-                    && borders?.bottom?.color?.green == Colors.black.green
-                    && borders?.bottom?.color?.blue == Colors.black.blue;
+                const bottomBorder = borders?.bottom?.style == "SOLID";
 
                 let validAlignment = true;
                 if(i >= memberInformationSection.length + membershipPointsSection.length + 2

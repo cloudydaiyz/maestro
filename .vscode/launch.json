@@ -22,7 +22,8 @@
                 "--inspect-brk",
                 "--watch",
                 "--coverage=false",
-                "--no-cache"
+                "--no-cache",
+                "--testTimeout=100000000"
             ],
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen"

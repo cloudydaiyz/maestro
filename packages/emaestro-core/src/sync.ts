@@ -3,7 +3,7 @@ import { getDrive, getForms, getSheets } from "./cloud/gcp";
 import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
-import { getDataSourceUrl } from "./util/helper";
+import { getDataSourceId, getDataSourceUrl } from "./util/helper";
 import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "./types/util-types";
@@ -117,7 +117,7 @@ export class TroupeSyncService extends BaseService {
             const discoveryEventType = { ...eventType, totalFiles: 0 };
 
             for(const folder in eventType.sourceFolderUris) {
-                const folderId = DRIVE_FOLDER_REGEX.exec(folder)!.groups!["folderId"];
+                const folderId = getDataSourceId("Google Drive Folder", folder)!;
                 const winningEventType = this.performEventTypeTieBreaker(
                     folderToEventTypeMap, folderId, discoveryEventType
                 );
@@ -532,6 +532,6 @@ export class TroupeSyncService extends BaseService {
         }).sort((a, b) => a.points["Total"] - b.points["Total"]);
 
         const logService = new GoogleSheetsLogService();
-        logService.updateLog(this.troupe!, events, audience);
+        logService.updateLog(this.troupe!.logSheetUri, this.troupe!, events, audience);
     }
 }

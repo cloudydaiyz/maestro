@@ -9,6 +9,7 @@ import { getForms } from "../../cloud/gcp";
 import { GaxiosResponse } from "gaxios";
 import { EventDataService } from "../base-service";
 import assert from "assert";
+import { getDataSourceId } from "../../util/helper";
 
 export class GoogleFormsEventDataService extends EventDataService {
     forms!: forms_v1.Forms;
@@ -26,7 +27,7 @@ export class GoogleFormsEventDataService extends EventDataService {
     }
 
     async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
-        const formId = FORMS_REGEX.exec(event.sourceUri)!.groups!["formId"];
+        const formId = getDataSourceId("Google Forms", event.sourceUri)!;
         const questionToTypeMap: GoogleFormsQuestionToTypeMap = {};
         const eventData = this.events[event.sourceUri];
         assert(eventData, "Improperly structured event data");

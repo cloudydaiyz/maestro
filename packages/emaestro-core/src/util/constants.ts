@@ -8,14 +8,14 @@ export const MAX_EVENT_TYPES = 10;
 export const MAX_PAGE_SIZE = 30;
 
 // == Constants for event source URLs ==
-export const DRIVE_FOLDER_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/(?<folderId>[^\/&?#]+).*/;
-export const DRIVE_FOLDER_URL_TEMPL = "https://drive.google.com/drive/folders/<id>?nsldnadsnj";
+export const DRIVE_FOLDER_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/(?<id>[^\/&?#]+).*/;
+export const DRIVE_FOLDER_URL_TEMPL = "https://drive.google.com/drive/folders/<id>";
 export const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
 
-export const SHEETS_REGEX = /https:\/\/docs.google.com\/spreadsheets\/d\/(?<spreadsheetId>[^\/&?#]+).*/;
+export const SHEETS_REGEX = /https:\/\/docs.google.com\/spreadsheets\/d\/(?<id>[^\/&?#]+).*/;
 export const SHEETS_URL_TEMPL = "https://docs.google.com/spreadsheets/d/<id>";
 
-export const FORMS_REGEX = /https:\/\/docs.google.com\/forms\/d\/(?<formId>[^\/&?#]+).*/;
+export const FORMS_REGEX = /https:\/\/docs.google.com\/forms\/d\/(?<id>[^\/&?#]+).*/;
 export const FORMS_URL_TEMPL = "https://docs.google.com/forms/d/<id>";
 
 // == Constants for the core types ==
@@ -41,10 +41,10 @@ export const BASE_POINT_TYPES_OBJ = {
     },
 } as const;
 
-export const EVENT_DATA_SOURCES = ["Google Forms", "Google Sheets", ""] as const;
-export const EVENT_DATA_SOURCE_REGEX = [FORMS_REGEX, SHEETS_REGEX] as const;
-export const EVENT_DATA_SOURCE_MIME_TYPES = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet"] as const;
-export const EVENT_DATA_SOURCE_URLS = [FORMS_URL_TEMPL, SHEETS_URL_TEMPL] as const;
+export const EVENT_DATA_SOURCES = ["Google Forms", "Google Sheets", "Google Drive Folder", ""] as const;
+export const EVENT_DATA_SOURCE_REGEX = [FORMS_REGEX, SHEETS_REGEX, DRIVE_FOLDER_REGEX] as const;
+export const EVENT_DATA_SOURCE_MIME_TYPES = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet", "application/vnd.google-apps.folder"] as const;
+export const EVENT_DATA_SOURCE_URLS = [FORMS_URL_TEMPL, SHEETS_URL_TEMPL, DRIVE_FOLDER_URL_TEMPL] as const;
 
 export const BIRTHDAY_UPDATE_FREQUENCIES = ["weekly", "monthly"] as const;
 
