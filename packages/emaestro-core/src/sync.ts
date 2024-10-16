@@ -96,7 +96,7 @@ export class TroupeSyncService extends BaseService {
     }
 
     /** Discovers events found from the given event types in the troupe */
-    protected async discoverEvents(): Promise<void> {
+    async discoverEvents(): Promise<void> {
         assert(this.troupe);
         const troupeId = this.troupe._id.toHexString();
 
@@ -237,8 +237,8 @@ export class TroupeSyncService extends BaseService {
     /** 
      * Goes through event sign ups to discover audience, mark them as discovered, 
      * and update existing audience points. Drops invalid audience members.
-     * */
-    protected async discoverAndRefreshAudience() {
+     */
+    async discoverAndRefreshAudience() {
         assert(this.troupe);
         const troupeId = this.troupe._id.toHexString();
         const lastUpdated = new Date();
@@ -323,7 +323,8 @@ export class TroupeSyncService extends BaseService {
         await dataService.ready.then(() => dataService.discoverAudience(event, lastUpdated));
     }
 
-    protected async persistSync(): Promise<void> {
+    /** Persist new information retrieved from events to the database */
+    async persistSync(): Promise<void> {
         assert(this.troupe && this.dashboard);
         const troupeId = this.troupe._id.toHexString();
 
@@ -508,7 +509,8 @@ export class TroupeSyncService extends BaseService {
         await Promise.all(persistResults);
     }
 
-    protected async refreshLogSheet() {
+    /** Update the log sheet with the new information from this sync */
+    async refreshLogSheet() {
         const events = Object.keys(this.events).map(e => this.events[e].event).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
         const audience = Object.keys(this.members).map(m => {
             const member = this.members[m].member;

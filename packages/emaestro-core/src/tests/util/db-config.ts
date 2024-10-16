@@ -133,7 +133,7 @@ export const noMembersConfig: DbSetupConfig = {
         "third": { title: "test event 3", customTroupeId: "A", customEventTypeId: "uncool events" },
         "fourth": { title: "test event 4 (special)", customTroupeId: "A", value: 4, startDate: new Date(1728850141961) },
         "fifth": { title: "test event 5", customTroupeId: "A", customEventTypeId: "alright events", startDate: new Date(1728850141961) },
-        "sixth": { title: "test event 4 (special)", customTroupeId: "A", value: -2 },
-        "seventh": { title: "test event 4 (special)", customTroupeId: "A", value: 7 },
+        "sixth": { title: "test event 6 (special)", customTroupeId: "A", value: -2 },
+        "seventh": { title: "test event 7 (special)", customTroupeId: "A", value: 7 },
     },
 }

@@ -1,9 +1,7 @@
 import init from "../util/init";
 import { noMembersConfig } from "../util/db-config";
 
-import { TroupeApiService } from "../..";
-import { TroupeCoreService } from "../../core";
-import { test, describe } from "@jest/globals";
+import { describe } from "@jest/globals";
 import { GoogleFormsEventDataService } from "../../services/events/gforms-event";
 import { EventDataMap, AttendeeDataMap } from "../../types/service-types";
 import { objectMap, objectToArray, verifyMemberPropertyType } from "../../util/helper";

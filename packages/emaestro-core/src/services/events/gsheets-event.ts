@@ -41,10 +41,10 @@ export class GoogleSheetsEventDataService extends EventDataService {
             this.columnToTypeMap = {};
 
             // Pipe the readable stream into the CSV parser
-            await new Promise((resolve, reject) => {
+            await new Promise<void>((resolve, reject) => {
                 readableStream.pipe(parse({ delimiter: "," }))
                 .on('data', row => this.synchronizeEvent(event, row))
-                .on('end', () => { this.synchronizeAudience(event, lastUpdated); resolve(null) })
+                .on('end', () => { this.synchronizeAudience(event, lastUpdated); resolve() })
                 .on('error', reject);
             });
         } catch(e) {

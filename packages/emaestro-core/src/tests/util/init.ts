@@ -12,6 +12,70 @@ import { Id } from "../../types/util-types";
 import { TroupeApiService } from "../..";
 import { DbSetupConfig, defaultConfig } from "./db-config";
 
+export default function () {
+    let mongod: MongoMemoryReplSet;
+    const resources: BaseService[] = [];
+
+    /** Helper to chain resource creation with adding to the list of resources to cleanup */
+    function addResource<T extends BaseService>(resource: T): T {
+        resources.push(resource);
+        return resource;
+    }
+
+    // Start the server
+    beforeAll(async () => {
+        mongod = await MongoMemoryReplSet.create({ replSet: { auth: { enable: true, customRootName: MONGODB_USER, customRootPwd: MONGODB_PASS } } });
+        const uri = mongod.getUri();
+
+        // Connect to and ping the server to ensure everything is setup
+        const client = new MongoClient(uri, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
+        client.on("connecting", () => console.log("Connecting to MongoDB..."));
+        client.on("connected", () => console.log("Connected to MongoDB"));
+        client.on("error", (err) => console.error("Connection error:", err));
+
+        await client.connect();
+        await client.db("admin").command({ ping: 1 });
+        await client.close();
+
+        process.env.MONGODB_URI = uri;
+
+        // Test that the default config is working properly
+        const config = await dbSetup(defaultConfig);
+        const api = await TroupeApiService.create();
+        
+        await Promise.all([
+            expect(api.getTroupe(config.troupes!["A"].id!).then(t => t.eventTypes)).resolves.toHaveLength(3),
+            expect(api.getEvents(config.troupes!["A"].id!)).resolves.toHaveLength(7),
+            expect(api.getAudience(config.troupes!["A"].id!)).resolves.toHaveLength(5),
+        ]);
+        api.close();
+    });
+    
+    // Delete all data from the database
+    afterEach(async () => {
+        const cleanupService = await BaseService.create();
+        resources.push(cleanupService);
+
+        // Delete all collections
+        await Promise.all([
+            cleanupService.troupeColl.deleteMany({}),
+            cleanupService.dashboardColl.deleteMany({}),
+            cleanupService.eventColl.deleteMany({}),
+            cleanupService.audienceColl.deleteMany({}),
+            cleanupService.eventsAttendedColl.deleteMany({}),
+        ]);
+
+        await Promise.all(resources.map(r => r.close()));
+    });
+
+    // Stop the server
+    afterAll(async () => {
+        await mongod.stop();
+    });
+
+    return { addResource, dbSetup };
+};
+
 /**
  * Setup the database with the given configuration, opting out of interaction with
  * external services (Google Sheets, Google Forms, etc.)
@@ -93,8 +157,8 @@ async function dbSetup(config: DbSetupConfig) {
             title: request.title || "Test Event - " + customEventId,
             source: request.source || "",
             synchronizedSource: request.synchronizedSource || "",
-            sourceUri: request.sourceUri || "https://example.com",
-            synchronizedSourceUri: request.synchronizedSourceUri || "https://example.com",
+            sourceUri: request.sourceUri || "https://example.com/" + customEventId,
+            synchronizedSourceUri: request.synchronizedSourceUri || "https://example.com/" + customEventId,
             startDate: request.startDate || new Date(),
             eventTypeId: eventType ? eventType._id.toHexString() : undefined,
             eventTypeTitle: eventType ? eventType.title : undefined,
@@ -240,67 +304,3 @@ async function dbSetup(config: DbSetupConfig) {
     await setup.close();
     return config;
 }
-
-export default function () {
-    let mongod: MongoMemoryReplSet;
-    const resources: BaseService[] = [];
-
-    /** Helper to chain resource creation with adding to the list of resources to cleanup */
-    function addResource<T extends BaseService>(resource: T): T {
-        resources.push(resource);
-        return resource;
-    }
-
-    // Start the server
-    beforeAll(async () => {
-        mongod = await MongoMemoryReplSet.create({ replSet: { auth: { enable: true, customRootName: MONGODB_USER, customRootPwd: MONGODB_PASS } } });
-        const uri = mongod.getUri();
-
-        // Connect to and ping the server to ensure everything is setup
-        const client = new MongoClient(uri, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
-        client.on("connecting", () => console.log("Connecting to MongoDB..."));
-        client.on("connected", () => console.log("Connected to MongoDB"));
-        client.on("error", (err) => console.error("Connection error:", err));
-
-        await client.connect();
-        await client.db("admin").command({ ping: 1 });
-        await client.close();
-
-        process.env.MONGODB_URI = uri;
-
-        // Test that the default config is working properly
-        const config = await dbSetup(defaultConfig);
-        const api = await TroupeApiService.create();
-        
-        await Promise.all([
-            expect(api.getTroupe(config.troupes!["A"].id!).then(t => t.eventTypes)).resolves.toHaveLength(3),
-            expect(api.getEvents(config.troupes!["A"].id!)).resolves.toHaveLength(7),
-            expect(api.getAudience(config.troupes!["A"].id!)).resolves.toHaveLength(5),
-        ]);
-        api.close();
-    });
-    
-    // Delete all data from the database
-    afterEach(async () => {
-        const cleanupService = await BaseService.create();
-        resources.push(cleanupService);
-
-        // Delete all collections
-        await Promise.all([
-            cleanupService.troupeColl.deleteMany({}),
-            cleanupService.dashboardColl.deleteMany({}),
-            cleanupService.eventColl.deleteMany({}),
-            cleanupService.audienceColl.deleteMany({}),
-            cleanupService.eventsAttendedColl.deleteMany({}),
-        ]);
-
-        await Promise.all(resources.map(r => r.close()));
-    });
-
-    // Stop the server
-    afterAll(async () => {
-        await mongod.stop();
-    });
-
-    return { addResource, dbSetup };
-};
