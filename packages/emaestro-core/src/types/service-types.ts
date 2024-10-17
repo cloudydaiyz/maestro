@@ -12,9 +12,9 @@ export type CreateTroupeRequest = Pick<
 export type DiscoveryEventType = WithId<EventTypeSchema> & TieBreakerStatistics;
 
 /** Additional statistics for the event type to help with tie breaking */
-type TieBreakerStatistics = Partial<{
+type TieBreakerStatistics = {
     totalFiles: number,
-}>;
+};
 
 /** Maps folder IDs to the event type they were discovered for */ 
 export type FolderToEventTypeMap = { 
@@ -42,11 +42,7 @@ export type GoogleSheetsQuestionToTypeMap = {
 }
 
 export interface EventDataMap { 
-    [sourceUri: string]: {
-        event: WithId<EventSchema>,
-        delete: boolean,
-        fromColl: boolean, 
-    }
+    [sourceUri: string]: WithId<EventSchema>,
 }
 
 export interface AttendeeDataMap { 

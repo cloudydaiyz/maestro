@@ -42,6 +42,17 @@ export function verifyMemberPropertyType(value: MemberPropertyValue, mpt: Member
     return false;
 }
 
+/** Returns the default value for the given member property type */
+export function getDefaultMemberPropertyValue(mpt: MemberPropertyType): MemberPropertyValue {
+    const rawType = mpt.slice(0, -1);
+    if(rawType == "string") return "";
+    if(rawType == "number") return 0;
+    if(rawType == "boolean") return false;
+    if(rawType == "date") return new Date();
+    if(mpt.endsWith("!")) throw new Error("Cannot get default value for required member property");
+    return null;
+}
+
 /** Returns true if the given member property value (from api call) is valid with the given member property type */
 export function verifyApiMemberPropertyType(value: Replace<MemberPropertyValue, Date, string>, mpt: MemberPropertyType): boolean {
     const rawType = mpt.slice(0, -1);

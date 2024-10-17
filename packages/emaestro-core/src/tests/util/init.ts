@@ -7,7 +7,7 @@ import { BaseService } from "../../services/base-service";
 import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../../util/constants";
 import assert from "assert";
-import { randomElement } from "../../util/helper";
+import { getDefaultMemberPropertyValue, randomElement, verifyMemberPropertyType } from "../../util/helper";
 import { Id } from "../../types/util-types";
 import { TroupeApiService } from "../..";
 import { DbSetupConfig, defaultConfig } from "./db-config";
@@ -200,26 +200,19 @@ async function dbSetup(config: DbSetupConfig) {
 
         request.properties = request.properties || {};
         for(const property in troupe.memberPropertyTypes) {
-            const propertyType = troupe.memberPropertyTypes[property].slice(0, -1);
-            const required = troupe.memberPropertyTypes[property].endsWith("!");
+            const propertyType = troupe.memberPropertyTypes[property];
             const currentMemberProperty = request.properties[property];
 
             if(currentMemberProperty) {
-                assert(typeof currentMemberProperty.value == propertyType 
-                    || !required && currentMemberProperty.value == null
-                    || currentMemberProperty.value instanceof Date && propertyType == "date", 
+                assert(
+                    verifyMemberPropertyType(currentMemberProperty.value, propertyType), 
                     "Invalid specified member property"
                 );
             }
 
             request.properties[property] = currentMemberProperty || { 
                 value: property in baseMemberPropertyDefaults ? baseMemberPropertyDefaults[property]
-                    : required 
-                    ? propertyType == "string" ? "" 
-                    : propertyType == "number" ? 0
-                    : propertyType == "date" ? new Date()
-                    : propertyType == "boolean" ? false : null
-                    : null, 
+                    : getDefaultMemberPropertyValue(propertyType),
                 override: false 
             };
         }

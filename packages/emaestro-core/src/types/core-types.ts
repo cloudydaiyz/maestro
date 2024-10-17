@@ -148,7 +148,7 @@ export type BaseMemberProperties = {
 }
 
 export type VariableMemberProperties = {
-    [key: string]: {
+    [property: string]: {
         value: MemberPropertyValue,
         /** True if this property was manually overridden; this takes precedence
          *  over the origin event.  */

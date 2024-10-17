@@ -3,7 +3,7 @@ import { getDrive, getForms, getSheets } from "./cloud/gcp";
 import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
 import { AggregationCursor, AnyBulkWriteOperation, BulkWriteResult, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
-import { getDataSourceId, getDataSourceUrl } from "./util/helper";
+import { getDataSourceId, getDataSourceUrl, getDefaultMemberPropertyValue } from "./util/helper";
 import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "./types/util-types";
@@ -12,16 +12,6 @@ import { GoogleSheetsEventDataService } from "./services/events/gsheets-event";
 import { BaseService, EventDataService } from "./services/base-service";
 import assert from "assert";
 import { GoogleSheetsLogService } from "./services/logs/gsheets-log";
-
-// Forgot why I made this. Should come back to me as I'm reviewing the code.
-function initEventMap(events: WithId<EventSchema>[], fromColl?: boolean): EventDataMap {
-    const map: EventDataMap = {};
-    fromColl = fromColl == undefined ? true : fromColl;
-    for(const event of events) {
-        map[event.sourceUri] = { event, delete: false, fromColl };
-    }
-    return map;
-}
 
 /**
  * Synchronizes the troupe with its source uris for events and event types, then updates the
@@ -100,7 +90,7 @@ export class TroupeSyncService extends BaseService {
             event.synchronizedSource = event.source;
             event.synchronizedSourceUri = event.sourceUri;
             event.synchronizedFieldToPropertyMap = event.fieldToPropertyMap;
-            this.eventMap[event.sourceUri] = { event, delete: false, fromColl: true };
+            this.eventMap[event.sourceUri] = event;
         }
 
         // To help with tie breaking, keep track of the folders that have been discovered
@@ -134,7 +124,7 @@ export class TroupeSyncService extends BaseService {
         const discoveredFolders: string[] = [];
         while(foldersToExplore.length > 0) {
             const folderId = foldersToExplore.pop()!;
-            const currentEventType = folderToEventTypeMap[folderId];
+            const currentDiscoveryEventType = folderToEventTypeMap[folderId];
 
             if(discoveredFolders.includes(folderId)) continue;
             discoveredFolders.push(folderId);
@@ -169,7 +159,7 @@ export class TroupeSyncService extends BaseService {
 
                 if(file.mimeType === DRIVE_FOLDER_MIME) {
                     const winningEventType = this.performEventTypeTieBreaker(
-                        folderToEventTypeMap, folderId, currentEventType
+                        folderToEventTypeMap, folderId, currentDiscoveryEventType
                     );
 
                     // Update the winning event type and add the folder to the list of folders to explore
@@ -192,11 +182,11 @@ export class TroupeSyncService extends BaseService {
                 }
 
                 // Convert the winning event type back to a regular event type
-                delete currentEventType.totalFiles;
+                const { totalFiles, ...currentEventType } = currentDiscoveryEventType;
 
                 // Add the event to the collection of events if it's not already added
                 if(sourceUri in this.eventMap) {
-                    const event = this.eventMap[sourceUri].event;
+                    const event = this.eventMap[sourceUri];
                     if(!event.eventTypeId) {
                         event.eventTypeId = currentEventType._id.toHexString();
                         event.eventTypeTitle = currentEventType.title;
@@ -219,7 +209,7 @@ export class TroupeSyncService extends BaseService {
                         fieldToPropertyMap: {},
                         synchronizedFieldToPropertyMap: {},
                     };
-                    this.eventMap[sourceUri] = { event, delete: false, fromColl: false };
+                    this.eventMap[sourceUri] = event;
                 }
             }
         }
@@ -267,6 +257,11 @@ export class TroupeSyncService extends BaseService {
             for(const prop in this.troupe.memberPropertyTypes) {
                 if(prop in member.properties && member.properties[prop].override) {
                     baseProps[prop] = member.properties[prop];
+                } else {
+                    baseProps[prop] = {
+                        value: member.properties[prop]?.value,
+                        override: false,
+                    }
                 }
             }
             member.properties = baseProps as MemberSchema["properties"];
@@ -275,12 +270,9 @@ export class TroupeSyncService extends BaseService {
         
         // Discover audience members from events not flagged for deletion
         const audienceDiscovery = [];
-        for(const eventData of Object.values(this.eventMap)) {
-            const event = eventData.event;
-
-            if(!eventData.delete) {
-                audienceDiscovery.push(this.discoverAudience(event, lastUpdated));
-            }
+        for(const sourceUri in this.eventMap) {
+            const event = this.eventMap[sourceUri];
+            audienceDiscovery.push(this.discoverAudience(event, lastUpdated));
         }
         await Promise.all(audienceDiscovery);
 
@@ -293,7 +285,8 @@ export class TroupeSyncService extends BaseService {
         }
 
         // Mark members without required properties for deletion
-        for(const member of Object.values(this.attendeeMap)) {
+        for(const memberId in this.attendeeMap) {
+            const member = this.attendeeMap[memberId];
             for(const prop of requiredProperties) {
                 if(!member.member.properties[prop].value) {
                     member.delete = true;
@@ -332,7 +325,6 @@ export class TroupeSyncService extends BaseService {
 
         // Initialize events, audience members, and events attended documents to update and to delete
         let updateEvents: WithId<EventSchema>[] = [];
-        let eventsToDelete: ObjectId[] = [];
         let updateAudience: WithId<MemberSchema>[] = [];
         let membersToDelete: ObjectId[] = [];
         let updateEventsAttended: WithId<EventsAttendedBucketSchema>[] = [];
@@ -378,17 +370,13 @@ export class TroupeSyncService extends BaseService {
         // Populate the events to update and delete arrays
         for(const sourceUri in this.eventMap) {
             const eventData = this.eventMap[sourceUri];
-            if(eventData.delete && eventData.fromColl) {
-                eventsToDelete.push(eventData.event._id);
-            } else if(!eventData.delete) {
-                const eventTypeId = eventData.event.eventTypeId;
-                updateEvents.push(eventData.event);
-                dashboardUpdate.totalEvents! += 1;
+            const eventTypeId = eventData.eventTypeId;
+            updateEvents.push(eventData);
+            dashboardUpdate.totalEvents! += 1;
 
-                if(eventTypeId) {
-                    dashboardUpdate.totalEventsByEventType![eventTypeId].value += 1;
-                    dashboardUpdate.eventPercentageByEventType![eventTypeId].value += 1;
-                }
+            if(eventTypeId) {
+                dashboardUpdate.totalEventsByEventType![eventTypeId].value += 1;
+                dashboardUpdate.eventPercentageByEventType![eventTypeId].value += 1;
             }
         }
 
@@ -494,7 +482,6 @@ export class TroupeSyncService extends BaseService {
                 update: { $set: event },
             }
         } as AnyBulkWriteOperation<EventSchema>))));
-        persistResults.push(this.eventColl.deleteMany({ _id: { $in: eventsToDelete } }));
 
         persistResults.push(this.audienceColl.bulkWrite(updateAudience.map(member => ({
             updateOne: {
@@ -519,7 +506,7 @@ export class TroupeSyncService extends BaseService {
 
     /** Update the log sheet with the new information from this sync */
     async refreshLogSheet() {
-        const events = Object.keys(this.eventMap).map(e => this.eventMap[e].event).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+        const events = Object.keys(this.eventMap).map(uri => this.eventMap[uri]).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
         const audience = Object.keys(this.attendeeMap).map(m => {
             const member = this.attendeeMap[m].member;
             const attendee: WithId<AttendeeSchema> = {
