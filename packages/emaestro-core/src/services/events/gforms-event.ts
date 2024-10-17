@@ -29,7 +29,7 @@ export class GoogleFormsEventDataService extends EventDataService {
     async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
         const formId = getDataSourceId("Google Forms", event.sourceUri)!;
         const questionToTypeMap: GoogleFormsQuestionToTypeMap = {};
-        const eventData = this.events[event.sourceUri];
+        const eventData = this.eventMap[event.sourceUri];
         assert(eventData, "Improperly structured event data");
 
         // Retrieve form data
@@ -212,7 +212,7 @@ export class GoogleFormsEventDataService extends EventDataService {
                 properties,
                 points: { "Total": 0 },
             };
-            let eventsAttended: typeof this.members[string]["eventsAttended"] = [{
+            let eventsAttended: typeof this.attendeeMap[string]["eventsAttended"] = [{
                 eventId: event._id.toHexString(),
                 typeId: event.eventTypeId,
                 value: event.value,
@@ -249,7 +249,7 @@ export class GoogleFormsEventDataService extends EventDataService {
 
                     // Invariant: At most one unique property per field
                     if(property == "Member ID") {
-                        const existingMember = this.members[value as string];
+                        const existingMember = this.attendeeMap[value as string];
 
                         // If the member already exists, use the existing member and copy over any new properties
                         if(existingMember) {
@@ -279,7 +279,7 @@ export class GoogleFormsEventDataService extends EventDataService {
 
             // Add the member to the list of members. Member ID already proven
             // to exist in event from discoverAndRefreshAudience method
-            this.members[member.properties["Member ID"].value] = { 
+            this.attendeeMap[member.properties["Member ID"].value] = { 
                 member, eventsAttended, eventsAttendedDocs, fromColl, delete: false 
             };
         }

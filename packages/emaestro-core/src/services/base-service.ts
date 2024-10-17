@@ -9,6 +9,11 @@ import assert from "assert";
 import { ClientError } from "../util/error";
 
 export class BaseService {
+    /** 
+     * Function that resolves on the completion of the class creation.
+     * Allows children to define unique criteria to dictate the completion of class initialization.
+     */
+    ready: Promise<void>;
     client: MongoClient;
     troupeColl: Collection<TroupeSchema>;
     dashboardColl: Collection<TroupeDashboardSchema>;
@@ -28,11 +33,13 @@ export class BaseService {
         this.audienceColl = this.client.db(DB_NAME).collection("audience");
         this.eventColl = this.client.db(DB_NAME).collection("events");
         this.eventsAttendedColl = this.client.db(DB_NAME).collection("eventsAttended");
+        this.ready = new Promise<void>(() => {});
     }
 
     static async create<T extends BaseService>(this: new() => T): Promise<T> {
         const service = new this();
         await service.client.connect();
+        await service.ready;
         return service;
     }
 
@@ -68,13 +75,13 @@ export class BaseService {
 export abstract class EventDataService {
     ready: Promise<void>;
     troupe: WithId<TroupeSchema>;
-    events: EventDataMap;
-    members: AttendeeDataMap;
+    eventMap: EventDataMap;
+    attendeeMap: AttendeeDataMap;
 
     constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap) {
         this.troupe = troupe;
-        this.events = events;
-        this.members = members;
+        this.eventMap = events;
+        this.attendeeMap = members;
         this.ready = this.init();
     }
 

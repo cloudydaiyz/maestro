@@ -2,12 +2,10 @@ import init from "../util/init";
 import { defaultConfig, noMembersConfig } from "../util/db-config";
 
 import { describe } from "@jest/globals";
-import { GoogleFormsEventDataService } from "../../services/events/gforms-event";
-import { EventDataMap, AttendeeDataMap } from "../../types/service-types";
-import { arrayToObject, objectMap, objectToArray, verifyMemberPropertyType } from "../../util/helper";
+import { objectToArray } from "../../util/helper";
 import { GoogleSheetsLogService } from "../../services/logs/gsheets-log";
 import { WithId } from "mongodb";
-import { AttendeeSchema, EventSchema, TroupeSchema } from "../../types/core-types";
+import { AttendeeSchema, EventSchema } from "../../types/core-types";
 
 const { addResource, dbSetup } = init();
 

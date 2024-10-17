@@ -8,15 +8,18 @@ export type CreateTroupeRequest = Pick<
     "name"
 >;
 
-// Additional statistics for the event type to help with tie breaking
+/** Event type with additional statistics for the event type to help with tie breaking */
+export type DiscoveryEventType = WithId<EventTypeSchema> & TieBreakerStatistics;
+
+/** Additional statistics for the event type to help with tie breaking */
 type TieBreakerStatistics = Partial<{
     totalFiles: number,
 }>;
 
-export type DiscoveryEventType = WithId<EventTypeSchema> & TieBreakerStatistics;
-
-// Maps folder IDs to the event type they were discovered for
-export type FolderToEventTypeMap = { [folderId: string]: DiscoveryEventType };
+/** Maps folder IDs to the event type they were discovered for */ 
+export type FolderToEventTypeMap = { 
+    [folderId: string]: DiscoveryEventType 
+};
 
 export type GoogleFormsQuestionToTypeMap = {
     [questionId: string]: {

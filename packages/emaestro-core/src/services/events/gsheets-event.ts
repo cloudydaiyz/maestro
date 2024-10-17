@@ -49,7 +49,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 .on('error', reject);
             });
         } catch(e) {
-            this.events[event.sourceUri].delete = true;
+            this.eventMap[event.sourceUri].delete = true;
         }
     };
 
@@ -130,7 +130,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 properties,
                 points: { "Total": 0 },
             };
-            let eventsAttended: typeof this.members[string]["eventsAttended"] = [{
+            let eventsAttended: typeof this.attendeeMap[string]["eventsAttended"] = [{
                 eventId: event._id.toHexString(),
                 typeId: event.eventTypeId,
                 value: event.value,
@@ -150,7 +150,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 else if(propertyType == "date") value = new Date(rawValue);
 
                 if(property == "Member ID") {
-                    const existingMember = this.members[value as string];
+                    const existingMember = this.attendeeMap[value as string];
                     
                     // If the member already exists, use the existing member and copy over any new properties
                     if(existingMember) {
@@ -178,7 +178,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
             }
 
             // Add the member to the list of members.
-            this.members[member.properties["Member ID"].value] = { 
+            this.attendeeMap[member.properties["Member ID"].value] = { 
                 member, eventsAttended, eventsAttendedDocs, fromColl, delete: false 
             };
         });

@@ -2,7 +2,7 @@ import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "./cloud/gcp";
 import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
-import { AggregationCursor, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
+import { AggregationCursor, AnyBulkWriteOperation, BulkWriteResult, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getDataSourceId, getDataSourceUrl } from "./util/helper";
 import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "./types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
@@ -32,30 +32,25 @@ function initEventMap(events: WithId<EventSchema>[], fromColl?: boolean): EventD
  * - NOTE: Populate local variables with synchronized information to update the database
  */
 export class TroupeSyncService extends BaseService {
-    ready: Promise<void>;
     drive!: drive_v3.Drive;
-    sheets!: sheets_v4.Sheets;
-    forms!: forms_v1.Forms;
 
     // Output variables
     troupe: WithId<TroupeSchema> | null;
     dashboard: WithId<TroupeDashboardSchema> | null;
-    events: EventDataMap;
-    members: AttendeeDataMap;
+    eventMap: EventDataMap;
+    attendeeMap: AttendeeDataMap;
 
     constructor() {
         super();
         this.troupe = null;
         this.dashboard = null;
-        this.events = {};
-        this.members = {};
+        this.eventMap = {};
+        this.attendeeMap = {};
         this.ready = this.init();
     }
 
     async init() {
         this.drive = await getDrive();
-        this.sheets = await getSheets();
-        this.forms = await getForms();
     }
 
     /**
@@ -83,9 +78,9 @@ export class TroupeSyncService extends BaseService {
 
         // Perform sync
         await this.discoverEvents()
-            .then(this.discoverAndRefreshAudience)
-            .then(this.persistSync)
-            .then(() => skipLogPublish ?? this.refreshLogSheet);
+            .then(() => this.discoverAndRefreshAudience())
+            .then(() => this.persistSync())
+            .then(() => { if(skipLogPublish) return this.refreshLogSheet() });
         
         // Unlock the troupe
         const unlockResult = await this.troupeColl.updateOne(
@@ -105,7 +100,7 @@ export class TroupeSyncService extends BaseService {
             event.synchronizedSource = event.source;
             event.synchronizedSourceUri = event.sourceUri;
             event.synchronizedFieldToPropertyMap = event.fieldToPropertyMap;
-            this.events[event.sourceUri] = { event, delete: false, fromColl: true };
+            this.eventMap[event.sourceUri] = { event, delete: false, fromColl: true };
         }
 
         // To help with tie breaking, keep track of the folders that have been discovered
@@ -123,9 +118,15 @@ export class TroupeSyncService extends BaseService {
                 );
 
                 // Update the winning event type and add the folder to the list of folders to explore
-                winningEventType.totalFiles! += 1;
-                folderToEventTypeMap[folderId] = winningEventType;
-                foldersToExplore.push(folderId);
+                if(winningEventType != folderToEventTypeMap[folderId]) {
+                    if(folderToEventTypeMap[folderId]) {
+                        folderToEventTypeMap[folderId].totalFiles! -= 1;
+                    }
+                    
+                    winningEventType.totalFiles! += 1;
+                    folderToEventTypeMap[folderId] = winningEventType;
+                    foldersToExplore.push(folderId);
+                }
             }
         }
 
@@ -133,15 +134,15 @@ export class TroupeSyncService extends BaseService {
         const discoveredFolders: string[] = [];
         while(foldersToExplore.length > 0) {
             const folderId = foldersToExplore.pop()!;
-            let winningEventType = folderToEventTypeMap[folderId];
+            const currentEventType = folderToEventTypeMap[folderId];
 
             if(discoveredFolders.includes(folderId)) continue;
             discoveredFolders.push(folderId);
 
             // Get the folder's children
-            let q = `(${MIME_QUERY.join(" or ")}) and '${folderId}' in parents`;
             let response: GaxiosResponse<drive_v3.Schema$FileList>;
             try {
+                const q = `(${MIME_QUERY.join(" or ")}) and '${folderId}' in parents`;
                 response = await this.drive.files.list(
                     { q, fields: "files(id, name, mimeType)", }
                 );
@@ -155,69 +156,70 @@ export class TroupeSyncService extends BaseService {
                 discoveredFolders.pop();
                 continue;
             }
-
-            // Go through the files in the Google Drive folders
             const files = response.data.files;
-            if(files && files.length) {
-                for(const file of files) {
-                    let source: EventDataSource = "";
-                    let sourceUri = "";
-                    const eventDataSource = EVENT_DATA_SOURCE_MIME_TYPES.indexOf(
-                        file.mimeType! as typeof EVENT_DATA_SOURCE_MIME_TYPES[number]
+            if(!files) continue;
+            
+            // Go through the files in the Google Drive folders
+            for(const file of files) {
+                let source: EventDataSource = "";
+                let sourceUri = "";
+                const eventDataSource = EVENT_DATA_SOURCE_MIME_TYPES.indexOf(
+                    file.mimeType! as typeof EVENT_DATA_SOURCE_MIME_TYPES[number]
+                );
+
+                if(file.mimeType === DRIVE_FOLDER_MIME) {
+                    const winningEventType = this.performEventTypeTieBreaker(
+                        folderToEventTypeMap, folderId, currentEventType
                     );
 
-                    if(file.mimeType === DRIVE_FOLDER_MIME) {
-                        winningEventType = this.performEventTypeTieBreaker(
-                            folderToEventTypeMap, folderId, folderToEventTypeMap[folderId]
-                        );
-
-                        // Update the winning event type and add the folder to the list of folders to explore
+                    // Update the winning event type and add the folder to the list of folders to explore
+                    if(winningEventType != folderToEventTypeMap[folderId]) {
+                        if(folderToEventTypeMap[folderId]) {
+                            folderToEventTypeMap[folderId].totalFiles! -= 1;
+                        }
+                        
                         winningEventType.totalFiles! += 1;
                         folderToEventTypeMap[folderId] = winningEventType;
                         foldersToExplore.push(folderId);
-                        continue;
-                    } else if(EVENT_DATA_SOURCE_MIME_TYPES
-                        .includes(file.mimeType! as typeof EVENT_DATA_SOURCE_MIME_TYPES[number])) {
-                        
-                        file.mimeType = EVENT_DATA_SOURCE_MIME_TYPES[eventDataSource];
-                        source = EVENT_DATA_SOURCES[eventDataSource];
-                        sourceUri = getDataSourceUrl(source, file.id!);
-                    } else {
-                        continue;
                     }
+                    continue;
+                } else if(eventDataSource != -1) {
+                    file.mimeType = EVENT_DATA_SOURCE_MIME_TYPES[eventDataSource];
+                    source = EVENT_DATA_SOURCES[eventDataSource];
+                    sourceUri = getDataSourceUrl(source, file.id!);
+                } else {
+                    continue;
+                }
 
-                    // Convert the winning event type back to a regular event type
-                    delete winningEventType.totalFiles;
+                // Convert the winning event type back to a regular event type
+                delete currentEventType.totalFiles;
 
-                    // Add the event to the collection of events if it's not already added
-                    if(sourceUri in this.events) {
-                        const event = this.events[sourceUri].event;
-                        if(!event.eventTypeId) {
-                            event.eventTypeId = winningEventType._id.toHexString();
-                            event.eventTypeTitle = winningEventType.title;
-                            event.value = winningEventType.value;
-                        }
-                    } else {
-                        const event: WithId<EventSchema> = {
-                            _id: new ObjectId(),
-                            troupeId,
-                            lastUpdated: new Date(),
-                            title: file.name!,
-                            source,
-                            synchronizedSource: source,
-                            sourceUri,
-                            synchronizedSourceUri: sourceUri,
-                            startDate: file.createdTime
-                                ? new Date(file.createdTime)
-                                : new Date(),
-                            eventTypeId: winningEventType._id.toHexString(),
-                            eventTypeTitle: winningEventType.title,
-                            value: winningEventType.value,
-                            fieldToPropertyMap: {},
-                            synchronizedFieldToPropertyMap: {},
-                        };
-                        this.events[sourceUri] = { event, delete: false, fromColl: false };
+                // Add the event to the collection of events if it's not already added
+                if(sourceUri in this.eventMap) {
+                    const event = this.eventMap[sourceUri].event;
+                    if(!event.eventTypeId) {
+                        event.eventTypeId = currentEventType._id.toHexString();
+                        event.eventTypeTitle = currentEventType.title;
+                        event.value = currentEventType.value;
                     }
+                } else {
+                    const event: WithId<EventSchema> = {
+                        _id: new ObjectId(),
+                        troupeId,
+                        lastUpdated: new Date(),
+                        title: file.name!,
+                        source,
+                        synchronizedSource: source,
+                        sourceUri,
+                        synchronizedSourceUri: sourceUri,
+                        startDate: file.createdTime ? new Date(file.createdTime) : new Date(),
+                        eventTypeId: currentEventType._id.toHexString(),
+                        eventTypeTitle: currentEventType.title,
+                        value: currentEventType.value,
+                        fieldToPropertyMap: {},
+                        synchronizedFieldToPropertyMap: {},
+                    };
+                    this.eventMap[sourceUri] = { event, delete: false, fromColl: false };
                 }
             }
         }
@@ -250,7 +252,7 @@ export class TroupeSyncService extends BaseService {
                 .sort({ page: 1 })
                 .toArray();
             
-            this.members[member.properties["Member ID"].value] = {
+            this.attendeeMap[member.properties["Member ID"].value] = {
                 member, eventsAttended: [], eventsAttendedDocs, delete: false, fromColl: true
             };
 
@@ -273,7 +275,7 @@ export class TroupeSyncService extends BaseService {
         
         // Discover audience members from events not flagged for deletion
         const audienceDiscovery = [];
-        for(const eventData of Object.values(this.events)) {
+        for(const eventData of Object.values(this.eventMap)) {
             const event = eventData.event;
 
             if(!eventData.delete) {
@@ -291,7 +293,7 @@ export class TroupeSyncService extends BaseService {
         }
 
         // Mark members without required properties for deletion
-        for(const member of Object.values(this.members)) {
+        for(const member of Object.values(this.attendeeMap)) {
             for(const prop of requiredProperties) {
                 if(!member.member.properties[prop].value) {
                     member.delete = true;
@@ -314,9 +316,9 @@ export class TroupeSyncService extends BaseService {
         // Select a data service to collect event data from, and discover audience using the service
         let dataService: EventDataService;
         if(event.source === "Google Forms") {
-            dataService = new GoogleFormsEventDataService(this.troupe, this.events, this.members);
+            dataService = new GoogleFormsEventDataService(this.troupe, this.eventMap, this.attendeeMap);
         } else if(event.source == "Google Sheets") {
-            dataService = new GoogleSheetsEventDataService(this.troupe, this.events, this.members);
+            dataService = new GoogleSheetsEventDataService(this.troupe, this.eventMap, this.attendeeMap);
         } else {
             return;
         }
@@ -374,8 +376,8 @@ export class TroupeSyncService extends BaseService {
         }
 
         // Populate the events to update and delete arrays
-        for(const sourceUri in this.events) {
-            const eventData = this.events[sourceUri];
+        for(const sourceUri in this.eventMap) {
+            const eventData = this.eventMap[sourceUri];
             if(eventData.delete && eventData.fromColl) {
                 eventsToDelete.push(eventData.event._id);
             } else if(!eventData.delete) {
@@ -391,8 +393,8 @@ export class TroupeSyncService extends BaseService {
         }
 
         // Populate the members and events attended to update and delete arrays
-        for(const memberId in this.members) {
-            const memberData = this.members[memberId];
+        for(const memberId in this.attendeeMap) {
+            const memberData = this.attendeeMap[memberId];
 
             // Delete the member and the events they've attended if they're marked for deletion
             if(memberData.delete && memberData.fromColl) {
@@ -484,24 +486,30 @@ export class TroupeSyncService extends BaseService {
         }
 
         // Update the events, audience, and events attended collections
-        const persistResults: (AggregationCursor<Document> | Promise<DeleteResult> | Promise<UpdateResult>)[] = [];
+        const persistResults: (Promise<BulkWriteResult> | Promise<DeleteResult> | Promise<UpdateResult>)[] = [];
 
-        persistResults.push(this.eventColl.aggregate([
-            { $documents: updateEvents },
-            { $merge: { into: "events", on: "_id", whenMatched: "replace" } }
-        ]));
+        persistResults.push(this.eventColl.bulkWrite(updateEvents.map(event => ({
+            updateOne: {
+                filter: { _id: event._id },
+                update: { $set: event },
+            }
+        } as AnyBulkWriteOperation<EventSchema>))));
         persistResults.push(this.eventColl.deleteMany({ _id: { $in: eventsToDelete } }));
 
-        persistResults.push(this.audienceColl.aggregate([
-            { $documents: updateAudience },
-            { $merge: { into: "audience", on: "_id", whenMatched: "replace" } }
-        ]));
+        persistResults.push(this.audienceColl.bulkWrite(updateAudience.map(member => ({
+            updateOne: {
+                filter: { _id: member._id },
+                update: { $set: member },
+            }
+        } as AnyBulkWriteOperation<MemberSchema>))));
         persistResults.push(this.audienceColl.deleteMany({ _id: { $in: membersToDelete } }));
 
-        persistResults.push(this.eventsAttendedColl.aggregate([
-            { $documents: updateEventsAttended },
-            { $merge: { into: "eventsAttended", on: "_id", whenMatched: "replace" } }
-        ]));
+        persistResults.push(this.eventsAttendedColl.bulkWrite(updateEventsAttended.map(bucket => ({
+            updateOne: {
+                filter: { _id: bucket._id },
+                update: { $set: bucket },
+            }
+        } as AnyBulkWriteOperation<EventsAttendedBucketSchema>))));
         persistResults.push(this.eventsAttendedColl.deleteMany({ _id: { $in: eventsAttendedToDelete } }));
 
         persistResults.push(this.dashboardColl.updateOne({ troupeId }, { $set: dashboardUpdate }));
@@ -511,16 +519,16 @@ export class TroupeSyncService extends BaseService {
 
     /** Update the log sheet with the new information from this sync */
     async refreshLogSheet() {
-        const events = Object.keys(this.events).map(e => this.events[e].event).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
-        const audience = Object.keys(this.members).map(m => {
-            const member = this.members[m].member;
+        const events = Object.keys(this.eventMap).map(e => this.eventMap[e].event).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+        const audience = Object.keys(this.attendeeMap).map(m => {
+            const member = this.attendeeMap[m].member;
             const attendee: WithId<AttendeeSchema> = {
                 ...member,
                 _id: new ObjectId(member._id.toHexString()),
                 eventsAttended: {},
             };
 
-            this.members[m].eventsAttended.forEach(e => {
+            this.attendeeMap[m].eventsAttended.forEach(e => {
                 attendee.eventsAttended[e.eventId] = {
                     typeId: e.typeId,
                     value: e.value,

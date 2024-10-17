@@ -57,7 +57,7 @@ export function randomElement<T>(array: T[]): T {
 }
 
 /** Maps an object to another object */
-export function objectMap<T extends Object, U extends Object>(
+export function objectMap<T, U>(
     obj: T, 
     fn: (key: keyof T, value: T[keyof T]) => [key: keyof U, value: U[keyof U]]
 ): U {
@@ -70,7 +70,7 @@ export function objectMap<T extends Object, U extends Object>(
 }
 
 /** Converts an object to an array */
-export function objectToArray<T extends Object, U>(
+export function objectToArray<T, U>(
     obj: T, 
     fn: (key: keyof T, value: T[keyof T]) => U
 ): U[] {
@@ -82,7 +82,7 @@ export function objectToArray<T extends Object, U>(
 }
 
 /** Converts an array to an object */
-export function arrayToObject<T, U extends Object>(
+export function arrayToObject<T, U>(
     arr: T[], 
     fn: (value: T, index: number) => [key: keyof U, value: U[keyof U]]
 ): U {
