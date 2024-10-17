@@ -33,7 +33,7 @@ export class BaseService {
         this.audienceColl = this.client.db(DB_NAME).collection("audience");
         this.eventColl = this.client.db(DB_NAME).collection("events");
         this.eventsAttendedColl = this.client.db(DB_NAME).collection("eventsAttended");
-        this.ready = new Promise<void>(() => {});
+        this.ready = new Promise<void>(resolve => resolve());
     }
 
     static async create<T extends BaseService>(this: new() => T): Promise<T> {

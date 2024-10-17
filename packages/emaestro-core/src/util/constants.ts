@@ -31,7 +31,7 @@ export const BASE_MEMBER_PROPERTY_TYPES = {
     "First Name": "string!",
     "Last Name": "string!",
     "Email": "string!",
-    "Birthday": "date!",
+    "Birthday": "date?",
 } as const;
 
 export const BASE_POINT_TYPES_OBJ = {

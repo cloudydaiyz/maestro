@@ -2,7 +2,7 @@
 
 import { EventDataSource, MemberPropertyType, MemberPropertyValue } from "../types/core-types";
 import { Replace } from "../types/util-types";
-import { FORMS_REGEX, FORMS_URL_TEMPL, SHEETS_REGEX, SHEETS_URL_TEMPL } from "./constants";
+import { DRIVE_FOLDER_REGEX, FORMS_REGEX, FORMS_URL_TEMPL, SHEETS_REGEX, SHEETS_URL_TEMPL } from "./constants";
 import crypto from "crypto";
 
 /**
@@ -23,7 +23,7 @@ export function getDataSourceId(dataSource: EventDataSource, url: string): strin
     let regex: RegExp;
     if(dataSource == "Google Sheets") regex = SHEETS_REGEX;
     else if(dataSource == "Google Forms") regex = FORMS_REGEX;
-    else if(dataSource == "Google Drive Folder") regex = FORMS_REGEX;
+    else if(dataSource == "Google Drive Folder") regex = DRIVE_FOLDER_REGEX;
     else return undefined;
     return regex.exec(url)?.groups?.["id"];
 }
@@ -65,6 +65,23 @@ export function verifyApiMemberPropertyType(value: Replace<MemberPropertyValue, 
 /** Returns a random element from the given array */
 export function randomElement<T>(array: T[]): T {
     return array[Math.floor(Math.random() * array.length)];
+}
+
+/** Returns a shuffled version of an array */
+export function shuffleArray<T>(array: T[]): T[] {
+    const shuffled = array.slice();
+    for(let i = shuffled.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+}
+
+/** Removes the specified value from the given array, and returns the modified array */
+export function deleteFromArray<T>(array: T[], value: T): T[] {
+    const index = array.indexOf(value);
+    if(index != -1) array.splice(index, 1);
+    return array;
 }
 
 /** Maps an object to another object */

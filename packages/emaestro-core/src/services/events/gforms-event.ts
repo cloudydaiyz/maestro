@@ -272,6 +272,7 @@ export class GoogleFormsEventDataService extends EventDataService {
             // Update the member's points
             for(const pointType in this.troupe.pointTypes) {
                 const range = this.troupe.pointTypes[pointType];
+                if(!member.points[pointType]) member.points[pointType] = 0;
                 if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
                     member.points[pointType] += event.value;
                 }

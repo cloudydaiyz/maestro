@@ -57,7 +57,7 @@ export class TroupeSyncService extends BaseService {
 
         // Lock the troupe
         this.troupe = await this.troupeColl.findOneAndUpdate(
-            { troupeId },
+            { _id: new ObjectId(troupeId) },
             { $set: { syncLock: true } },
             { returnDocument: "after" }
         );
@@ -70,11 +70,11 @@ export class TroupeSyncService extends BaseService {
         await this.discoverEvents()
             .then(() => this.discoverAndRefreshAudience())
             .then(() => this.persistSync())
-            .then(() => { if(skipLogPublish) return this.refreshLogSheet() });
+            .then(() => { if(!skipLogPublish) return this.refreshLogSheet() });
         
         // Unlock the troupe
         const unlockResult = await this.troupeColl.updateOne(
-            { troupeId },
+            { _id: new ObjectId(troupeId) },
             { $set: { syncLock: false } }
         );
         assert(unlockResult.modifiedCount === 1, "Failed to unlock troupe after sync");
@@ -90,7 +90,7 @@ export class TroupeSyncService extends BaseService {
             event.synchronizedSource = event.source;
             event.synchronizedSourceUri = event.sourceUri;
             event.synchronizedFieldToPropertyMap = event.fieldToPropertyMap;
-            this.eventMap[event.sourceUri] = event;
+            this.eventMap[event.sourceUri] = { event, delete: false, fromColl: true };
         }
 
         // To help with tie breaking, keep track of the folders that have been discovered
@@ -101,7 +101,7 @@ export class TroupeSyncService extends BaseService {
         for(const eventType of this.troupe.eventTypes) {
             const discoveryEventType = { ...eventType, totalFiles: 0 };
 
-            for(const folder in eventType.sourceFolderUris) {
+            for(const folder of eventType.sourceFolderUris) {
                 const folderId = getDataSourceId("Google Drive Folder", folder)!;
                 const winningEventType = this.performEventTypeTieBreaker(
                     folderToEventTypeMap, folderId, discoveryEventType
@@ -186,11 +186,11 @@ export class TroupeSyncService extends BaseService {
 
                 // Add the event to the collection of events if it's not already added
                 if(sourceUri in this.eventMap) {
-                    const event = this.eventMap[sourceUri];
-                    if(!event.eventTypeId) {
-                        event.eventTypeId = currentEventType._id.toHexString();
-                        event.eventTypeTitle = currentEventType.title;
-                        event.value = currentEventType.value;
+                    const eventData = this.eventMap[sourceUri];
+                    if(!eventData.event.eventTypeId) {
+                        eventData.event.eventTypeId = currentEventType._id.toHexString();
+                        eventData.event.eventTypeTitle = currentEventType.title;
+                        eventData.event.value = currentEventType.value;
                     }
                 } else {
                     const event: WithId<EventSchema> = {
@@ -209,7 +209,7 @@ export class TroupeSyncService extends BaseService {
                         fieldToPropertyMap: {},
                         synchronizedFieldToPropertyMap: {},
                     };
-                    this.eventMap[sourceUri] = event;
+                    this.eventMap[sourceUri] = { event, delete: false, fromColl: false };
                 }
             }
         }
@@ -271,15 +271,15 @@ export class TroupeSyncService extends BaseService {
         // Discover audience members from events not flagged for deletion
         const audienceDiscovery = [];
         for(const sourceUri in this.eventMap) {
-            const event = this.eventMap[sourceUri];
-            audienceDiscovery.push(this.discoverAudience(event, lastUpdated));
+            const eventData = this.eventMap[sourceUri];
+            audienceDiscovery.push(this.discoverAudience(eventData.event, lastUpdated));
         }
         await Promise.all(audienceDiscovery);
 
         // Get all the required properties from the troupe
         const requiredProperties = [];
         for(const prop in this.troupe.memberPropertyTypes) {
-            if(this.troupe.memberPropertyTypes[prop].slice(0, -1) == "!") {
+            if(this.troupe.memberPropertyTypes[prop].endsWith("!")) {
                 requiredProperties.push(prop);
             }
         }
@@ -313,6 +313,7 @@ export class TroupeSyncService extends BaseService {
         } else if(event.source == "Google Sheets") {
             dataService = new GoogleSheetsEventDataService(this.troupe, this.eventMap, this.attendeeMap);
         } else {
+            // Invalid event, no audience to discover
             return;
         }
         await dataService.ready.then(() => dataService.discoverAudience(event, lastUpdated));
@@ -324,11 +325,8 @@ export class TroupeSyncService extends BaseService {
         const troupeId = this.troupe._id.toHexString();
 
         // Initialize events, audience members, and events attended documents to update and to delete
-        let updateEvents: WithId<EventSchema>[] = [];
-        let updateAudience: WithId<MemberSchema>[] = [];
-        let membersToDelete: ObjectId[] = [];
-        let updateEventsAttended: WithId<EventsAttendedBucketSchema>[] = [];
-        let eventsAttendedToDelete: ObjectId[] = [];
+        
+        
 
         // Initialize dashboard to update with statistics from event & audience update
         const dashboardUpdate: SetOperator<TroupeDashboardSchema> = {
@@ -349,10 +347,6 @@ export class TroupeSyncService extends BaseService {
             eventPercentageByEventType: {},
         };
 
-        const birthdayCutoff = dashboardUpdate.upcomingBirthdays!.frequency == "weekly" 
-            ? new Date(Date.now() + FULL_DAY * 7)
-            : new Date(Date.now() + FULL_DAY * 30);
-
         // Initialize dashboard statistics
         for(const eventType of this.troupe.eventTypes) {
             const eventTypeId = eventType._id.toHexString();
@@ -368,19 +362,35 @@ export class TroupeSyncService extends BaseService {
         }
 
         // Populate the events to update and delete arrays
+        let updateEvents: WithId<EventSchema>[] = [];
+        let eventsToDelete: ObjectId[] = [];
+
         for(const sourceUri in this.eventMap) {
             const eventData = this.eventMap[sourceUri];
-            const eventTypeId = eventData.eventTypeId;
-            updateEvents.push(eventData);
-            dashboardUpdate.totalEvents! += 1;
+            if(eventData.delete && eventData.fromColl) {
+                eventsToDelete.push(eventData.event._id);
+            } else if(!eventData.delete) {
+                const eventTypeId = eventData.event.eventTypeId;
+                updateEvents.push(eventData.event);
+                dashboardUpdate.totalEvents! += 1;
 
-            if(eventTypeId) {
-                dashboardUpdate.totalEventsByEventType![eventTypeId].value += 1;
-                dashboardUpdate.eventPercentageByEventType![eventTypeId].value += 1;
+                if(eventTypeId) {
+                    dashboardUpdate.totalEventsByEventType![eventTypeId].value += 1;
+                    dashboardUpdate.eventPercentageByEventType![eventTypeId].value += 1;
+                }
             }
         }
 
         // Populate the members and events attended to update and delete arrays
+        const birthdayCutoff = dashboardUpdate.upcomingBirthdays!.frequency == "weekly" 
+            ? new Date(Date.now() + FULL_DAY * 7)
+            : new Date(Date.now() + FULL_DAY * 30);
+
+        let updateAudience: WithId<MemberSchema>[] = [];
+        let membersToDelete: ObjectId[] = [];
+        let updateEventsAttended: WithId<EventsAttendedBucketSchema>[] = [];
+        let eventsAttendedToDelete: ObjectId[] = [];
+
         for(const memberId in this.attendeeMap) {
             const memberData = this.attendeeMap[memberId];
 
@@ -395,7 +405,7 @@ export class TroupeSyncService extends BaseService {
                 dashboardUpdate.totalMembers! += 1;
 
                 const birthday = memberData.member.properties["Birthday"].value;
-                if(birthday < birthdayCutoff) {
+                if(birthday && birthday < birthdayCutoff) {
                     dashboardUpdate.upcomingBirthdays!.members.push({
                         id: memberData.member._id.toHexString(),
                         firstName: memberData.member.properties["First Name"].value,
@@ -476,37 +486,57 @@ export class TroupeSyncService extends BaseService {
         // Update the events, audience, and events attended collections
         const persistResults: (Promise<BulkWriteResult> | Promise<DeleteResult> | Promise<UpdateResult>)[] = [];
 
-        persistResults.push(this.eventColl.bulkWrite(updateEvents.map(event => ({
-            updateOne: {
-                filter: { _id: event._id },
-                update: { $set: event },
-            }
-        } as AnyBulkWriteOperation<EventSchema>))));
+        if(updateEvents.length > 0) {
+            persistResults.push(this.eventColl.bulkWrite(updateEvents.map(event => ({
+                updateOne: {
+                    filter: { _id: event._id },
+                    update: { $set: event },
+                    upsert: true,
+                }
+            } as AnyBulkWriteOperation<EventSchema>))));
 
-        persistResults.push(this.audienceColl.bulkWrite(updateAudience.map(member => ({
-            updateOne: {
-                filter: { _id: member._id },
-                update: { $set: member },
-            }
-        } as AnyBulkWriteOperation<MemberSchema>))));
+            // await this.eventColl.bulkWrite(updateEvents.map(event => ({
+            //     updateOne: {
+            //         filter: { _id: event._id },
+            //         update: { $set: event },
+            //         upsert: true,
+            //     }
+            // } as AnyBulkWriteOperation<EventSchema>)));
+
+            // console.log(this.eventColl.find({}).toArray().then(console.log));
+        }
+        persistResults.push(this.eventColl.deleteMany({ _id: { $in: eventsToDelete } }));
+
+        if(updateAudience.length > 0) {
+            persistResults.push(this.audienceColl.bulkWrite(updateAudience.map(member => ({
+                updateOne: {
+                    filter: { _id: member._id },
+                    update: { $set: member },
+                    upsert: true,
+                }
+            } as AnyBulkWriteOperation<MemberSchema>))));
+        }
         persistResults.push(this.audienceColl.deleteMany({ _id: { $in: membersToDelete } }));
 
-        persistResults.push(this.eventsAttendedColl.bulkWrite(updateEventsAttended.map(bucket => ({
-            updateOne: {
-                filter: { _id: bucket._id },
-                update: { $set: bucket },
-            }
-        } as AnyBulkWriteOperation<EventsAttendedBucketSchema>))));
+        if(updateEventsAttended.length > 0) {
+            persistResults.push(this.eventsAttendedColl.bulkWrite(updateEventsAttended.map(bucket => ({
+                updateOne: {
+                    filter: { _id: bucket._id },
+                    update: { $set: bucket },
+                    upsert: true,
+                }
+            } as AnyBulkWriteOperation<EventsAttendedBucketSchema>))));
+        }
         persistResults.push(this.eventsAttendedColl.deleteMany({ _id: { $in: eventsAttendedToDelete } }));
 
-        persistResults.push(this.dashboardColl.updateOne({ troupeId }, { $set: dashboardUpdate }));
+        persistResults.push(this.dashboardColl.updateOne({ troupeId }, { $set: dashboardUpdate }, { upsert: true }));
         
         await Promise.all(persistResults);
     }
 
     /** Update the log sheet with the new information from this sync */
     async refreshLogSheet() {
-        const events = Object.keys(this.eventMap).map(uri => this.eventMap[uri]).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
+        const events = Object.keys(this.eventMap).map(uri => this.eventMap[uri].event).sort((a, b) => a.startDate.getTime() - b.startDate.getTime());
         const audience = Object.keys(this.attendeeMap).map(m => {
             const member = this.attendeeMap[m].member;
             const attendee: WithId<AttendeeSchema> = {

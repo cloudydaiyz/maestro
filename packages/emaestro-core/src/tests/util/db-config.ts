@@ -137,3 +137,20 @@ export const noMembersConfig: DbSetupConfig = {
         "seventh": { title: "test event 7 (special)", customTroupeId: "A", value: 7 },
     },
 }
+
+export const onlyEventTypesConfig: DbSetupConfig = {
+    troupes: { 
+        "A": { 
+            name: "test troupe", 
+            pointTypes: { 
+                "Fall": { startDate: new Date(1728870141961), endDate: new Date(1733017341961) },
+            },
+            memberPropertyTypes: {
+                "New Prop": "string?",
+            }
+        } 
+    },
+    eventTypes: {
+        "cool events": { value: 10, sourceFolderUris: [ "https://drive.google.com/drive/folders/1gQAhRgA7RzOPe_7YWdjniBiK8Q97yV8D" ] },
+    },
+}

@@ -4,7 +4,7 @@ import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { MONGODB_PASS, MONGODB_USER } from '../../util/env';
 import { MongoClient, ObjectId, WithId } from 'mongodb';
 import { BaseService } from "../../services/base-service";
-import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
+import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../../util/constants";
 import assert from "assert";
 import { getDefaultMemberPropertyValue, randomElement, verifyMemberPropertyType } from "../../util/helper";
@@ -93,6 +93,7 @@ async function dbSetup(config: DbSetupConfig) {
 
     // Create the troupe
     const testTroupes: WithId<TroupeSchema>[] = [];
+    const testDashboards: WithId<TroupeDashboardSchema>[] = [];
     for(const customTroupeId in config.troupes) {
         const request = config.troupes[customTroupeId];
         request._id = new ObjectId();
@@ -111,8 +112,30 @@ async function dbSetup(config: DbSetupConfig) {
             synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
         };
 
+        const newDashboard: WithId<TroupeDashboardSchema> = {
+            _id: new ObjectId(),
+            troupeId: request.id,
+            lastUpdated: new Date(),
+            upcomingBirthdays: {
+                frequency: "monthly",
+                desiredFrequency: "monthly",
+                members: [],
+            },
+            totalMembers: 0,
+            totalEvents: 0,
+            totalAttendees: 0,
+            totalEventTypes: 0,
+            avgAttendeesPerEvent: 0,
+            avgAttendeesByEventType: {},
+            attendeePercentageByEventType: {},
+            eventPercentageByEventType: {},
+            totalAttendeesByEventType: {},
+            totalEventsByEventType: {},
+        }
+
         request.troupe = newTroupe;
         testTroupes.push(newTroupe);
+        testDashboards.push(newDashboard);
     }
 
     for(const customEventTypeId in config.eventTypes) {
@@ -301,6 +324,7 @@ async function dbSetup(config: DbSetupConfig) {
     if(testEvents.length > 0) operations.push(db.eventColl.insertMany(testEvents));
     if(testAudience.length > 0) operations.push(db.audienceColl.insertMany(testAudience));
     if(testEventsAttended.length > 0) operations.push(db.eventsAttendedColl.insertMany(testEventsAttended));
+    if(testDashboards.length > 0) operations.push(db.dashboardColl.insertMany(testDashboards));
 
     await Promise.all(operations).then(() => db.close());
     return config;
