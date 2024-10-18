@@ -24,7 +24,7 @@ describe("troupe sync service", () => {
         }
     });
 
-    it.skip("should sync correctly", async () => {
+    it("should sync correctly", async () => {
         const config = await dbSetup(onlyEventTypesConfig);
         const troupeId = config.troupes!["A"].id!;
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
@@ -198,6 +198,6 @@ describe("troupe sync service", () => {
         });
 
         // Validate the log sheet
-        expect(logService.validateLog(currentLog!, postSyncTroupe!, postSyncEvents, postSyncAttendees!)).resolves.toBe(true);
+        await expect(logService.validateLog(currentLog!, postSyncTroupe!, postSyncEvents, postSyncAttendees!)).resolves.toBe(true);
     });
 });

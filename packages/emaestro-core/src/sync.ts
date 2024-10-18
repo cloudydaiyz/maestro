@@ -387,8 +387,9 @@ export class TroupeSyncService extends BaseService {
         let updateEventsAttended: WithId<EventsAttendedBucketSchema>[] = [];
         let eventsAttendedToDelete: ObjectId[] = [];
 
-        for(const memberId in this.attendeeMap) {
-            const memberData = this.attendeeMap[memberId];
+        for(const memberIdProp in this.attendeeMap) {
+            const memberData = this.attendeeMap[memberIdProp];
+            const memberId = memberData.member._id.toHexString();
 
             // Delete the member and the events they've attended if they're marked for deletion
             if(memberData.delete && memberData.fromColl) {
@@ -403,7 +404,7 @@ export class TroupeSyncService extends BaseService {
                 const birthday = memberData.member.properties["Birthday"].value;
                 if(birthday && birthday < birthdayCutoff) {
                     dashboardUpdate.upcomingBirthdays!.members.push({
-                        id: memberData.member._id.toHexString(),
+                        id: memberId,
                         firstName: memberData.member.properties["First Name"].value,
                         lastName: memberData.member.properties["Last Name"].value,
                         birthday,
