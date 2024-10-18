@@ -4,10 +4,10 @@ import assert from "assert";
 import { CreateTroupeRequest } from "../types/service-types";
 import { ObjectId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "../util/constants";
-import { BaseService, TroupeLogService } from "./base-service";
+import { BaseDbService, TroupeLogService } from "./base";
 import { GoogleSheetsLogService } from "./logs/gsheets-log";
 
-export class TroupeCoreService extends BaseService {
+export class TroupeCoreService extends BaseDbService {
     constructor() { super() }
 
     /** Initializes a new troupe with a dashboard and log sheet */

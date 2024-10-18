@@ -2,7 +2,7 @@
 
 import { WithId } from "mongodb";
 import { TroupeSchema, EventSchema, MemberSchema, EventsAttendedBucketSchema, AttendeeSchema } from "../../types/core-types";
-import { TroupeLogService } from "../base-service";
+import { TroupeLogService } from "../base";
 import { sheets_v4 } from "googleapis";
 import { getDrive, getSheets } from "../../cloud/gcp";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, SHEETS_REGEX } from "../../util/constants";

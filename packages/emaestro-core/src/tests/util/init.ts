@@ -3,7 +3,7 @@ import "dotenv/config";
 import { MongoMemoryReplSet } from 'mongodb-memory-server';
 import { MONGODB_PASS, MONGODB_USER } from '../../util/env';
 import { MongoClient, ObjectId, WithId } from 'mongodb';
-import { BaseService } from "../../services/base-service";
+import { BaseDbService } from "../../services/base";
 import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../../util/constants";
 import assert from "assert";
@@ -14,10 +14,10 @@ import { DbSetupConfig, defaultConfig } from "./db-config";
 
 export default function () {
     let mongod: MongoMemoryReplSet;
-    const resources: BaseService[] = [];
+    const resources: BaseDbService[] = [];
 
     /** Helper to chain resource creation with adding to the list of resources to cleanup */
-    function addResource<T extends BaseService>(resource: T): T {
+    function addResource<T extends BaseDbService>(resource: T): T {
         resources.push(resource);
         return resource;
     }
@@ -53,7 +53,7 @@ export default function () {
     
     // Delete all data from the database
     afterEach(async () => {
-        const cleanupService = await BaseService.create();
+        const cleanupService = await BaseDbService.create();
         resources.push(cleanupService);
 
         // Delete all collections
@@ -87,7 +87,7 @@ async function dbSetup(config: DbSetupConfig) {
         events: config.events || {},
         members: config.members || {},
     }
-    const db = await BaseService.create();
+    const db = await BaseDbService.create();
 
     const customTroupeIds = Object.keys(config.troupes!);
 

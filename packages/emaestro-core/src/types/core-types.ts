@@ -210,7 +210,7 @@ export interface PercentageStatistics {
 export interface UserSchema {
     email: string,
     password: string, // encrypted at rest
-    troupeId: string,
+    troupeId?: string,
 }
 
 export interface UserSessionSchema {

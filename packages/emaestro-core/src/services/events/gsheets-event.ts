@@ -8,7 +8,7 @@ import { SHEETS_REGEX } from "../../util/constants";
 import { parse } from "csv-parse";
 import { Readable } from "stream";
 import assert from "assert";
-import { EventDataService } from "../base-service";
+import { EventDataService } from "../base";
 import { getDataSourceId } from "../../util/helper";
 
 export class GoogleSheetsEventDataService extends EventDataService {

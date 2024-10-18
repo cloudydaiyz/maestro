@@ -9,7 +9,7 @@ import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "../types/util-types";
 import { GoogleFormsEventDataService } from "./events/gforms-event";
 import { GoogleSheetsEventDataService } from "./events/gsheets-event";
-import { BaseService, EventDataService } from "./base-service";
+import { BaseDbService, EventDataService } from "./base";
 import assert from "assert";
 import { GoogleSheetsLogService } from "./logs/gsheets-log";
 
@@ -21,7 +21,7 @@ import { GoogleSheetsLogService } from "./logs/gsheets-log";
  * - Delete members that are no longer in the source folder & have no overridden properties
  * - NOTE: Populate local variables with synchronized information to update the database
  */
-export class TroupeSyncService extends BaseService {
+export class TroupeSyncService extends BaseDbService {
     drive!: drive_v3.Drive;
 
     // Output variables

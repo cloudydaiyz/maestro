@@ -1,15 +1,17 @@
-import { BaseService } from "./base-service";
+import { BaseDbService } from "./base";
 import { Collection } from "mongodb";
 import { UserSchema, UserSessionSchema } from "../types/core-types";
 import { DB_NAME } from "../util/constants";
+import zxcvbn from "zxcvbn";
 import assert from "assert";
+import { TroupeCoreService } from "./core";
 
 /**
  *  1. Encrypt passwords at rest
  *  2. Recycle keys to encrypt / decrypt tokens daily
  *  3. Recycle keys to encrypt / decrypt passwords weekly
  */
-export class AuthCoreService extends BaseService {
+export class AuthService extends BaseDbService {
     userColl: Collection<UserSchema>;
     sessionColl: Collection<UserSessionSchema>;
 
@@ -20,8 +22,8 @@ export class AuthCoreService extends BaseService {
     }
 
     /** Creates a new account with the associated troupe */
-    async register(email: string, password: string, troupeId: string): Promise<void> {
-        const insertUser = await this.userColl.insertOne({ email, password, troupeId });
+    async register(email: string, password: string): Promise<void> {
+        const insertUser = await this.userColl.insertOne({ email, password });
         assert(insertUser.acknowledged, "Failed to create user");
     }
     
@@ -32,13 +34,7 @@ export class AuthCoreService extends BaseService {
 
     /** Validates a given access token */
     validate(accessToken: string): boolean {
-        const rand = Math.floor(Math.random() * 10);
-        if (rand > 5) {
-            return true;
-        } else {
-
-        }
-        return false;
+        return true;
     }
 
     /** Refreshes access credentials */

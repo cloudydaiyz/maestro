@@ -5,13 +5,31 @@ import { AttendeeSchema, EventsAttendedBucketSchema, EventSchema, EventTypeSchem
 import { MONGODB_PASS, MONGODB_USER } from "../util/env";
 import { DB_NAME, SHEETS_REGEX } from "../util/constants";
 import { EventDataMap, AttendeeDataMap } from "../types/service-types";
-import assert from "assert";
 import { ClientError } from "../util/error";
+import assert from "assert";
 
-export class BaseService {
+let client: MongoClient;
+
+/** 
+ * Retrieves the MongoClient, and initializes one if not already set.
+ * This is so the same client can be reused for multiple service objects.
+ */
+function getMongoClient(): MongoClient {
+    if(!client) {
+        // MongoDB URI could be changed from testing -- use the environment variable instead of MONGODB_URI const
+        client = new MongoClient(process.env.MONGODB_URI!, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
+        client.on("connecting", () => console.log("Connecting to MongoDB..."));
+        client.on("connected", () => console.log("Connected to MongoDB"));
+        client.on("error", (err) => console.error("Connection error:", err));
+    }
+    return client;
+}
+
+/** Base service for all services that interact with the database */
+export class BaseDbService {
     /** 
-     * Function that resolves on the completion of the class creation.
-     * Allows children to define unique criteria to dictate the completion of class initialization.
+     * Function that resolves on the completion of the class creation. This
+     * allows children to define unique criteria to dictate the completion of class initialization.
      */
     ready: Promise<void>;
     client: MongoClient;
@@ -22,12 +40,7 @@ export class BaseService {
     eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
     
     constructor() {
-        // MongoDB URI could be changed from testing -- use the environment variable instead of MONGODB_URI const
-        this.client = new MongoClient(process.env.MONGODB_URI!, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
-        this.client.on("connecting", () => console.log("Connecting to MongoDB..."));
-        this.client.on("connected", () => console.log("Connected to MongoDB"));
-        this.client.on("error", (err) => console.error("Connection error:", err));
-
+        this.client = getMongoClient();
         this.troupeColl = this.client.db(DB_NAME).collection("troupes");
         this.dashboardColl = this.client.db(DB_NAME).collection("dashboards");
         this.audienceColl = this.client.db(DB_NAME).collection("audience");
@@ -36,7 +49,7 @@ export class BaseService {
         this.ready = new Promise<void>(resolve => resolve());
     }
 
-    static async create<T extends BaseService>(this: new() => T): Promise<T> {
+    static async create<T extends BaseDbService>(this: new() => T): Promise<T> {
         const service = new this();
         await service.client.connect();
         await service.ready;

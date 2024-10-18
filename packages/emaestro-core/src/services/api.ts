@@ -5,17 +5,17 @@ import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EV
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints } from "../types/core-types";
 import { CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "../types/util-types";
-import assert from "assert";
-import { BaseService } from "./base-service";
+import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
 import { verifyApiMemberPropertyType } from "../util/helper";
+import assert from "assert";
 
 /**
  * Provides methods for interacting with the Troupe API. The structure of all given parameters will
  * not be checked (e.g. data type, constant range boundaries), but any checks requiring database access 
  * will be performed on each parameter.
  */
-export class TroupeApiService extends BaseService {
+export class TroupeApiService extends BaseDbService {
     constructor() { super() }
 
     /** Retrieves troupe or parses existing troupe into public format */ 
