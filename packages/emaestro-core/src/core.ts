@@ -4,21 +4,20 @@ import assert from "assert";
 import { CreateTroupeRequest } from "./types/service-types";
 import { ObjectId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "./util/constants";
-import { BaseService } from "./services/base-service";
+import { BaseService, TroupeLogService } from "./services/base-service";
+import { GoogleSheetsLogService } from "./services/logs/gsheets-log";
 
 export class TroupeCoreService extends BaseService {
     constructor() { super() }
 
-    async createTroupe(request: CreateTroupeRequest) {
-        const logSheetUri = "blah";
-        assert(logSheetUri, "Failed to create log sheet");
+    async createTroupe(request: CreateTroupeRequest, createLog?: true) {
 
         return this.client.startSession().withTransaction(async () => {
             const lastUpdated = new Date();
             const insertTroupe = await this.troupeColl.insertOne({
                 ...request,
                 lastUpdated,
-                logSheetUri,
+                logSheetUri: "",
                 eventTypes: [],
                 memberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
                 synchronizedMemberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
@@ -48,12 +47,24 @@ export class TroupeCoreService extends BaseService {
                 totalEventsByEventType: {},
             });
             assert(insertDashboard.insertedId, "Failed to create dashboard");
+
+            if(createLog) await this.newTroupeLog(insertTroupe.insertedId.toHexString());
+
             return insertTroupe.insertedId;
         });
     }
 
-    async newTroupeLog(troupeId: string) {
+    async newTroupeLog(troupeId: string): Promise<string> {
+        const troupe = await this.getTroupeSchema(troupeId, true);
+        const events = await this.eventColl.find({ troupeId }).toArray();
+        const audience = await this.audienceColl.find({ troupeId }).toArray();
 
+        const logService: TroupeLogService = new GoogleSheetsLogService();
+        const logSheetUri = await logService.createLog(troupe, events, audience.map( m => ({...m, eventsAttended: {} }) ));
+
+        const updateTroupe = await this.troupeColl.updateOne({ _id: new ObjectId(troupeId) }, { $set: { logSheetUri } });
+        assert(updateTroupe.modifiedCount == 1, "Failed to update troupe");
+        return logSheetUri;
     }
 
     async deleteTroupe(troupeId: string) {
@@ -65,7 +76,6 @@ export class TroupeCoreService extends BaseService {
                 this.eventColl.deleteMany({ troupeId })
             ]).then((res) => {
                 assert(res.every((r) => r.acknowledged), "Failed to fully delete troupe");
-                // console.log(res.reduce((deletedCount, r) => deletedCount + r.deletedCount, 0));
             });
         });
     }

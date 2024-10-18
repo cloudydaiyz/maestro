@@ -81,7 +81,7 @@ export class TroupeSyncService extends BaseService {
     }
 
     /** Discovers events found from the given event types in the troupe */
-    async discoverEvents(): Promise<void> {
+    protected async discoverEvents(): Promise<void> {
         assert(this.troupe);
         const troupeId = this.troupe._id.toHexString();
 
@@ -230,7 +230,7 @@ export class TroupeSyncService extends BaseService {
      * Goes through event sign ups to discover audience, mark them as discovered, 
      * and update existing audience points. Drops invalid audience members.
      */
-    async discoverAndRefreshAudience() {
+    protected async discoverAndRefreshAudience() {
         assert(this.troupe);
         const troupeId = this.troupe._id.toHexString();
         const lastUpdated = new Date();
@@ -323,10 +323,6 @@ export class TroupeSyncService extends BaseService {
     async persistSync(): Promise<void> {
         assert(this.troupe && this.dashboard);
         const troupeId = this.troupe._id.toHexString();
-
-        // Initialize events, audience members, and events attended documents to update and to delete
-        
-        
 
         // Initialize dashboard to update with statistics from event & audience update
         const dashboardUpdate: SetOperator<TroupeDashboardSchema> = {
@@ -494,16 +490,6 @@ export class TroupeSyncService extends BaseService {
                     upsert: true,
                 }
             } as AnyBulkWriteOperation<EventSchema>))));
-
-            // await this.eventColl.bulkWrite(updateEvents.map(event => ({
-            //     updateOne: {
-            //         filter: { _id: event._id },
-            //         update: { $set: event },
-            //         upsert: true,
-            //     }
-            // } as AnyBulkWriteOperation<EventSchema>)));
-
-            // console.log(this.eventColl.find({}).toArray().then(console.log));
         }
         persistResults.push(this.eventColl.deleteMany({ _id: { $in: eventsToDelete } }));
 
@@ -557,6 +543,6 @@ export class TroupeSyncService extends BaseService {
         }).sort((a, b) => a.points["Total"] - b.points["Total"]);
 
         const logService = new GoogleSheetsLogService();
-        logService.updateLog(this.troupe!.logSheetUri, this.troupe!, events, audience);
+        await logService.updateLog(this.troupe!.logSheetUri, this.troupe!, events, audience);
     }
 }

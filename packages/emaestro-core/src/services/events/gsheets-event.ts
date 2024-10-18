@@ -115,6 +115,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
         
         // Iterate through the array and convert the data to the appropriate type
         this.results.forEach((values, i) => {
+            if(i == 0) return;
 
             // Initialize member properties
             const properties = {} as BaseMemberProperties & VariableMemberProperties;

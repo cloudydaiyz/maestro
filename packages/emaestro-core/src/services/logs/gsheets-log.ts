@@ -461,7 +461,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             // Check the row to see if any cells have changed and, if so, add the row to the updated rows
             for(let j = 0; !addRow && j <= row.values!.length; j++) {
                 const desiredCell = row.values![j].effectiveValue?.stringValue || "";
-                if(desiredCell != currentData[i][j]) {
+                if(desiredCell != currentData[i]?.[j]) {
                     updatedRows.push(row);
                     addRow = true;
                 }
@@ -479,7 +479,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             requests.push({
                 updateCells: {
                     rows: updatedRows,
-                    fields: "userEnteredValue",
+                    fields: "userEnteredValue,userEnteredFormat",
                     start: { sheetId: 0, rowIndex: 2, columnIndex: 0 },
                 }
             });
@@ -527,7 +527,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             // Check the row to see if any cells have changed and, if so, add the row to the updated rows
             for(let j = 0; !addRow && j <= row.values!.length; j++) {
                 const desiredCell = row.values![j].effectiveValue?.stringValue || "";
-                if(desiredCell != currentData[i][j]) {
+                if(desiredCell != currentData[i]?.[j]) {
                     updatedRows.push(row);
                     addRow = true;
                 }
@@ -545,7 +545,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             requests.push({
                 updateCells: {
                     rows: updatedRows,
-                    fields: "userEnteredValue",
+                    fields: "userEnteredValue,userEnteredFormat",
                     start: { sheetId: 1, rowIndex: 2, columnIndex: 0 },
                 }
             });
@@ -558,13 +558,22 @@ export class GoogleSheetsLogService extends TroupeLogService {
         const requests: sheets_v4.Schema$Request[] = [];
         const desiredSheet = this.buildAudienceLog(troupe, events, audience);
 
-        // Update the headers
-        const currentCutoff1 = currentData[1].indexOf("");
-        const currentCutoff2 = currentData[1].lastIndexOf("");
+        // Obtain the cutoffs for the headers
+        const currentCutoff1 = currentData[1].indexOf(""); // membership information section end
+        let currentCutoff2 = currentData[1].lastIndexOf(""); // membership points section end
+        let currentCutoff3 = currentData[1].length; // events attended section end
+        if(currentCutoff2 == currentCutoff1) {
+            // There's supposed to be a second cutoff, but it's not found, so
+            // the current data has no events and the second cutoff is the length of the array
+            currentCutoff2 = currentData[1].length;
+            currentCutoff3 = currentData[1].length + 1;
+        }
 
         const desiredCutoff1 = desiredSheet.data![0].rowData![1].values!.findIndex(data => data.userEnteredValue!.stringValue == "");
         const desiredCutoff2 = desiredSheet.data![0].rowData![1].values!.findIndex((data, i) => i != desiredCutoff1 && data.userEnteredValue!.stringValue == "");
+        const desiredCutoff3 = desiredSheet.data![0].rowData![1].values!.length - 1;
 
+        // Based on the first cutoff, add/delete columns for membership information section
         if(currentCutoff1 < desiredCutoff1) {
             requests.push({
                 insertDimension: {
@@ -589,6 +598,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             });
         }
 
+        // Based on the second cutoff, add/delete columns for membership points section
         if(currentCutoff2 < desiredCutoff2) {
             requests.push({
                 insertDimension: {
@@ -613,6 +623,31 @@ export class GoogleSheetsLogService extends TroupeLogService {
             });
         }
 
+        // Based on the second cutoff, add/delete columns for the events section
+        if(currentCutoff3 < desiredCutoff3) {
+            requests.push({
+                insertDimension: {
+                    range: {
+                        sheetId: 2,
+                        dimension: "COLUMNS",
+                        startIndex: currentCutoff3,
+                        endIndex: desiredCutoff3,
+                    }
+                }
+            })
+        } else if(currentCutoff3 > desiredCutoff3) {
+            requests.push({
+                deleteDimension: {
+                    range: {
+                        sheetId: 2,
+                        dimension: "COLUMNS",
+                        startIndex: desiredCutoff3,
+                        endIndex: currentCutoff3,
+                    }
+                }
+            });
+        }
+
         // Delete extra rows in the current sheet
         if(desiredSheet.data![0].rowData!.length < currentData.length) {
             requests.push({
@@ -632,7 +667,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
         requests.push({
             updateCells: {
                 rows: desiredSheet.data![0].rowData!,
-                fields: "userEnteredValue",
+                fields: "userEnteredValue,userEnteredFormat",
                 start: { sheetId: 2, rowIndex: 0, columnIndex: 0 },
             }
         });
@@ -707,10 +742,8 @@ export class GoogleSheetsLogService extends TroupeLogService {
             // Ensure sheets have the correct amount of rows (columns for member log)
             assert(currentData.data.valueRanges?.[0]?.values?.length == troupe.eventTypes.length + 2);
             assert(currentData.data.valueRanges?.[1]?.values?.length == events.length + 2);
-            assert(currentData.data.valueRanges?.[2]?.values?.[0]?.length == 
-                memberInformationSection.length 
-                + membershipPointsSection.length 
-                + eventNumbersSection.length + 2
+            assert(currentData.data.valueRanges?.[2]?.values?.[0]?.length 
+                == memberInformationSection.length + membershipPointsSection.length + eventNumbersSection.length + 2
             );
 
             // Ensure member log has the correct amount of rows
