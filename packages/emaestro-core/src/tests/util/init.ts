@@ -9,7 +9,7 @@ import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from 
 import assert from "assert";
 import { getDefaultMemberPropertyValue, randomElement, verifyMemberPropertyType } from "../../util/helper";
 import { Id } from "../../types/util-types";
-import { TroupeApiService } from "../..";
+import { TroupeApiService } from "../../services/api";
 import { DbSetupConfig, defaultConfig } from "./db-config";
 
 export default function () {

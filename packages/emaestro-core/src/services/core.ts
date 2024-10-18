@@ -1,17 +1,17 @@
 // Additional functionality for other backend services
 
 import assert from "assert";
-import { CreateTroupeRequest } from "./types/service-types";
+import { CreateTroupeRequest } from "../types/service-types";
 import { ObjectId } from "mongodb";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "./util/constants";
-import { BaseService, TroupeLogService } from "./services/base-service";
-import { GoogleSheetsLogService } from "./services/logs/gsheets-log";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "../util/constants";
+import { BaseService, TroupeLogService } from "./base-service";
+import { GoogleSheetsLogService } from "./logs/gsheets-log";
 
 export class TroupeCoreService extends BaseService {
     constructor() { super() }
 
+    /** Initializes a new troupe with a dashboard and log sheet */
     async createTroupe(request: CreateTroupeRequest, createLog?: true) {
-
         return this.client.startSession().withTransaction(async () => {
             const lastUpdated = new Date();
             const insertTroupe = await this.troupeColl.insertOne({
@@ -54,6 +54,7 @@ export class TroupeCoreService extends BaseService {
         });
     }
 
+    /** Creates the log sheet for a troupe */
     async newTroupeLog(troupeId: string): Promise<string> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         const events = await this.eventColl.find({ troupeId }).toArray();
@@ -67,8 +68,12 @@ export class TroupeCoreService extends BaseService {
         return logSheetUri;
     }
 
+    /** Deletes a troupe and its associated data (log, audience, events, dashboard) */
     async deleteTroupe(troupeId: string) {
         return this.client.startSession().withTransaction(async () => {
+            const logService: TroupeLogService = new GoogleSheetsLogService();
+            await logService.deleteLog(troupeId);
+
             return Promise.all([
                 this.troupeColl.deleteOne({ _id: new ObjectId(troupeId) }),
                 this.dashboardColl.deleteOne({ troupeId }),

@@ -1,17 +1,17 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
-import { getDrive, getForms, getSheets } from "./cloud/gcp";
-import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "./types/core-types";
-import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "./util/constants";
+import { getDrive, getForms, getSheets } from "../cloud/gcp";
+import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "../types/core-types";
+import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "../util/constants";
 import { AggregationCursor, AnyBulkWriteOperation, BulkWriteResult, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
-import { getDataSourceId, getDataSourceUrl, getDefaultMemberPropertyValue } from "./util/helper";
-import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "./types/service-types";
+import { getDataSourceId, getDataSourceUrl, getDefaultMemberPropertyValue } from "../util/helper";
+import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "../types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
-import { Mutable, SetOperator } from "./types/util-types";
-import { GoogleFormsEventDataService } from "./services/events/gforms-event";
-import { GoogleSheetsEventDataService } from "./services/events/gsheets-event";
-import { BaseService, EventDataService } from "./services/base-service";
+import { Mutable, SetOperator } from "../types/util-types";
+import { GoogleFormsEventDataService } from "./events/gforms-event";
+import { GoogleSheetsEventDataService } from "./events/gsheets-event";
+import { BaseService, EventDataService } from "./base-service";
 import assert from "assert";
-import { GoogleSheetsLogService } from "./services/logs/gsheets-log";
+import { GoogleSheetsLogService } from "./logs/gsheets-log";
 
 /**
  * Synchronizes the troupe with its source uris for events and event types, then updates the

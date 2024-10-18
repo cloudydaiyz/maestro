@@ -1,7 +1,7 @@
 import init from "./util/init";
 
-import { TroupeApiService } from "..";
-import { TroupeCoreService } from "../core";
+import { TroupeApiService } from "../services/api";
+import { TroupeCoreService } from "../services/core";
 import { test, describe } from "@jest/globals";
 
 const { addResource, dbSetup } = init();

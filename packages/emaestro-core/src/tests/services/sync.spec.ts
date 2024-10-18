@@ -6,10 +6,10 @@ import { arrayToObject, deleteFromArray, objectToArray, shuffleArray } from "../
 import { GoogleSheetsLogService } from "../../services/logs/gsheets-log";
 import { ObjectId, WithId } from "mongodb";
 import { AttendeeSchema, EventSchema, EventsAttendedBucketSchema } from "../../types/core-types";
-import { TroupeSyncService } from "../../sync";
-import { TroupeApiService } from "../..";
+import { TroupeSyncService } from "../../services/sync";
+import { TroupeApiService } from "../../services/api";
 import { PublicEvent, UpdateEventRequest } from "../../types/api-types";
-import { TroupeCoreService } from "../../core";
+import { TroupeCoreService } from "../../services/core";
 
 const { addResource, dbSetup } = init();
 

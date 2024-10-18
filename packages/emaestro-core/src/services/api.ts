@@ -1,14 +1,14 @@
 // Implementation for client-facing controller methods
 
 import { AnyBulkWriteOperation, ObjectId, PullOperator, PushOperator, UpdateFilter, WithId } from "mongodb";
-import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "./util/constants";
-import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints } from "./types/core-types";
-import { CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "./types/api-types";
-import { Mutable, Replace, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "./types/util-types";
+import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "../util/constants";
+import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints } from "../types/core-types";
+import { CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
+import { Mutable, Replace, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "../types/util-types";
 import assert from "assert";
-import { BaseService } from "./services/base-service";
-import { ClientError } from "./util/error";
-import { verifyApiMemberPropertyType } from "./util/helper";
+import { BaseService } from "./base-service";
+import { ClientError } from "../util/error";
+import { verifyApiMemberPropertyType } from "../util/helper";
 
 /**
  * Provides methods for interacting with the Troupe API. The structure of all given parameters will
