@@ -9,9 +9,11 @@
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "start": "npm start --prefix=packages/emaestro-core"
+    "start": "npm start --prefix=packages/emaestro-core",
+    "test-env": "dotenvx run -- sh -c 'echo $CRAZY'"
   },
   "devDependencies": {
+    "@dotenvx/dotenvx": "^1.20.0",
     "typescript": "^5.3.3"
   }
 }

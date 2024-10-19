@@ -13,9 +13,9 @@ describe("basic core operations", () => {
 
         const troupeId = await core.createTroupe({ name: "test" });
 
-        expect(await api.getTroupe(troupeId.toHexString())).toHaveProperty("name", "test");
+        expect(await api.getTroupe(troupeId)).toHaveProperty("name", "test");
 
-        const updatedTroupe1 = await api.updateTroupe(troupeId.toHexString(), {
+        const updatedTroupe1 = await api.updateTroupe(troupeId, {
             name: "test2",
             updateMemberProperties: {
                 "hi": "boolean!",
@@ -27,14 +27,14 @@ describe("basic core operations", () => {
         expect(updatedTroupe1.memberPropertyTypes).toHaveProperty("hi");
         expect(updatedTroupe1.memberPropertyTypes).not.toHaveProperty("bye");
 
-        const updatedTroupe2 = await api.updateTroupe(troupeId.toHexString(), {
+        const updatedTroupe2 = await api.updateTroupe(troupeId, {
             removeMemberProperties: ["hi", "bye"],
         });
 
         expect(updatedTroupe2.memberPropertyTypes).not.toHaveProperty("hi");
 
-        await core.deleteTroupe(troupeId.toHexString());
+        await core.deleteTroupe(troupeId);
 
-        await expect(api.getTroupe(troupeId.toHexString())).rejects.toThrow();
+        await expect(api.getTroupe(troupeId)).rejects.toThrow();
     });
 });

@@ -3,8 +3,8 @@
 import { AnyBulkWriteOperation, ObjectId, PullOperator, PushOperator, UpdateFilter, WithId } from "mongodb";
 import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "../util/constants";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints } from "../types/core-types";
-import { CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
-import { Mutable, Replace, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "../types/util-types";
+import { ApiType, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
+import { Mutable, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "../types/util-types";
 import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
 import { verifyApiMemberPropertyType } from "../util/helper";
@@ -694,12 +694,12 @@ export class TroupeApiService extends BaseDbService {
         const memberId = m._id!.toHexString();
         delete m._id;
 
-        const properties = {} as Replace<MemberSchema["properties"], Date, string>;
+        const properties = {} as ApiType<MemberSchema["properties"]>;
         for(const key in m.properties) {
             properties[key] = {
                 value: m.properties[key].value instanceof Date 
                     ? m.properties[key]!.value!.toString()
-                    : m.properties[key].value as Replace<MemberPropertyValue, Date, string>,
+                    : m.properties[key].value as ApiType<MemberPropertyValue>,
                 override: m.properties[key].override,
             }
         }

@@ -20,7 +20,7 @@ describe("basic api operations", () => {
 
         const troupeId = await core.createTroupe({ name: "test" });
 
-        expect(await api.getTroupe(troupeId.toHexString())).toHaveProperty("name", "test");
+        expect(await api.getTroupe(troupeId)).toHaveProperty("name", "test");
     });
 
     test("create event", async () => {

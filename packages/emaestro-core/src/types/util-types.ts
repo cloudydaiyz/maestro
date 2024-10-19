@@ -10,16 +10,18 @@ import { EventSchema } from "./core-types";
 export type WeakPartial<T, K extends keyof T> = Omit<T, K> & Partial<T>;
 
 /**
- * Replaces all keys in type T with a value type of A with a value type of B. Affects
+ * Replaces all keys in type T without a value type in A with a value type of B. Affects
  * nested objects and arrays as well.
  */
-export type Replace<T, A, B> = T extends A 
-    ? B
-    : T extends Object 
-    ? { [key in keyof T]: Replace<T[key], A, B> }
-    : T extends Array<any> 
+export type Replace<T, A, B> = T extends A
+    ? T
+    : T extends Object
+    ? T extends String | Date ? B : { [key in keyof T]: Replace<T[key], A, B> }
+    : T extends Array<any>
     ? Array<Replace<T[number], A, B>>
-    : T;
+    : B;
+
+type t = null extends Object ? "a" : "b";
 
 export type Mutable<T> = { -readonly [P in keyof T]: T[P] }
 

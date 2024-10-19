@@ -53,15 +53,15 @@ export type MemberPropertyValue = MemberPropertyTypeToValue[MemberPropertyType];
 
 // == POINT TYPES ==
 
-export interface PointData {
-    startDate: Date,
-    endDate: Date,
-}
-
 export type BasePointTypes = typeof BASE_POINT_TYPES_OBJ;
 
 export interface VariablePointTypes {
     [key: string]: PointData,
+}
+
+export interface PointData {
+    startDate: Date,
+    endDate: Date,
 }
 
 export type BaseMemberPoints = Mutable<{ [key in keyof BasePointTypes]: number }>;
@@ -145,6 +145,29 @@ export type BaseMemberProperties = {
         value: MemberPropertyTypeToValue[typeof BASE_MEMBER_PROPERTY_TYPES[key]],
         override: boolean,
     };
+}
+
+const bmp: BaseMemberProperties = {
+    "Member ID": {
+        value: "",
+        override: false
+    },
+    "First Name": {
+        value: "",
+        override: false
+    },
+    "Last Name": {
+        value: "",
+        override: false
+    },
+    Email: {
+        value: "",
+        override: false
+    },
+    Birthday: {
+        value: null,
+        override: false
+    }
 }
 
 export type VariableMemberProperties = {

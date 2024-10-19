@@ -11,7 +11,7 @@ export class TroupeCoreService extends BaseDbService {
     constructor() { super() }
 
     /** Initializes a new troupe with a dashboard and log sheet */
-    async createTroupe(request: CreateTroupeRequest, createLog?: true) {
+    async createTroupe(request: CreateTroupeRequest, createLog?: true): Promise<string> {
         return this.client.startSession().withTransaction(async () => {
             const lastUpdated = new Date();
             const insertTroupe = await this.troupeColl.insertOne({
@@ -50,7 +50,7 @@ export class TroupeCoreService extends BaseDbService {
 
             if(createLog) await this.newTroupeLog(insertTroupe.insertedId.toHexString());
 
-            return insertTroupe.insertedId;
+            return insertTroupe.insertedId.toHexString();
         });
     }
 

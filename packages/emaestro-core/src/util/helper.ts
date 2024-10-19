@@ -1,7 +1,7 @@
 // Helper functions
 
+import { ApiType } from "../types/api-types";
 import { EventDataSource, MemberPropertyType, MemberPropertyValue } from "../types/core-types";
-import { Replace } from "../types/util-types";
 import { DRIVE_FOLDER_REGEX, FORMS_REGEX, FORMS_URL_TEMPL, SHEETS_REGEX, SHEETS_URL_TEMPL } from "./constants";
 import crypto from "crypto";
 
@@ -54,7 +54,7 @@ export function getDefaultMemberPropertyValue(mpt: MemberPropertyType): MemberPr
 }
 
 /** Returns true if the given member property value (from api call) is valid with the given member property type */
-export function verifyApiMemberPropertyType(value: Replace<MemberPropertyValue, Date, string>, mpt: MemberPropertyType): boolean {
+export function verifyApiMemberPropertyType(value: ApiType<MemberPropertyValue>, mpt: MemberPropertyType): boolean {
     const rawType = mpt.slice(0, -1);
     if(rawType == "date") {
         return typeof value == "string" && verifyMemberPropertyType(new Date(value), mpt);

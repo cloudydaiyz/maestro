@@ -4,19 +4,18 @@ import { ObjectId, WithId } from "mongodb";
 import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, VariableMemberProperties } from "./core-types";
 import { Id, Replace, WeakPartial } from "./util-types";
 
+/** Converts T to a JSON serializable format */
+export type ApiType<T> = Replace<T, string|boolean|number|null|undefined, string>;
+
 // == Public Types ==
 
-export type Troupe = Replace<
-    Omit<TroupeSchema, "eventTypes" | "_id" | "syncLock">, 
-    Date | ObjectId, 
-    string
-> & Id & { eventTypes: EventType[] }
+export type Troupe = ApiType<Omit<TroupeSchema, "eventTypes" | "syncLock">> & Id & { eventTypes: EventType[] }
 
-export type PublicEvent = Replace<EventSchema, Date, string> & Id;
+export type PublicEvent = ApiType<EventSchema> & Id;
 
-export type EventType = Replace<EventTypeSchema, Date, string> & Id;
+export type EventType = ApiType<EventTypeSchema> & Id;
 
-export type Member = Replace<MemberSchema, Date, string> & Id;
+export type Member = ApiType<MemberSchema> & Id;
 
 // == API Request Types ==
 
@@ -28,15 +27,15 @@ export type Member = Replace<MemberSchema, Date, string> & Id;
  * - Cannot have more than `MAX_MEMBER_PROPERTIES` member properties or `MAX_POINT_TYPES` 
  *   point types
  */
-export type UpdateTroupeRequest = {
+export type UpdateTroupeRequest = ApiType<{
     name?: string,
     /** Set as an empty string to remove. */ 
     originEventId?: string, 
     updateMemberProperties?: VariableMemberPropertyTypes,
     removeMemberProperties?: string[],
-    updatePointTypes?: Replace<VariablePointTypes, Date, string>,
+    updatePointTypes?: VariablePointTypes,
     removePointTypes?: string[],
-}
+}>
 
 /**
  * If manually added, event starts with empty field to property map and unvalidated
@@ -45,15 +44,16 @@ export type UpdateTroupeRequest = {
  * map is updated. User may only update the existing fields in the field to property map,
  * even if they know the ID of other fields in the source.
  */
-export type CreateEventRequest = WeakPartial<
+export type CreateEventRequest = ApiType<WeakPartial<
     Pick<
         PublicEvent,
         "title" | "sourceUri" | "startDate" | "eventTypeId" | "value"
     >, 
     "value"
->;
+>>;
 
-export type UpdateEventRequest = {
+/** Updates an event */
+export type UpdateEventRequest = ApiType<{
     title?: string,
     startDate?: string,
     /** Must be a valid {@link EventDataSource}. */
@@ -66,12 +66,13 @@ export type UpdateEventRequest = {
     },
     /** Removes properties associated with fields */
     removeProperties?: string[],
-}
+}>;
 
-export type CreateEventTypeRequest = Pick<
+/** Creates a new event type */
+export type CreateEventTypeRequest = ApiType<Pick<
     EventType,
     "title" | "value" | "sourceFolderUris"
->;
+>>;
 
 /**
  * Updates an event type. Caveats:
@@ -80,27 +81,28 @@ export type CreateEventTypeRequest = Pick<
  * - `sourceFolderUris` are updated immediately, but the data resulting from the
  *   update doesn't get changed until the next sync.
  */
-export type UpdateEventTypeRequest = {
+export type UpdateEventTypeRequest = ApiType<{
     title?: string,
     value?: number,
     addSourceFolderUris?: string[],
     removeSourceFolderUris?: string[],
-}
+}>;
 
 /**
  * Creates a new member. All required member properties defined by the troupe must be set.
  */
-export type CreateMemberRequest = Pick<
+export type CreateMemberRequest = ApiType<Pick<
     Member,
     "properties"
->;
+>>;
 
-export type UpdateMemberRequest = {
+/** Updates and/or removes member property values from member */
+export type UpdateMemberRequest = ApiType<{
     updateProperties?: {
         [key: string]: {
-            value?: Replace<MemberPropertyValue, Date, string>,
+            value?: MemberPropertyValue,
             override?: boolean,
         }
     },
     removeProperties?: string[],
-}
+}>;
