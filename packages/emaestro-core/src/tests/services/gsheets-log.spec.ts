@@ -6,22 +6,16 @@ import { objectToArray } from "../../util/helper";
 import { GoogleSheetsLogService } from "../../services/logs/gsheets-log";
 import { WithId } from "mongodb";
 import { AttendeeSchema, EventSchema } from "../../types/core-types";
+import { cleanLogs } from "../../util/resources";
 
-const { addResource, dbSetup } = init();
+const { dbSetup } = init();
 
 describe("google sheets log service", () => {
-    const service = new GoogleSheetsLogService();
-    let currentLog: string | null;
-
-    afterEach(async () => { 
-        if(currentLog) {
-            console.log(`Deleting log sheet at: ${currentLog}`);
-            await service.deleteLog(currentLog);
-        }
-    });
+    afterAll(async () => { await cleanLogs() });
 
     it("should create a log correctly for troupe", async () => {
         const config = await dbSetup(defaultConfig);
+        const service = new GoogleSheetsLogService();
 
         // Setup test data
         const troupe = config.troupes!["A"].troupe!;
@@ -39,14 +33,15 @@ describe("google sheets log service", () => {
         audience.sort((a, b) => a.points["Total"] - b.points["Total"]);
 
         // Create the log
-        currentLog = await service.createLog(troupe, events, audience);
+        let uri = await service.createLog(troupe, events, audience);
 
         // Ensure that the log has the correct values and formatting
-        await expect(service.validateLog(currentLog, troupe, events, audience)).resolves.toBeTruthy();
+        await expect(service.validateLog(uri, troupe, events, audience)).resolves.toBeTruthy();
     });
 
     it("should update a log correctly for troupe", async () => {
         const config1 = await dbSetup(defaultConfig);
+        const service = new GoogleSheetsLogService();
 
         // Setup test data
         let troupe = config1.troupes!["A"].troupe!;
@@ -64,8 +59,8 @@ describe("google sheets log service", () => {
         audience.sort((a, b) => a.points["Total"] - b.points["Total"]);
 
         // Create the log
-        currentLog = await service.createLog(troupe, events, audience);
-        await expect(service.validateLog(currentLog, troupe, events, audience)).resolves.toBeTruthy();
+        let uri = await service.createLog(troupe, events, audience);
+        await expect(service.validateLog(uri, troupe, events, audience)).resolves.toBeTruthy();
 
         // Change test data
         const config2 = await dbSetup(noMembersConfig);
@@ -85,7 +80,7 @@ describe("google sheets log service", () => {
         audience.sort((a, b) => a.points["Total"] - b.points["Total"]);
 
         // Update the log
-        await service.updateLog(currentLog, troupe, events, audience);
-        await expect(service.validateLog(currentLog, troupe, events, audience)).resolves.toBeTruthy();
+        await service.updateLog(uri, troupe, events, audience);
+        await expect(service.validateLog(uri, troupe, events, audience)).resolves.toBeTruthy();
     });
 });

@@ -54,7 +54,7 @@ export function newController(handler: ApiController): ApiController {
             }
         }
     }
-};
+}
 
 export function newUtilController<T extends Object>(handler: (body: Object) => Promise<T | void>): ApiController {
     return newController(async (path, method, headers, body) => {

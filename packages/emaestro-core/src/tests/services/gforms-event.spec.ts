@@ -6,7 +6,7 @@ import { GoogleFormsEventDataService } from "../../services/events/gforms-event"
 import { EventDataMap, AttendeeDataMap } from "../../types/service-types";
 import { objectMap, objectToArray, verifyMemberPropertyType } from "../../util/helper";
 
-const { addResource, dbSetup } = init();
+const { dbSetup } = init();
 
 describe("google forms event service", () => {
     it("should get event data from non-initialized event & no preexisting members", async () => {

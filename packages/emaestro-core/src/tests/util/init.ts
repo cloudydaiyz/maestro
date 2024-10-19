@@ -11,33 +11,13 @@ import { getDefaultMemberPropertyValue, randomElement, verifyMemberPropertyType 
 import { Id } from "../../types/util-types";
 import { TroupeApiService } from "../../services/api";
 import { DbSetupConfig, defaultConfig } from "./db-config";
+import { cleanDbConnections, startDb, stopDb } from "../../util/resources";
 
 export default function () {
-    let mongod: MongoMemoryReplSet;
-    const resources: BaseDbService[] = [];
-
-    /** Helper to chain resource creation with adding to the list of resources to cleanup */
-    function addResource<T extends BaseDbService>(resource: T): T {
-        resources.push(resource);
-        return resource;
-    }
 
     // Start the server
     beforeAll(async () => {
-        mongod = await MongoMemoryReplSet.create({ replSet: { auth: { enable: true, customRootName: MONGODB_USER, customRootPwd: MONGODB_PASS } } });
-        const uri = mongod.getUri();
-
-        // Connect to and ping the server to ensure everything is setup
-        const client = new MongoClient(uri, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
-        client.on("connecting", () => console.log("Connecting to MongoDB..."));
-        client.on("connected", () => console.log("Connected to MongoDB"));
-        client.on("error", (err) => console.error("Connection error:", err));
-
-        await client.connect();
-        await client.db("admin").command({ ping: 1 });
-        await client.close();
-
-        process.env.MONGODB_URI = uri;
+        await startDb();
 
         // Test that the default config is working properly
         const config = await dbSetup(defaultConfig);
@@ -54,7 +34,6 @@ export default function () {
     // Delete all data from the database
     afterEach(async () => {
         const cleanupService = await BaseDbService.create();
-        resources.push(cleanupService);
 
         // Delete all collections
         await Promise.all([
@@ -65,15 +44,15 @@ export default function () {
             cleanupService.eventsAttendedColl.deleteMany({}),
         ]);
 
-        await Promise.all(resources.map(r => r.close()));
+        await cleanDbConnections();
     });
 
     // Stop the server
     afterAll(async () => {
-        await mongod.stop();
+        await stopDb();
     });
 
-    return { addResource, dbSetup };
+    return { dbSetup };
 };
 
 /**

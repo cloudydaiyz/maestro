@@ -6,7 +6,7 @@ import { EventDataMap, AttendeeDataMap } from "../../types/service-types";
 import { objectMap, objectToArray, verifyMemberPropertyType } from "../../util/helper";
 import { GoogleSheetsEventDataService } from "../../services/events/gsheets-event";
 
-const { addResource, dbSetup } = init();
+const { dbSetup } = init();
 
 describe("google sheets event service", () => {
     it("should get event data from non-initialized event & no preexisting members", async () => {

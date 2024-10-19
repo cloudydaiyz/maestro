@@ -40,6 +40,9 @@ namespace Colors {
 export class GoogleSheetsLogService extends TroupeLogService {
     constructor() { super() }
 
+    /** Uris of all the logs created by this troupe log service */
+    static logsCreated: string[] = [];
+
     protected headerBuilder(data: string[], color: sheets_v4.Schema$Color, subheader?: boolean, event?: true): sheets_v4.Schema$CellData[] {
         return data.map((value, i) => {
             const userEnteredValue: sheets_v4.Schema$ExtendedValue = { stringValue: value };
@@ -126,6 +129,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             }
         });
         assert(createSheet.data.spreadsheetId && createSheet.data.spreadsheetUrl, "Failed to create log sheet");
+        GoogleSheetsLogService.logsCreated.push(createSheet.data.spreadsheetUrl);
 
         const postCreationOps: Promise<any>[] = [];
         

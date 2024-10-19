@@ -7,23 +7,7 @@ import { DB_NAME, SHEETS_REGEX } from "../util/constants";
 import { EventDataMap, AttendeeDataMap } from "../types/service-types";
 import { ClientError } from "../util/error";
 import assert from "assert";
-
-let client: MongoClient;
-
-/** 
- * Retrieves the MongoClient, and initializes one if not already set.
- * This is so the same client can be reused for multiple service objects.
- */
-function getMongoClient(): MongoClient {
-    if(!client) {
-        // MongoDB URI could be changed from testing -- use the environment variable instead of MONGODB_URI const
-        client = new MongoClient(process.env.MONGODB_URI!, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
-        client.on("connecting", () => console.log("Connecting to MongoDB..."));
-        client.on("connected", () => console.log("Connected to MongoDB"));
-        client.on("error", (err) => console.error("Connection error:", err));
-    }
-    return client;
-}
+import { newDbConnection, removeDbConnection } from "../util/resources";
 
 /** Base service for all services that interact with the database */
 export class BaseDbService {
@@ -40,7 +24,9 @@ export class BaseDbService {
     eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
     
     constructor() {
-        this.client = getMongoClient();
+        // MongoDB URI could be changed from testing -- use the environment variable instead of MONGODB_URI const
+        this.client = newDbConnection();
+
         this.troupeColl = this.client.db(DB_NAME).collection("troupes");
         this.dashboardColl = this.client.db(DB_NAME).collection("dashboards");
         this.audienceColl = this.client.db(DB_NAME).collection("audience");
@@ -81,7 +67,7 @@ export class BaseDbService {
         return member;
     }
 
-    async close() { return this.client.close() }
+    async close() { return removeDbConnection(this.client) }
 }
 
 /** Handles event/member data retrieval and synchronization from a data source */

@@ -11,7 +11,7 @@ import { TroupeApiService } from "../../services/api";
 import { PublicEvent, UpdateEventRequest } from "../../types/api-types";
 import { TroupeCoreService } from "../../services/core";
 
-const { addResource, dbSetup } = init();
+const { dbSetup } = init();
 
 describe("troupe sync service", () => {
     const logService = new GoogleSheetsLogService();
@@ -29,8 +29,8 @@ describe("troupe sync service", () => {
         const troupeId = config.troupes!["A"].id!;
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
 
-        const syncService = addResource(await TroupeSyncService.create());
-        const apiService = addResource(await TroupeApiService.create());
+        const syncService = await TroupeSyncService.create();
+        const apiService = await TroupeApiService.create();
 
         // Sync the troupe and ensure no errors are thrown
         await expect(syncService.sync(troupeId, true)).resolves.not.toThrow();
@@ -104,9 +104,9 @@ describe("troupe sync service", () => {
         const troupeId = config.troupes!["A"].id!;
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
 
-        const syncService = addResource(await TroupeSyncService.create());
-        const apiService = addResource(await TroupeApiService.create());
-        const coreService = addResource(await TroupeCoreService.create());
+        const syncService = await TroupeSyncService.create();
+        const apiService = await TroupeApiService.create();
+        const coreService = await TroupeCoreService.create();
 
         // Create a new log for the updated troupe
         currentLog = await coreService.newTroupeLog(troupeId);

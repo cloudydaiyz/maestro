@@ -4,12 +4,12 @@ import { TroupeApiService } from "../services/api";
 import { TroupeCoreService } from "../services/core";
 import { test, describe } from "@jest/globals";
 
-const { addResource, dbSetup } = init();
+const { dbSetup } = init();
 
 describe("basic core operations", () => {
     test("create and delete troupe", async () => {
-        const core = addResource(await TroupeCoreService.create());
-        const api = addResource(await TroupeApiService.create());
+        const core = await TroupeCoreService.create();
+        const api = await TroupeApiService.create();
 
         const troupeId = await core.createTroupe({ name: "test" });
 
