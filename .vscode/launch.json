@@ -27,6 +27,15 @@
             ],
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen"
+        },
+        {
+            "name": "*.ts | emaestro-core",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}/packages/emaestro-core",
+            "preLaunchTask": "tsc: build - packages/emaestro-core/tsconfig.json",
+            "program": "${file}",
+            "outFiles": ["${workspaceFolder}/packages/emaestro-core/dist/**/*.js"]
         }
     ]
 }

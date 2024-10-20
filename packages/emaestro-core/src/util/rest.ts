@@ -1,4 +1,4 @@
-// HTTP information for API
+// REST API controller and resource generation
 
 import { Path } from "path-parser";
 import { ZodError, z } from "zod";
@@ -58,7 +58,7 @@ export function newController(handler: ApiController): ApiController {
 
 export function newUtilController<T extends Object>(handler: (body: Object) => Promise<T | void>): ApiController {
     return newController(async (path, method, headers, body) => {
-        if(path) assert(path == "POST", new ClientError("Invalid method"));
+        if(method) assert(method == "POST", new ClientError("Invalid method"));
         const resBody = await handler(body);
         console.log(resBody);
 
@@ -66,7 +66,7 @@ export function newUtilController<T extends Object>(handler: (body: Object) => P
     });
 }
 
-/** path-parser Path with the path params in T */
+/** path-parser Path with `T` as the union of the given path params */
 type ParamPath<T extends string> = Path<{[key in T]: string}>;
 
 /** All available paths for the API */
@@ -112,9 +112,7 @@ export namespace BodySchema {
         override: z.boolean(),
     }));
 
-
-    // ====================
-    // == API CONTROLLER ==
+    // ========== API CONTROLLER ========== //
 
     export const CreateTroupeRequest: z.ZodType<CreateTroupeRequest> = z.object({
         name: z.string(),
@@ -181,9 +179,7 @@ export namespace BodySchema {
         removeProperties: z.string().array().optional(),
     });
 
-
-    // ========================
-    // == SERVICE CONTROLLER ==
+    // ========== SERVICE CONTROLLER ========== //
 
     export const SyncRequest: z.ZodType<{troupeId: string}> = z.object({
         troupeId: z.string(),

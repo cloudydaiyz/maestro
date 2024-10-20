@@ -1,63 +1,56 @@
-// Local express server
+// Local express server to simulate production environment
+
+import "dotenv/config";
+
 import express from "express";
-import { apiController } from "./controller";
-import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { DEV_MODE } from "./util/env";
-import { cleanDbConnections, cleanLogs, closeServers, startDb, stopDb } from "./util/resources";
-import { Server } from "http";
+import { cleanDbConnections, cleanLogs, closeServers, registerServer, startDb, stopDb } from "./util/resources";
+import { Methods } from "./util/rest";
+import { syncController, syncServer } from "./controller";
 
-let mongod: MongoMemoryReplSet;
-
-
-async function start() {
+/** Prepare for server initialization, start up MongoDB database */
+async function init() {
     if(DEV_MODE) {
         await startDb();
     }
 }
 
-async function end() {
+/** Clean up resources and exit this app */
+async function exit() {
     await closeServers();
     await cleanDbConnections();
-    await stopDb();
     await cleanLogs();
+
+    // Exiting the process will shut down the MongoDB memory server as well
+    process.exit(0);
 }
 
-start().then(() => {
+// Start the server
+init().then(async () => {
+    const { apiController } = await import("./controller");
+
+    // Set up the API as an express app
     const apiApp = express();
     apiApp.use(express.json());
     apiApp.all("*", (req, res) => {
-        // console.log(req.path);
-        // console.log(req.headers);
-        // console.log(req.body);
-        // console.log(req.method);
-        // res.send("Hello World from " + req.path);
-        // return;
-
-        apiController(req.path, req.method as any, req.headers, req.body).then((response) => {
+        apiController(req.path, req.method as keyof typeof Methods, req.headers, req.body).then((response) => {
             res.status(response.status).header(response.headers);
             if(response.body) res.json(response.body);
             res.end();
         });
     });
-
-    const apiServer = apiApp.listen(3000, () => {
+    apiApp.listen(3000, () => {
         console.log("API Server running on port 3000");
     });
 
-    // Handle server close event
-    apiServer.on('close', () => {
-        console.log('Server closing...');
-
-        // Perform cleanup tasks here, like closing database connections
-    });
-
-    // Graceful shutdown on SIGINT (Ctrl+C)
-    process.on('SIGINT', () => {
-        console.log('SIGINT signal received.');
-
-        apiServer.close(() => {
-            console.log('API server closed.');
-            process.exit(0);
+    // Set up the sync server to listen to events
+    if(DEV_MODE) {
+        syncServer.on("sync", async (arg): Promise<void> => {
+            await syncController("", "POST", {}, arg);
         });
-    });
+    }
+
+    // Graceful shutdown on SIGINT (Ctrl+C) and SIGTERM
+    process.on('SIGINT', async () => { console.log('SIGINT signal received.'); await exit() });
+    process.on('SIGTERM', async () => { console.log('SIGTERM signal received.'); await exit() });
 });

@@ -147,3 +147,55 @@ export function encrypt<T>(data: T, key: string, iv: Buffer): string {
     encrypted += cipher.final("hex");
     return encrypted;
 };
+
+/** Queue data structure implemented as an array */
+export class Queue<T> {
+    private queue: (T | undefined)[];
+    private startIndex: number;
+    private endIndex: number;
+    private length: number;
+
+    constructor(size?: number) {
+        this.queue = new Array(size || 16);
+        this.startIndex = 0;
+        this.endIndex = 0;
+        this.length = 0;
+    }
+
+    /** Adds an element to the end of the queue */
+    push(element: T): void {
+        if(this.length == this.queue.length) this.resize();
+        this.queue[this.endIndex] = element;
+        this.endIndex = (this.endIndex + 1) % this.queue.length;
+        this.length++;
+    }
+
+    /** Removes and returns the first element in the queue */
+    pop(): T | undefined {
+        const ele = this.queue[this.startIndex];
+        this.queue[this.startIndex] = undefined;
+        this.startIndex = (this.startIndex + 1) % this.queue.length;
+        this.length--;
+        return ele;
+    }
+
+    /** Returns the first element in the queue */
+    peek(): T | undefined {
+        return this.queue[this.startIndex];
+    }
+
+    /** Returns the number of elements in the queue */
+    size(): number {
+        return this.length;
+    }
+
+    private resize(): void {
+        const newQueue = new Array(this.queue.length * 2);
+        for(let i = 0; i < this.length; i++) {
+            newQueue[i] = this.queue[(this.startIndex + i) % this.queue.length];
+        }
+        this.queue = newQueue;
+        this.startIndex = 0;
+        this.endIndex = this.length;
+    }
+}

@@ -4,7 +4,7 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MONGODB_PASS, MONGODB_USER } from "./env";
 import { MongoClient } from "mongodb";
 import { Server } from "http";
-
+import { Express } from "express";
 
 let mongod: MongoMemoryReplSet | null = null;
 const dbConn: MongoClient[] = [];
@@ -14,7 +14,7 @@ export async function startDb(): Promise<void> {
     await stopDb();
     mongod = await MongoMemoryReplSet.create({ replSet: { auth: { enable: true, customRootName: MONGODB_USER, customRootPwd: MONGODB_PASS } } });
     const uri = mongod.getUri();
-
+    
     // Connect to and ping the server to ensure everything is setup
     const client = new MongoClient(uri, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
     client.on("connecting", () => console.log("Connecting to MongoDB..."));
@@ -29,7 +29,7 @@ export async function startDb(): Promise<void> {
 }
 
 export async function stopDb(): Promise<void> {
-    if(mongod) {
+    if(mongod && mongod.state == "running") {
         await cleanDbConnections().then(() => mongod!.stop());
     }
     mongod = null;
@@ -63,7 +63,7 @@ export async function cleanDbConnections() {
 export async function cleanLogs() {
     const { GoogleSheetsLogService } = await import("../services/logs/gsheets-log");
     const gsheets = new GoogleSheetsLogService();
-    for(let i = GoogleSheetsLogService.length - 1; i >= 0; i--) {
+    for(let i = GoogleSheetsLogService.logsCreated.length - 1; i >= 0; i--) {
         const log = GoogleSheetsLogService.logsCreated[i];
         console.log("Deleting log sheet at: " + log);
         await gsheets.deleteLog(log);
@@ -73,6 +73,12 @@ export async function cleanLogs() {
 
 export function registerServer(server: Server) {
     servers.push(server);
+    server.on("request", () => {});
+    return server;
+}
+
+export function registerExpressServer(app: Express) {
+    
 }
 
 export function closeServers() {
@@ -83,6 +89,7 @@ export function closeServers() {
             s.close(() => {
                 toClose--;
                 if(toClose == 0) {
+                    console.log('All servers closed.');
                     servers.splice(0, servers.length);
                     resolve();
                 }

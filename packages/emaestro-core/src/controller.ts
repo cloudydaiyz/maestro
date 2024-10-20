@@ -1,9 +1,11 @@
-import assert from "assert";
+import EventEmitter from "events";
 import { TroupeApiService } from "./services/api";
 import { TroupeCoreService } from "./services/core";
 import { TroupeSyncService } from "./services/sync";
 import { ClientError } from "./util/error";
-import { BodySchema, ApiController, Methods, Paths, newController, newUtilController } from "./util/http";
+import { BodySchema, Paths, newController, newUtilController } from "./util/rest";
+import { z } from "zod";
+import { DEV_MODE } from "./util/env";
 
 const initApiService = TroupeApiService.create();
 const initCoreService = TroupeCoreService.create();
@@ -167,6 +169,24 @@ export const apiController = newController(async (path, method, headers, body) =
         }
         throw new ClientError("Invalid method for path");
     }
+
+    const syncPath = Paths.Sync.test(path);
+    if(syncPath) {
+        if(method == "POST") {
+            if(DEV_MODE) {
+                syncServer.emit("sync", BodySchema.SyncRequest.parse(body));
+            } else {
+                // Send a request to the actual sync service
+            }
+
+            return {
+                status: 204,
+                headers: {},
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
     throw new ClientError("Invalid path");
 });
 
@@ -179,3 +199,9 @@ export const scheduleController = newController(async (path, headers, body) => {
     // do something
     return { status: 200, headers: {}, body: {} };
 });
+
+/** 
+ * Use an event emitter to act as a separate service that responds to sync requests.
+ * The emitter won't respond to events unless a server is set up (see `server.ts`).
+ */
+export const syncServer = new EventEmitter<{sync: [z.infer<typeof BodySchema.SyncRequest>]}>();
