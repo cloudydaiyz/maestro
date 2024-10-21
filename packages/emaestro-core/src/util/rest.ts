@@ -3,10 +3,10 @@
 import { Path } from "path-parser";
 import { ZodError, z } from "zod";
 
-import { MemberPropertyType, VariableMemberProperties } from "../types/core-types";
-import { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest } from "../types/api-types";
+import { MemberPropertyType, MemberPropertyValue, VariableMemberProperties } from "../types/core-types";
+import { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest, ApiType } from "../types/api-types";
 import { ClientError } from "./error";
-import { CreateTroupeRequest } from "../types/service-types";
+import { CreateTroupeRequest, SyncRequest, ScheduledTaskRequest } from "../types/service-types";
 import assert from "assert";
 
 /** Controller function to handle routing */
@@ -56,14 +56,29 @@ export function newController(handler: ApiController): ApiController {
     }
 }
 
-export function newUtilController<T extends Object>(handler: (body: Object) => Promise<T | void>): ApiController {
-    return newController(async (path, method, headers, body) => {
-        if(method) assert(method == "POST", new ClientError("Invalid method"));
-        const resBody = await handler(body);
-        console.log(resBody);
+export type UtilController = (body: Object) => Promise<ApiResponse>;
 
-        return resBody ? { status: 200, headers: {}, body: resBody } : { status: 204, headers: {} };
-    });
+export function newUtilController<T extends Object>(handler: (body: Object) => Promise<T | void>): UtilController {
+    return async (body: Object) => {
+        try {
+            // if(method) assert(method == "POST", new ClientError("Invalid method"));
+            const resBody = await handler(body);
+            // console.log(resBody ? "Response: " + resBody.toString() : "No response body");
+    
+            return resBody ? { status: 200, headers: {}, body: resBody } : { status: 204, headers: {} };
+        } catch(e) {
+            const err = e as Error;
+            console.error(err);
+
+            return {
+                status: 500,
+                headers: {},
+                body: {
+                    error: "Internal server error",
+                },
+            }
+        }
+    };
 }
 
 /** path-parser Path with `T` as the union of the given path params */
@@ -107,45 +122,45 @@ export namespace BodySchema {
         z.literal("date!"),
     ]);
 
-    const VariableMemberProperties: z.ZodType<VariableMemberProperties> = z.record(z.string(), z.object({
-        value: z.union([z.string(), z.boolean(), z.number(), z.date()]),
-        override: z.boolean(),
-    }));
+    // const VariableMemberProperties: z.ZodType<VariableMemberProperties> = z.record(z.string(), z.object({
+    //     value: z.union([z.string(), z.boolean(), z.number()]),
+    //     override: z.boolean(),
+    // }));
 
-    // ========== API CONTROLLER ========== //
+    // ========== API CONTROLLERS ========== //
 
     export const CreateTroupeRequest: z.ZodType<CreateTroupeRequest> = z.object({
         name: z.string(),
     });
 
     export const UpdateTroupeRequest: z.ZodType<UpdateTroupeRequest> = z.object({
-        name: z.string().optional(),
-        originEventId: z.string().optional(),
-        removeMemberProperties: z.string().array().optional(),
-        updateMemberProperties: z.record(z.string(), MemberPropertyType).optional(),
+        name: z.string().nullable().optional(),
+        originEventId: z.string().nullable().optional(),
+        removeMemberProperties: z.string().array().nullable().optional(),
+        updateMemberProperties: z.record(z.string(), MemberPropertyType).nullable().optional(),
         updatePointTypes: z.record(z.string(), z.object({
             startDate: z.string(),
             endDate: z.string(),
-        })),
-        removePointTypes: z.string().array().optional(),
+        })).nullable().optional(),
+        removePointTypes: z.string().array().nullable().optional(),
     });
 
     export const CreateEventRequest: z.ZodType<CreateEventRequest> = z.object({
         title: z.string(),
         startDate: z.string(),
         sourceUri: z.string(),
-        eventTypeId: z.string().optional(),
-        value: z.number().optional(),
+        eventTypeId: z.string().nullable().optional(),
+        value: z.number().nullable().optional(),
     });
 
     export const UpdateEventRequest: z.ZodType<UpdateEventRequest> = z.object({
-        title: z.string().optional(),
-        startDate: z.string().optional(),
-        sourceUri: z.string().optional(),
-        eventTypeId: z.string().optional(),
-        value: z.number().optional(),
-        updateProperties: z.record(z.string(), z.string()).optional(),
-        removeProperties: z.string().array().optional(),
+        title: z.string().nullable().optional(),
+        startDate: z.string().nullable().optional(),
+        sourceUri: z.string().nullable().optional(),
+        eventTypeId: z.string().nullable().optional(),
+        value: z.number().nullable().optional(),
+        updateProperties: z.record(z.string(), z.string()).nullable().optional(),
+        removeProperties: z.string().array().nullable().optional(),
     });
 
     export const CreateEventTypeRequest: z.ZodType<CreateEventTypeRequest> = z.object({
@@ -155,33 +170,37 @@ export namespace BodySchema {
     });
 
     export const UpdateEventTypeRequest: z.ZodType<UpdateEventTypeRequest> = z.object({
-        title: z.string().optional(),
-        value: z.number().optional(),
-        addSourceFolderUris: z.string().array().optional(),
-        removeSourceFolderUris: z.string().array().optional(),
+        title: z.string().nullable().optional(),
+        value: z.number().nullable().optional(),
+        addSourceFolderUris: z.string().array().nullable().optional(),
+        removeSourceFolderUris: z.string().array().nullable().optional(),
     });
-
+    
     export const CreateMemberRequest: z.ZodType<CreateMemberRequest> = z.object({
         properties: z.object({
-            ["Member ID"]: z.object({ value: z.string(), override: z.boolean() }),
-            ["First Name"]: z.object({ value: z.string(), override: z.boolean() }),
-            ["Last Name"]: z.object({ value: z.string(), override: z.boolean() }),
-            ["Email"]: z.object({ value: z.string(), override: z.boolean() }),
-            ["Birthday"]: z.object({ value: z.string(), override: z.boolean() }),
-        }).catchall(VariableMemberProperties),
+            ["Member ID"]: z.string(),
+            ["First Name"]: z.string(),
+            ["Last Name"]: z.string(),
+            ["Email"]: z.string(),
+            ["Birthday"]: z.string().nullable(),
+        }).catchall(z.union([z.string(), z.boolean(), z.number(), z.null()])),
     });
 
     export const UpdateMemberRequest: z.ZodType<UpdateMemberRequest> = z.object({
         updateProperties: z.record(z.string(), z.object({
-            value: z.union([z.string(), z.boolean(), z.number()]).optional(),
-            override: z.boolean().optional(),
-        })).optional(),
-        removeProperties: z.string().array().optional(),
+            value: z.union([z.string(), z.boolean(), z.number()]).nullable().optional(),
+            override: z.boolean().nullable().optional(),
+        })).nullable().optional(),
+        removeProperties: z.string().array().nullable().optional(),
     });
 
-    // ========== SERVICE CONTROLLER ========== //
+    // ========== SERVICE CONTROLLERS ========== //
 
-    export const SyncRequest: z.ZodType<{troupeId: string}> = z.object({
+    export const SyncRequest: z.ZodType<SyncRequest> = z.object({
         troupeId: z.string(),
+    });
+
+    export const ScheduledTaskRequest: z.ZodType<ScheduledTaskRequest> = z.object({
+        taskType: z.literal("sync"),
     });
 }

@@ -4,7 +4,6 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MONGODB_PASS, MONGODB_USER } from "./env";
 import { MongoClient } from "mongodb";
 import { Server } from "http";
-import { Express } from "express";
 
 let mongod: MongoMemoryReplSet | null = null;
 const dbConn: MongoClient[] = [];
@@ -29,7 +28,7 @@ export async function startDb(): Promise<void> {
 }
 
 export async function stopDb(): Promise<void> {
-    if(mongod && mongod.state == "running") {
+    if(mongod) {
         await cleanDbConnections().then(() => mongod!.stop());
     }
     mongod = null;
@@ -63,37 +62,13 @@ export async function cleanDbConnections() {
 export async function cleanLogs() {
     const { GoogleSheetsLogService } = await import("../services/logs/gsheets-log");
     const gsheets = new GoogleSheetsLogService();
+
+    const deletes: Promise<any>[] = [];
     for(let i = GoogleSheetsLogService.logsCreated.length - 1; i >= 0; i--) {
         const log = GoogleSheetsLogService.logsCreated[i];
         console.log("Deleting log sheet at: " + log);
-        await gsheets.deleteLog(log);
+        deletes.push(gsheets.deleteLog(log));
         GoogleSheetsLogService.logsCreated.pop();
     }
-}
-
-export function registerServer(server: Server) {
-    servers.push(server);
-    server.on("request", () => {});
-    return server;
-}
-
-export function registerExpressServer(app: Express) {
-    
-}
-
-export function closeServers() {
-    return new Promise<void>((resolve, reject) => {
-        let toClose = servers.length;
-
-        servers.forEach(s => {
-            s.close(() => {
-                toClose--;
-                if(toClose == 0) {
-                    console.log('All servers closed.');
-                    servers.splice(0, servers.length);
-                    resolve();
-                }
-            }).on("error", reject);
-        });
-    });
+    await Promise.all(deletes);
 }

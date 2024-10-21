@@ -195,12 +195,12 @@ export class TroupeApiService extends BaseDbService {
             sourceUri: request.sourceUri,
             synchronizedSourceUri: "",
             startDate,
-            eventTypeId: request.eventTypeId,
             eventTypeTitle: eventType?.title,
             value: request.value || eventType?.value as number,
             fieldToPropertyMap: {},
             synchronizedFieldToPropertyMap: {}
         }
+        if(request.eventTypeId) event.eventTypeId = request.eventTypeId;
         const insertedEvent = await this.eventColl.insertOne(event);
         assert(insertedEvent.acknowledged, "Insert failed for event");
 
@@ -497,6 +497,7 @@ export class TroupeApiService extends BaseDbService {
             $set: {} as UpdateOperator<EventSchema, "$set">,
         };
         let updateEvents = false;
+        let typeIdentifierUsed = false;
 
         eventTypeUpdate.$set.lastUpdated = new Date();
 
@@ -504,6 +505,7 @@ export class TroupeApiService extends BaseDbService {
             eventTypeUpdate.$set["eventTypes.$[type].title"] = request.title;
             eventUpdate.$set.eventTypeTitle = request.title;
             updateEvents = true;
+            typeIdentifierUsed = true;
         }
 
         if(request.value) {
@@ -562,8 +564,10 @@ export class TroupeApiService extends BaseDbService {
             });
 
             // Perform database update
-            const eventsAttendedUpdate = await this.eventsAttendedColl.bulkWrite(bulkEventsAttendedUpdate);
-            assert(eventsAttendedUpdate.isOk(), "Failed to update events attended");
+            if(bulkEventsAttendedUpdate.length > 0) {
+                const eventsAttendedUpdate = await this.eventsAttendedColl.bulkWrite(bulkEventsAttendedUpdate);
+                assert(eventsAttendedUpdate.isOk(), "Failed to update events attended");
+            }
 
             const bulkAudienceUpdate = members.map(member => ({
                 updateOne: {
@@ -571,11 +575,15 @@ export class TroupeApiService extends BaseDbService {
                     update: { $set: member },
                 }
             } as AnyBulkWriteOperation<MemberSchema>));
-            const audienceUpdate = await this.audienceColl.bulkWrite(bulkAudienceUpdate);
-            assert(audienceUpdate.isOk(), "Failed to update member points");
+
+            if(bulkAudienceUpdate.length > 0) {
+                const audienceUpdate = await this.audienceColl.bulkWrite(bulkAudienceUpdate);
+                assert(audienceUpdate.isOk(), "Failed to update member points");
+            }
 
             eventUpdate.$set.value = request.value;
             updateEvents = true;
+            typeIdentifierUsed = true;
         }
 
         // Update source uris, ignoring duplicates, existing source folder URIs, and URIs to be removed
@@ -586,23 +594,23 @@ export class TroupeApiService extends BaseDbService {
         );
 
         newUris && newUris.length > 0 
-            ? eventTypeUpdate.$push["eventTypes.$[type].sourceFolderUris"] = { 
+            ? (eventTypeUpdate.$push["eventTypes.$[type].sourceFolderUris"] = { 
                 $each: newUris 
-            }  
+            }) && (typeIdentifierUsed = true)
             : null;
         
         // Remove source uris
         request.removeSourceFolderUris 
-            ? eventTypeUpdate.$pull["eventTypes.$[type].sourceFolderUris"] = { 
+            ? (eventTypeUpdate.$pull["eventTypes.$[type].sourceFolderUris"] = { 
                 $in: request.removeSourceFolderUris 
-            } 
+            }) && (typeIdentifierUsed = true)
             : null;
 
         // Perform database update
         const newEventType = await this.troupeColl.findOneAndUpdate(
             { _id: new ObjectId(troupeId) },
             eventTypeUpdate,
-            { arrayFilters: [{ "type._id": new ObjectId(eventTypeId) }]}
+            typeIdentifierUsed ? { arrayFilters: [{ "type._id": new ObjectId(eventTypeId) }]} : {}
         ).then(troupe => troupe?.eventTypes.find((et) => et._id.toHexString() == eventTypeId));
         assert(newEventType, "Failed to update event type");
 
@@ -641,8 +649,10 @@ export class TroupeApiService extends BaseDbService {
             });
         });
 
-        const updateEventsUpdate = await this.eventsAttendedColl.bulkWrite(bulkEventsAttendedUpdate);
-        assert(updateEventsUpdate.isOk(), "Failed to remove event type from events attended");
+        if(bulkEventsAttendedUpdate.length > 0) {
+            const updateEventsUpdate = await this.eventsAttendedColl.bulkWrite(bulkEventsAttendedUpdate);
+            assert(updateEventsUpdate.isOk(), "Failed to remove event type from events attended");
+        }
 
         // Remove the event type from the troupe
         const deleteEventTypeResult = await this.troupeColl.updateOne(
@@ -662,9 +672,10 @@ export class TroupeApiService extends BaseDbService {
 
         for(const prop in troupe.memberPropertyTypes) {
             assert(prop in request.properties, new ClientError("Missing required member property"));
-            assert(verifyApiMemberPropertyType(request.properties[prop].value, troupe.memberPropertyTypes[prop]), 
+            assert(verifyApiMemberPropertyType(request.properties[prop], troupe.memberPropertyTypes[prop]), 
                 new ClientError("Invalid member property type"));
-            properties[prop] = { value: request.properties[prop].value, override: true };
+
+            properties[prop] = { value: request.properties[prop], override: true };
         }
 
         const points: VariableMemberPoints = {};

@@ -2,22 +2,37 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "server | emaestro-core",
+            "type": "node",
+            "request": "launch",
+            "preLaunchTask": "tsc: build - packages/emaestro-core/tsconfig.json",
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run-script", "start"],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
+        },
+        {
             "name": "quick-test | emaestro-core",
             "type": "node",
             "request": "launch",
-            "cwd": "${workspaceFolder}/packages/emaestro-core",
             "preLaunchTask": "tsc: build - packages/emaestro-core/tsconfig.json",
-            "program": "${workspaceFolder}/packages/emaestro-core/src/quick-test.ts",
-            "outFiles": ["${workspaceFolder}/packages/emaestro-core/dist/**/*.js"]
+            "runtimeExecutable": "npm",
+            "runtimeArgs": ["run-script", "quick"],
+            "console": "integratedTerminal",
+            "internalConsoleOptions": "neverOpen",
         },
         {
-            "name": "*.spec.ts | emaestro-core",
+            "name": "*.spec.ts (tests) | emaestro-core",
             "type": "node",
             "request": "launch",
-            "cwd": "${workspaceFolder}/packages/emaestro-core",
+            "cwd": "${workspaceFolder}",
             "preLaunchTask": "tsc: build - packages/emaestro-core/tsconfig.json",
-            "runtimeExecutable": "${workspaceRoot}/packages/emaestro-core/node_modules/.bin/jest",
+            "runtimeExecutable": "npm",
             "runtimeArgs": [
+                "run-script",
+                "test",
+                "--",
+                "--",
                 "${fileBasenameNoExtension}",
                 "--inspect-brk",
                 "--watch",
@@ -28,14 +43,5 @@
             "console": "integratedTerminal",
             "internalConsoleOptions": "neverOpen"
         },
-        {
-            "name": "*.ts | emaestro-core",
-            "type": "node",
-            "request": "launch",
-            "cwd": "${workspaceFolder}/packages/emaestro-core",
-            "preLaunchTask": "tsc: build - packages/emaestro-core/tsconfig.json",
-            "program": "${file}",
-            "outFiles": ["${workspaceFolder}/packages/emaestro-core/dist/**/*.js"]
-        }
     ]
 }

@@ -6,6 +6,7 @@ import { ClientError } from "./util/error";
 import { BodySchema, Paths, newController, newUtilController } from "./util/rest";
 import { z } from "zod";
 import { DEV_MODE } from "./util/env";
+import { BaseDbService } from "./services/base";
 
 const initApiService = TroupeApiService.create();
 const initCoreService = TroupeCoreService.create();
@@ -20,7 +21,7 @@ export const apiController = newController(async (path, method, headers, body) =
             return {
                 status: 200,
                 headers: {},
-                body: await coreService.createTroupe(BodySchema.CreateTroupeRequest.parse(body), true),
+                body: { troupeId: await coreService.createTroupe(BodySchema.CreateTroupeRequest.parse(body), true), },
             }
         }
         throw new ClientError("Invalid method for path");
@@ -174,7 +175,8 @@ export const apiController = newController(async (path, method, headers, body) =
     if(syncPath) {
         if(method == "POST") {
             if(DEV_MODE) {
-                syncServer.emit("sync", BodySchema.SyncRequest.parse(body));
+                console.log("Sending sync event for troupe " + syncPath.troupeId);
+                syncServer.emit("sync", { troupeId: syncPath.troupeId });
             } else {
                 // Send a request to the actual sync service
             }
@@ -191,17 +193,43 @@ export const apiController = newController(async (path, method, headers, body) =
 });
 
 export const syncController = newUtilController(async (body) => {
+    const parsedBody = BodySchema.SyncRequest.parse(body);
+
+    console.log(`Syncing troupe ${parsedBody.troupeId}...`);
     const syncService = await initSyncService;
-    await syncService.sync(BodySchema.SyncRequest.parse(body).troupeId);
+    await syncService.sync(parsedBody.troupeId);
 });
 
-export const scheduleController = newController(async (path, headers, body) => {
-    // do something
-    return { status: 200, headers: {}, body: {} };
+export const scheduleController = newUtilController(async (body) => {
+    const parsedBody = BodySchema.ScheduledTaskRequest.parse(body);
+
+    console.log(`Performing scheduled task (${parsedBody.taskType})...`);
+    if(parsedBody.taskType == "sync") {
+        const db = await BaseDbService.create();
+        const troupeIds = await db.troupeColl.find({}).toArray().then(troupes => troupes.map(t => t._id.toHexString()));
+
+        // Sync all the troupes currently in the collection
+        for(const troupeId of troupeIds) {
+            if(DEV_MODE) {
+                syncServer.emit("sync", { troupeId });
+            }
+        }
+    }
 });
 
 /** 
- * Use an event emitter to act as a separate service that responds to sync requests.
+ * // ========== EVENT EMITTERS ========== //
+ * 
+ * The event emitters acts as a separate service for responding to service requests.
+ * 
+ * This is to simulate the actual services that will be active in the system other than
+ * the API in a development environment.
+ * 
  * The emitter won't respond to events unless a server is set up (see `server.ts`).
  */
+
+/** An event emitter that acts as the sync service to respond to sync requests. */
 export const syncServer = new EventEmitter<{sync: [z.infer<typeof BodySchema.SyncRequest>]}>();
+
+/** An event emitter that acts as the scheduled task service to respond to scheduled tasks. */
+export const scheduleServer = new EventEmitter<{task: [z.infer<typeof BodySchema.ScheduledTaskRequest>]}>();

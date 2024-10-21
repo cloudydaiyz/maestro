@@ -9,7 +9,7 @@ import { getForms } from "../../cloud/gcp";
 import { GaxiosResponse } from "gaxios";
 import { EventDataService } from "../base";
 import assert from "assert";
-import { getDataSourceId } from "../../util/helper";
+import { DateParser, getDataSourceId } from "../../util/helper";
 
 export class GoogleFormsEventDataService extends EventDataService {
     forms!: forms_v1.Forms;
@@ -165,6 +165,8 @@ export class GoogleFormsEventDataService extends EventDataService {
 
                 if(propertyType == "string") {
                     questionToTypeMap[fieldId].string = true;
+                } else if(propertyType == "date") {
+                    questionToTypeMap[fieldId].date = true; 
                 } else {
                     property = null;
                 }
@@ -240,7 +242,9 @@ export class GoogleFormsEventDataService extends EventDataService {
                     } else if(type.boolean) {
                         value = answer.textAnswers.answers[0].value == type.boolean.true;
                     } else if(type.date) {
-                        value = new Date(answer.textAnswers.answers[0].value);
+                        const parsed = DateParser.parse(answer.textAnswers.answers[0].value);
+                        if(!parsed) continue;
+                        value = parsed.toDate();
                     } else if(type.number) {
                         value = Number(answer.textAnswers.answers[0].value);
                     } else {

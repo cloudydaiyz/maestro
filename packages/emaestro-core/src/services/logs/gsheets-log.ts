@@ -6,11 +6,11 @@ import { TroupeLogService } from "../base";
 import { sheets_v4 } from "googleapis";
 import { getDrive, getSheets } from "../../cloud/gcp";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, SHEETS_REGEX } from "../../util/constants";
-import { getDataSourceId } from "../../util/helper";
+import { DateParser, getDataSourceId } from "../../util/helper";
 import { A1Notation } from "@shogo82148/a1notation";
-import assert from "assert";
 import { LOG_SHEET_DRIVE_ID } from "../../util/env";
 import { GaxiosResponse } from "gaxios";
+import assert from "assert";
 
 namespace Colors {
     const error = 0.01;
@@ -119,7 +119,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             });
         }
 
-        // Create the spreadsheet
+        // Create the spreadsheet and add this uri to the list of logs created by this service
         const createSheet = await sheets.spreadsheets.create({
             requestBody: {
                 properties: {
@@ -329,7 +329,11 @@ export class GoogleSheetsLogService extends TroupeLogService {
             const memberProperties = memberInformationSection.map((prop, j) => {
                 const data = prop == "Member No." 
                     ? i.toString()
-                    : member.properties[prop].value?.toString() || "";
+                    : !member.properties[prop].value
+                    ? ""
+                    : member.properties[prop].value instanceof Date
+                    ? DateParser.toString(member.properties[prop].value as Date)
+                    : member.properties[prop].value!.toString();
                 if(data.length > audienceLogMaxCharacters[j]) audienceLogMaxCharacters[j] = data.length;
                 return data;
             });
@@ -343,7 +347,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
             });
 
             const eventsAttended = events 
-                ? events.map(event =>  member.eventsAttended[event._id.toHexString()] ? "X" : "")
+                ? events.map(event => member.eventsAttended[event._id.toHexString()] ? "X" : "")
                 : [""];
 
             return {
@@ -403,6 +407,10 @@ export class GoogleSheetsLogService extends TroupeLogService {
         const forDrive = getDrive();
         const fileId = getDataSourceId("Google Sheets", uri);
         if(fileId) await forDrive.then(drive => drive.files.delete({ fileId }));
+
+        // Delete the uri from the list of logs created by this service
+        const removeIndex = GoogleSheetsLogService.logsCreated.findIndex(u => getDataSourceId("Google Sheets", u) == fileId);
+        if(removeIndex > -1) GoogleSheetsLogService.logsCreated.splice(removeIndex, 1);
     }
 
     async updateLog(uri: string, troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void> {
@@ -813,9 +821,17 @@ export class GoogleSheetsLogService extends TroupeLogService {
         const audienceLogValues = audienceLog.slice(2);
         const audienceLogValuesValid = audienceLogValues.every((row, i) => 
             row[0] == i.toString()
-            && row.slice(1, memberInformationSection.length + 1).every((prop, j) => prop == (audience[i].properties[memberInformationSection[j + 1]]?.value?.toString() ?? ""))
-            && row.slice(memberInformationSection.length + 1, memberInformationSection.length + membershipPointsSection.length + 1).every((point, j) => point == audience[i].points[membershipPointsSection[j]]?.toString())
-            && row.slice(memberInformationSection.length + membershipPointsSection.length + 2).every((event, j) => event == (audience[i].eventsAttended[events[j]._id.toHexString()] ? "X" : ""))
+            && row.slice(1, memberInformationSection.length + 1).every((prop, j) => 
+                !audience[i].properties[memberInformationSection[j + 1]]?.value
+                ? prop == ""
+                : audience[i].properties[memberInformationSection[j + 1]]!.value! instanceof Date
+                ? prop == DateParser.toString(audience[i].properties[memberInformationSection[j + 1]]!.value! as Date)
+                : prop == audience[i].properties[memberInformationSection[j + 1]]!.value!.toString()
+            )
+            && row.slice(memberInformationSection.length + 1, memberInformationSection.length + membershipPointsSection.length + 1)
+                .every((point, j) => point == audience[i].points[membershipPointsSection[j]]?.toString())
+            && row.slice(memberInformationSection.length + membershipPointsSection.length + 2)
+                .every((event, j) => event == (audience[i].eventsAttended[events[j]._id.toHexString()] ? "X" : ""))
         ) 
         if(!audienceLogValuesValid) return false;
 

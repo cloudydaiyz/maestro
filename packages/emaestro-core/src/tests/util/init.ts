@@ -1,17 +1,12 @@
-import "dotenv/config";
-
-import { MongoMemoryReplSet } from 'mongodb-memory-server';
-import { MONGODB_PASS, MONGODB_USER } from '../../util/env';
-import { MongoClient, ObjectId, WithId } from 'mongodb';
+import { ObjectId, WithId } from 'mongodb';
 import { BaseDbService } from "../../services/base";
-import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
+import { EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../../types/core-types";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../../util/constants";
-import assert from "assert";
 import { getDefaultMemberPropertyValue, randomElement, verifyMemberPropertyType } from "../../util/helper";
-import { Id } from "../../types/util-types";
 import { TroupeApiService } from "../../services/api";
 import { DbSetupConfig, defaultConfig } from "./db-config";
 import { cleanDbConnections, startDb, stopDb } from "../../util/resources";
+import assert from "assert";
 
 export default function () {
 

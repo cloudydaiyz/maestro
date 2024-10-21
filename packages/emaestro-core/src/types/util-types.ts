@@ -7,7 +7,7 @@ import { EventSchema } from "./core-types";
  * 
  * Application: K field can be deleted so another field can be added in its place
  */
-export type WeakPartial<T, K extends keyof T> = Omit<T, K> & Partial<T>;
+export type WeakPartial<T extends Object, K extends keyof T> = Omit<T, K> & Partial<T>;
 
 /**
  * Replaces all keys in type T without a value type in A with a value type of B. Affects
@@ -23,7 +23,11 @@ export type Replace<T, A, B> = T extends A
 
 type t = null extends Object ? "a" : "b";
 
-export type Mutable<T> = { -readonly [P in keyof T]: T[P] }
+/** Replaces immutable properties in object with mutable properties */
+export type Mutable<T extends Object> = { -readonly [P in keyof T]: T[P] }
+
+/** Replaces optional parameters with null as well. This helps with API testing. */
+export type NullOptional<T> = { [K in keyof T]: undefined extends T[K] ? T[K] | null : T[K] };
 
 // == Troupe Types ==
 

@@ -1,11 +1,11 @@
 // Public facing types to use for API endpoints
 
 import { ObjectId, WithId } from "mongodb";
-import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, VariableMemberProperties } from "./core-types";
-import { Id, Replace, WeakPartial } from "./util-types";
+import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, VariableMemberProperties, BaseMemberPropertyTypes, MemberPropertyTypeToValue } from "./core-types";
+import { Id, NullOptional, Replace, WeakPartial } from "./util-types";
 
 /** Converts T to a JSON serializable format */
-export type ApiType<T> = Replace<T, string|boolean|number|null|undefined, string>;
+export type ApiType<T> = NullOptional<Replace<T, string|boolean|number|null|undefined, string>>;
 
 // == Public Types ==
 
@@ -91,18 +91,29 @@ export type UpdateEventTypeRequest = ApiType<{
 /**
  * Creates a new member. All required member properties defined by the troupe must be set.
  */
-export type CreateMemberRequest = ApiType<Pick<
-    Member,
-    "properties"
->>;
+export type CreateMemberRequest = ApiType<{
+    properties: {
+        [prop in keyof BaseMemberPropertyTypes]: MemberPropertyTypeToValue[BaseMemberPropertyTypes[prop]];
+    } & {
+        [prop: string]: MemberPropertyValue;
+    }
+}>;
+
+export type CMR = ApiType<{
+    properties: {
+        [prop in keyof BaseMemberPropertyTypes]: MemberPropertyTypeToValue[BaseMemberPropertyTypes[prop]];
+    } & {
+        [prop: string]: MemberPropertyValue;
+    }
+}>;
 
 /** Updates and/or removes member property values from member */
 export type UpdateMemberRequest = ApiType<{
     updateProperties?: {
-        [key: string]: {
+        [key: string]: NullOptional<{
             value?: MemberPropertyValue,
             override?: boolean,
-        }
+        }>
     },
     removeProperties?: string[],
 }>;

@@ -1,5 +1,6 @@
 // Helper functions
 
+import dayjs, { Dayjs } from "dayjs";
 import { ApiType } from "../types/api-types";
 import { EventDataSource, MemberPropertyType, MemberPropertyValue } from "../types/core-types";
 import { DRIVE_FOLDER_REGEX, FORMS_REGEX, FORMS_URL_TEMPL, SHEETS_REGEX, SHEETS_URL_TEMPL } from "./constants";
@@ -148,54 +149,49 @@ export function encrypt<T>(data: T, key: string, iv: Buffer): string {
     return encrypted;
 };
 
-/** Queue data structure implemented as an array */
-export class Queue<T> {
-    private queue: (T | undefined)[];
-    private startIndex: number;
-    private endIndex: number;
-    private length: number;
+/** Standardized date parsing */
+export class DateParser {
+    private date: Dayjs;
+    /** Supported date formats */
+    public static formats = [
+        "M/D/YYYY",
+        "M/D/YYYY H:mm:ss",
+        "MM-DD",
+        "YYYY-MM-DD",
+        "MM-DD HH:MM",
+        "YYYY-MM-DD HH:MM"
+    ] as const;
 
-    constructor(size?: number) {
-        this.queue = new Array(size || 16);
-        this.startIndex = 0;
-        this.endIndex = 0;
-        this.length = 0;
+    constructor(date: Date | Dayjs) {
+        this.date = dayjs(date);
     }
 
-    /** Adds an element to the end of the queue */
-    push(element: T): void {
-        if(this.length == this.queue.length) this.resize();
-        this.queue[this.endIndex] = element;
-        this.endIndex = (this.endIndex + 1) % this.queue.length;
-        this.length++;
-    }
-
-    /** Removes and returns the first element in the queue */
-    pop(): T | undefined {
-        const ele = this.queue[this.startIndex];
-        this.queue[this.startIndex] = undefined;
-        this.startIndex = (this.startIndex + 1) % this.queue.length;
-        this.length--;
-        return ele;
-    }
-
-    /** Returns the first element in the queue */
-    peek(): T | undefined {
-        return this.queue[this.startIndex];
-    }
-
-    /** Returns the number of elements in the queue */
-    size(): number {
-        return this.length;
-    }
-
-    private resize(): void {
-        const newQueue = new Array(this.queue.length * 2);
-        for(let i = 0; i < this.length; i++) {
-            newQueue[i] = this.queue[(this.startIndex + i) % this.queue.length];
+    /** 
+     * Parses the input string into a DateParser object using one of the supported formats (see {@link DateParser.formats}). 
+     * Returns null if the input doesn't match any of the formats.
+     */
+    static parse(input: string): DateParser | null {
+        for(const format of DateParser.formats) {
+            const d = dayjs(input, format, true);
+            if(d.isValid()) return new DateParser(d);
         }
-        this.queue = newQueue;
-        this.startIndex = 0;
-        this.endIndex = this.length;
+        return null;
+    }
+
+    /** Stringified date as `MM-DD-YYYY` format */
+    toString(): string {
+        return dayjs(this.date).format("MM-DD-YYYY");
+    }
+
+    static toString(date: Date | Dayjs): string {
+        return (new DateParser(date)).toString();
+    }
+
+    toDate(): Date {
+        return this.date.toDate();
+    }
+
+    toDayJs(): Dayjs {
+        return this.date;
     }
 }

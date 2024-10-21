@@ -71,8 +71,9 @@ export class TroupeCoreService extends BaseDbService {
     /** Deletes a troupe and its associated data (log, audience, events, dashboard) */
     async deleteTroupe(troupeId: string) {
         return this.client.startSession().withTransaction(async () => {
+            const troupe = await this.getTroupeSchema(troupeId, true);
             const logService: TroupeLogService = new GoogleSheetsLogService();
-            await logService.deleteLog(troupeId);
+            await logService.deleteLog(troupe.logSheetUri);
 
             return Promise.all([
                 this.troupeColl.deleteOne({ _id: new ObjectId(troupeId) }),

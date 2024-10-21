@@ -3,10 +3,25 @@ import { Troupe } from "./api-types";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema } from "./core-types";
 import { WeakPartial } from "./util-types";
 
+// Additional API request types
+
+/** Creates a new Troupe. All troupes start off the same and are initialized upon user creation. */
 export type CreateTroupeRequest = Pick<
     Troupe,
     "name"
 >;
+
+/** Used by the sync service to queue a troupe for sync */
+export type SyncRequest = {
+    troupeId: string
+};
+
+/** Used by the scheduled task service to perform a specific task on a regular interval */
+export type ScheduledTaskRequest = {
+    taskType: "sync"
+}
+
+// Other service types
 
 /** Event type with additional statistics for the event type to help with tie breaking */
 export type DiscoveryEventType = WithId<EventTypeSchema> & TieBreakerStatistics;

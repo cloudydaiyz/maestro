@@ -9,7 +9,7 @@ import { parse } from "csv-parse";
 import { Readable } from "stream";
 import assert from "assert";
 import { EventDataService } from "../base";
-import { getDataSourceId } from "../../util/helper";
+import { DateParser, getDataSourceId } from "../../util/helper";
 
 export class GoogleSheetsEventDataService extends EventDataService {
     results?: string[][];
@@ -83,7 +83,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
                     event.fieldToPropertyMap[i].property = null;
                 } else if(type.number && isNaN(Number(value))) {
                     event.fieldToPropertyMap[i].property = null;
-                } else if(type.date && isNaN(Date.parse(value))) {
+                } else if(type.date && !DateParser.parse(value)) {
                     event.fieldToPropertyMap[i].property = null;
                 } else {
                     // Valid property; return
@@ -148,7 +148,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 const propertyType = this.troupe.memberPropertyTypes[property].slice(0, -1);
                 let value = rawValue.trim() as MemberPropertyValue;
                 if(propertyType == "number") value = Number(rawValue);
-                else if(propertyType == "date") value = new Date(rawValue);
+                else if(propertyType == "date") value = DateParser.parse(rawValue)!.toDate();
 
                 if(property == "Member ID") {
                     const existingMember = this.attendeeMap[value as string];

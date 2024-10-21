@@ -1,19 +1,21 @@
 {
-  "name": "trouper-root",
+  "name": "emaestro-root",
   "version": "0.0.0",
-  "description": "Root package for the Trouper project",
+  "description": "Root package for the emaestro project",
   "author": "Kylan Duncan",
   "keywords": [
-    "trouper"
+    "emaestro"
   ],
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "start": "npm start --prefix=packages/emaestro-core",
-    "test-env": "dotenvx run -- sh -c 'echo $CRAZY'"
+    "start": "dotenvx run -- npm --prefix=packages/emaestro-core start",
+    "quick": "dotenvx run -- npm --prefix=packages/emaestro-core run quick",
+    "test": "dotenvx run -- npm --prefix=packages/emaestro-core run test",
+    "coverage": "dotenvx run -- npm --prefix=packages/emaestro-core run coverage"
   },
   "devDependencies": {
     "@dotenvx/dotenvx": "^1.20.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.6.3"
   }
 }
