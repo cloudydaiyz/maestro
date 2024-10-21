@@ -1,5 +1,5 @@
 {
-  "name": "emaestro-core",
+  "name": "@cloudydaiyz/emaestro-core",
   "description": "Main package for the emaestro project",
   "author": "Kylan Duncan",
   "license": "ISC",
@@ -7,11 +7,10 @@
     "emaestro"
   ],
   "version": "1.0.0",
-  "main": "dist/index.js",
   "exports": {
     ".": {
-      "types": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/controller.d.ts",
+      "default": "./dist/controller.js"
     },
     "./types": {
       "types": "./dist/types/core-types.d.ts"

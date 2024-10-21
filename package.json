@@ -12,7 +12,8 @@
     "start": "dotenvx run -- npm --prefix=packages/emaestro-core start",
     "quick": "dotenvx run -- npm --prefix=packages/emaestro-core run quick",
     "test": "dotenvx run -- npm --prefix=packages/emaestro-core run test",
-    "coverage": "dotenvx run -- npm --prefix=packages/emaestro-core run coverage"
+    "coverage": "dotenvx run -- npm --prefix=packages/emaestro-core run coverage",
+    "gcp": "dotenvx run -- npm --prefix=packages/emaestro-gcp start"
   },
   "devDependencies": {
     "@dotenvx/dotenvx": "^1.20.0",

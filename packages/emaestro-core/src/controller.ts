@@ -222,8 +222,8 @@ export const scheduleController = newUtilController(async (body) => {
  * 
  * The event emitters acts as a separate service for responding to service requests.
  * 
- * This is to simulate the actual services that will be active in the system other than
- * the API in a development environment.
+ * This is to simulate the actual services other than the API that will be active in 
+ * the system in production for the dev environment.
  * 
  * The emitter won't respond to events unless a server is set up (see `server.ts`).
  */

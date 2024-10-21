@@ -122,11 +122,6 @@ export namespace BodySchema {
         z.literal("date!"),
     ]);
 
-    // const VariableMemberProperties: z.ZodType<VariableMemberProperties> = z.record(z.string(), z.object({
-    //     value: z.union([z.string(), z.boolean(), z.number()]),
-    //     override: z.boolean(),
-    // }));
-
     // ========== API CONTROLLERS ========== //
 
     export const CreateTroupeRequest: z.ZodType<CreateTroupeRequest> = z.object({

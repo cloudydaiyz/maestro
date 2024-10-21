@@ -1,7 +1,6 @@
-import * as fs from "node:fs/promises";
 import { google, sheets_v4, forms_v1, drive_v3 } from "googleapis";
 import { GoogleAuth } from "google-auth-library";
-import { SERVICE_KEY_PATH, BASE_LOG_SHEET_ID, LOG_SHEET_DRIVE_ID } from "../util/env";
+import { GCP_CREDS } from "../util/env";
 
 let auth: GoogleAuth;
 let sheets: sheets_v4.Sheets;
@@ -10,7 +9,7 @@ let drive: drive_v3.Drive;
 
 // Load or request or authorization to call APIs from Google
 export async function authorizeGoogle() {
-    const credentials = JSON.parse(String(await fs.readFile(SERVICE_KEY_PATH)));
+    const credentials = JSON.parse(GCP_CREDS);
     const scopes = [
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/forms.body",

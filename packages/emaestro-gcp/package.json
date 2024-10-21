@@ -1,0 +1,19 @@
+{
+  "name": "@cloudydaiyz/emaestro-gcp",
+  "version": "0.0.0",
+  "description": "Cloud run functions for the emaestro project",
+  "author": "Kylan Duncan",
+  "license": "ISC",
+  "keywords": [
+    "emaestro"
+  ],
+  "main": "index.js",
+  "scripts": {
+    "start": "tsc && functions-framework --target=api"
+  },
+  "dependencies": {
+    "@cloudydaiyz/emaestro-core": "file:../emaestro-core",
+    "@google-cloud/functions-framework": "^3.4.2",
+    "googleapis": "^144.0.0"
+  }
+}
