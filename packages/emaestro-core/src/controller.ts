@@ -210,7 +210,7 @@ export const scheduleController = newUtilController(async (body) => {
 
         // Sync all the troupes currently in the collection
         for(const troupeId of troupeIds) {
-            if(DEV_MODE) {
+            if(DEV_MODE && syncServer.listenerCount("sync") > 0) {
                 syncServer.emit("sync", { troupeId });
             }
         }

@@ -12,11 +12,17 @@
       "types": "./dist/controller.d.ts",
       "default": "./dist/controller.js"
     },
+    "./server": {
+      "default": "./dist/server.js"
+    },
     "./types": {
       "types": "./dist/types/core-types.d.ts"
     },
     "./types/api": {
       "types": "./dist/types/api-types.d.ts"
+    },
+    "./types/rest": {
+      "types": "./dist/util/rest.d.ts"
     }
   },
   "scripts": {
@@ -35,7 +41,6 @@
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
-    "@google-cloud/local-auth": "^3.0.1",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.13",
     "@types/node": "^22.7.4",

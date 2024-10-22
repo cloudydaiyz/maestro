@@ -15,5 +15,8 @@
     "@cloudydaiyz/emaestro-core": "file:../emaestro-core",
     "@google-cloud/functions-framework": "^3.4.2",
     "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "mongodb-memory-server": "^10.1.2"
   }
 }

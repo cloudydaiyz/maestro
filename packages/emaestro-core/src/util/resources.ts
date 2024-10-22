@@ -7,7 +7,6 @@ import { Server } from "http";
 
 let mongod: MongoMemoryReplSet | null = null;
 const dbConn: MongoClient[] = [];
-const servers: Server[] = [];
 
 export async function startDb(): Promise<void> {
     await stopDb();
@@ -60,6 +59,7 @@ export async function cleanDbConnections() {
 }
 
 export async function cleanLogs() {
+    console.log("Cleaning logs");
     const { GoogleSheetsLogService } = await import("../services/logs/gsheets-log");
     const gsheets = new GoogleSheetsLogService();
 

@@ -5,3 +5,5 @@ quick-test*.*
 .env
 service-key.json
 packages/emaestro-gcp/index.js
+packages/emaestro-gcp/index.d.ts
+*.tsbuildinfo

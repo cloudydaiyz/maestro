@@ -6,15 +6,38 @@ import { cleanDbConnections, cleanLogs, startDb } from "./util/resources";
 import { Methods } from "./util/rest";
 import { Server } from "http";
 
+type ControllerModule = typeof import("./controller");
 let server: Server;
 
 /** Prepare for server initialization, start up MongoDB database */
-async function init() {
+export async function init(): Promise<ControllerModule> {
     if(DEV_MODE) await startDb();
+
+    // To cover the case of testing locally, delay the controller imports so that the in-memory MongoDB server can be used
+    const controllers = await import("./controller");
+
+    // Set up the event emitters
+    if(DEV_MODE) {
+        controllers.syncServer.on("sync", async (arg): Promise<void> => {
+            console.log("Sync event received");
+            await controllers.syncController(arg);
+        });
+
+        controllers.scheduleServer.on("task", async (arg): Promise<void> => {
+            console.log("Scheduled task received");
+            await controllers.scheduleController(arg);
+        });
+
+        // Set up scheduled tasks
+        setInterval(() => {
+            controllers.scheduleServer.emit("task", { taskType: "sync" });
+        }, 10000);
+    }
+    return controllers;
 }
 
 /** Clean up resources and exit this app */
-async function exit() {
+export async function exit() {
     await new Promise<void>((resolve, reject) => server.close((err) => { if(err) reject(err.message); else resolve() }));
     await cleanDbConnections();
     await cleanLogs();
@@ -23,10 +46,13 @@ async function exit() {
     process.exit(0);
 }
 
-/** Start the API server */
-export async function startServer() {
-    await init();
-    const { apiController, syncController, syncServer, scheduleController, scheduleServer } = await import("./controller");
+/** 
+ * Start an express.js server for the API controller 
+ * 
+ * **FUTURE:** Implement functionality to handle multiple controllers
+ */
+export async function startDevServer() {
+    const { apiController } = await init();
 
     // Set up the API as an express app
     const apiApp = express();
@@ -43,24 +69,6 @@ export async function startServer() {
     server = apiApp.listen(3000, () => {
         console.log("API server running on port 3000\n");
     });
-
-    // Set up the event emitters
-    if(DEV_MODE) {
-        syncServer.on("sync", async (arg): Promise<void> => {
-            console.log("Sync event received");
-            await syncController(arg);
-        });
-
-        scheduleServer.on("task", async (arg): Promise<void> => {
-            console.log("Scheduled task received");
-            await scheduleController(arg);
-        });
-
-        // Set up scheduled tasks
-        setInterval(() => {
-            scheduleServer.emit("task", { taskType: "sync" });
-        }, 60000);
-    }
 
     // Graceful shutdown on SIGINT (Ctrl+C) and SIGTERM
     process.on('SIGINT', async () => { console.log('SIGINT signal received.'); await exit() });

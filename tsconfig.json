@@ -1,0 +1,6 @@
+{
+  "compilerOptions": {},
+  "files": [],
+  "include": [],
+  "references": [{ "path": "./packages/emaestro-core" }, { "path": "./packages/emaestro-gcp" }]
+}

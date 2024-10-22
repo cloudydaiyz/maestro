@@ -7,7 +7,8 @@
     "strict": true,                                      /* Enable all strict type-checking options. */
     "skipLibCheck": true,                                 /* Skip type checking all .d.ts files. */
     "removeComments": true,                              /* Do not emit comments to output. */
-    "moduleResolution": "Node16"
+    "composite": true,                                       /* Enable project references */
+    "moduleResolution": "Node16",
   },
-  "include": ["./index.ts"],
+  "include": ["index.ts"],
 }
