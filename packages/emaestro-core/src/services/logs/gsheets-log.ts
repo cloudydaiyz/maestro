@@ -71,6 +71,7 @@ export class GoogleSheetsLogService extends TroupeLogService {
     }
 
     async createLog(troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[] = [], audience: WithId<AttendeeSchema>[] = []): Promise<string> {
+        assert(LOG_SHEET_DRIVE_ID, "ENV: Missing log sheet drive ID");
         const drive = await getDrive();
         const sheets = await getSheets();
 

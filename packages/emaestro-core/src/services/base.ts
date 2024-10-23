@@ -9,19 +9,26 @@ import { ClientError } from "../util/error";
 import assert from "assert";
 import { newDbConnection, removeDbConnection } from "../util/resources";
 
+/** Allows multiple database services to share the same MongoDB connection */
+export class SharedMongoClient {
+    // FUTURE: Implement a pseudo connection pool
+    static connections: number = 0;
+    static client: MongoClient | null = null;
+}
+
 /** Base service for all services that interact with the database */
 export class BaseDbService {
     /** 
-     * Function that resolves on the completion of the class creation. This
-     * allows children to define unique criteria to dictate the completion of class initialization.
+     * Function that resolves on the completion of the class creation. This allows children
+     * to define unique criteria that dictates the completion of class initialization.
      */
     ready: Promise<void>;
-    client: MongoClient;
-    troupeColl: Collection<TroupeSchema>;
-    dashboardColl: Collection<TroupeDashboardSchema>;
-    eventColl: Collection<EventSchema>;
-    audienceColl: Collection<MemberSchema>;
-    eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
+    readonly client: MongoClient;
+    readonly troupeColl: Collection<TroupeSchema>;
+    readonly dashboardColl: Collection<TroupeDashboardSchema>;
+    readonly eventColl: Collection<EventSchema>;
+    readonly audienceColl: Collection<MemberSchema>;
+    readonly eventsAttendedColl: Collection<EventsAttendedBucketSchema>;
     
     constructor() {
         // MongoDB URI could be changed from testing -- use the environment variable instead of MONGODB_URI const

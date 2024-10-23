@@ -41,14 +41,10 @@ export const BASE_POINT_TYPES_OBJ = {
     },
 } as const;
 
-export const EVENT_DATA_SOURCES = ["Google Forms", "Google Sheets", "Google Drive Folder", ""] as const;
-export const EVENT_DATA_SOURCE_REGEX = [FORMS_REGEX, SHEETS_REGEX, DRIVE_FOLDER_REGEX] as const;
-export const EVENT_DATA_SOURCE_MIME_TYPES = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet", "application/vnd.google-apps.folder"] as const;
-export const EVENT_DATA_SOURCE_URLS = [FORMS_URL_TEMPL, SHEETS_URL_TEMPL, DRIVE_FOLDER_URL_TEMPL] as const;
-
 export const BIRTHDAY_UPDATE_FREQUENCIES = ["weekly", "monthly"] as const;
 
-export const MIME_QUERY: string[] = [];
-for(const mimeType of EVENT_DATA_SOURCE_MIME_TYPES) {
-    MIME_QUERY.push(`mimeType = '${mimeType}'`);
-}
+export const EVENT_DATA_SOURCES = ["Google Forms", "Google Sheets", "Google Drive Folder", ""] as const;
+export const EVENT_DATA_SOURCE_REGEX = [FORMS_REGEX, SHEETS_REGEX, DRIVE_FOLDER_REGEX] as const;
+export const EVENT_DATA_SOURCE_URLS = [FORMS_URL_TEMPL, SHEETS_URL_TEMPL, DRIVE_FOLDER_URL_TEMPL] as const;
+export const EVENT_DATA_SOURCE_MIME_TYPES = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet", "application/vnd.google-apps.folder"] as const;
+export const EVENT_DATA_SOURCE_MIME_QUERIES = EVENT_DATA_SOURCE_MIME_TYPES.map(mimeType => `mimeType = '${mimeType}'`);

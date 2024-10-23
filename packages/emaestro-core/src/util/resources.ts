@@ -4,11 +4,14 @@ import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MONGODB_PASS, MONGODB_USER } from "./env";
 import { MongoClient } from "mongodb";
 import { Server } from "http";
+import assert from "assert";
 
 let mongod: MongoMemoryReplSet | null = null;
 const dbConn: MongoClient[] = [];
 
 export async function startDb(): Promise<void> {
+    assert(MONGODB_USER && MONGODB_PASS, "ENV: Missing required environment variables");
+    
     await stopDb();
     mongod = await MongoMemoryReplSet.create({ replSet: { auth: { enable: true, customRootName: MONGODB_USER, customRootPwd: MONGODB_PASS } } });
     const uri = mongod.getUri();
@@ -34,9 +37,10 @@ export async function stopDb(): Promise<void> {
 }
 
 export function newDbConnection(): MongoClient {
+    assert(process.env.MONGODB_URI && MONGODB_USER && MONGODB_PASS, "ENV: Missing required environment variables");
 
     // MongoDB URI could be changed from testing -- use the environment variable instead of MONGODB_URI const
-    const client = new MongoClient(process.env.MONGODB_URI!, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
+    const client = new MongoClient(process.env.MONGODB_URI, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
     client.on("connecting", () => console.log("Connecting to MongoDB..."));
     client.on("connected", () => console.log("Connected to MongoDB"));
     client.on("error", (err) => console.error("Connection error:", err));

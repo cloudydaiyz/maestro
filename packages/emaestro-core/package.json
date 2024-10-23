@@ -9,8 +9,8 @@
   "version": "1.0.0",
   "exports": {
     ".": {
-      "types": "./dist/controller.d.ts",
-      "default": "./dist/controller.js"
+      "types": "./dist/controllers.d.ts",
+      "default": "./dist/controllers.js"
     },
     "./server": {
       "default": "./dist/server.js"
@@ -41,6 +41,7 @@
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
+    "@google-cloud/tasks": "^5.5.1",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.13",
     "@types/node": "^22.7.4",

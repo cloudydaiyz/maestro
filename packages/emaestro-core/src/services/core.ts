@@ -1,11 +1,12 @@
 // Additional functionality for other backend services
 
 import assert from "assert";
-import { CreateTroupeRequest } from "../types/service-types";
+import { CreateTroupeRequest, SyncRequest } from "../types/service-types";
 import { ObjectId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ } from "../util/constants";
 import { BaseDbService, TroupeLogService } from "./base";
 import { GoogleSheetsLogService } from "./logs/gsheets-log";
+import { bulkAddToSyncQueue } from "../cloud/gcp";
 
 export class TroupeCoreService extends BaseDbService {
     constructor() { super() }
@@ -84,5 +85,12 @@ export class TroupeCoreService extends BaseDbService {
                 assert(res.every((r) => r.acknowledged), "Failed to fully delete troupe");
             });
         });
+    }
+
+    /** Places all troupes into the sync queue with sync locks disabled */
+    async syncTroupes() {
+        const requests: SyncRequest[] = await this.troupeColl.find({}).toArray()
+            .then(troupes => troupes.filter(t => !t.syncLock).map(t => ({ troupeId: t._id.toHexString()})));
+        await bulkAddToSyncQueue(requests);
     }
 }

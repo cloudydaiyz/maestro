@@ -7,6 +7,8 @@ import { BodySchema, Paths, newController, newUtilController } from "./util/rest
 import { z } from "zod";
 import { DEV_MODE } from "./util/env";
 import { BaseDbService } from "./services/base";
+import { addToSyncQueue, bulkAddToSyncQueue } from "./cloud/gcp";
+import { SyncRequest } from "./types/service-types";
 
 const initApiService = TroupeApiService.create();
 const initCoreService = TroupeCoreService.create();
@@ -174,11 +176,13 @@ export const apiController = newController(async (path, method, headers, body) =
     const syncPath = Paths.Sync.test(path);
     if(syncPath) {
         if(method == "POST") {
+            console.log("Sending sync event for troupe " + syncPath.troupeId);
+
+            // Send the sync event to the (dev/actual) sync service
             if(DEV_MODE) {
-                console.log("Sending sync event for troupe " + syncPath.troupeId);
                 syncServer.emit("sync", { troupeId: syncPath.troupeId });
             } else {
-                // Send a request to the actual sync service
+                await apiService.initiateSync(syncPath.troupeId);
             }
 
             return {
@@ -201,18 +205,22 @@ export const syncController = newUtilController(async (body) => {
 });
 
 export const scheduleController = newUtilController(async (body) => {
+    const [ coreService ] = await Promise.all([initCoreService]);
     const parsedBody = BodySchema.ScheduledTaskRequest.parse(body);
 
     console.log(`Performing scheduled task (${parsedBody.taskType})...`);
     if(parsedBody.taskType == "sync") {
         const db = await BaseDbService.create();
-        const troupeIds = await db.troupeColl.find({}).toArray().then(troupes => troupes.map(t => t._id.toHexString()));
+        const syncRequests: SyncRequest[] = await db.troupeColl.find({}).toArray()
+            .then(troupes => troupes.map(t => ({ troupeId: t._id.toHexString() })));
 
         // Sync all the troupes currently in the collection
-        for(const troupeId of troupeIds) {
-            if(DEV_MODE && syncServer.listenerCount("sync") > 0) {
-                syncServer.emit("sync", { troupeId });
+        if(DEV_MODE && syncServer.listenerCount("sync") > 0) {
+            for(const request of syncRequests) {
+                syncServer.emit("sync", request);
             }
+        } else if(!DEV_MODE) {
+            await coreService.syncTroupes();
         }
     }
 });

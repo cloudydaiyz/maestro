@@ -1,4 +1,6 @@
 // Local express server to simulate production environment
+// Decouples server creation from GCP functions to allow for local testing & server deployment in future
+// FUTURE: Implement functionality to handle multiple controllers
 
 import express from "express";
 import { DEV_MODE } from "./util/env";
@@ -6,15 +8,17 @@ import { cleanDbConnections, cleanLogs, startDb } from "./util/resources";
 import { Methods } from "./util/rest";
 import { Server } from "http";
 
-type ControllerModule = typeof import("./controller");
+type ControllerModule = typeof import("./controllers");
 let server: Server;
 
-/** Prepare for server initialization, start up MongoDB database */
+/** Prepares for server initialization, starts up MongoDB database */
 export async function init(): Promise<ControllerModule> {
-    if(DEV_MODE) await startDb();
+    if(DEV_MODE) {
+        await startDb();
+    }
 
     // To cover the case of testing locally, delay the controller imports so that the in-memory MongoDB server can be used
-    const controllers = await import("./controller");
+    const controllers = await import("./controllers");
 
     // Set up the event emitters
     if(DEV_MODE) {
@@ -36,7 +40,7 @@ export async function init(): Promise<ControllerModule> {
     return controllers;
 }
 
-/** Clean up resources and exit this app */
+/** Cleans up resources and exit this app */
 export async function exit() {
     await new Promise<void>((resolve, reject) => server.close((err) => { if(err) reject(err.message); else resolve() }));
     await cleanDbConnections();
@@ -46,12 +50,8 @@ export async function exit() {
     process.exit(0);
 }
 
-/** 
- * Start an express.js server for the API controller 
- * 
- * **FUTURE:** Implement functionality to handle multiple controllers
- */
-export async function startDevServer() {
+/** Starts an express.js server for the API controller */
+export async function startApiServer() {
     const { apiController } = await init();
 
     // Set up the API as an express app

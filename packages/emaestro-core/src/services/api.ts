@@ -9,6 +9,7 @@ import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
 import { verifyApiMemberPropertyType } from "../util/helper";
 import assert from "assert";
+import { addToSyncQueue } from "../cloud/gcp";
 
 /**
  * Provides methods for interacting with the Troupe API. The structure of all given parameters will
@@ -810,11 +811,10 @@ export class TroupeApiService extends BaseDbService {
         assert(res.every(r => r.acknowledged), "Failed to delete member data");
     }
 
-    /** 
-     * Places troupe into the sync queue if the lock is disabled. If no ID is provided,
-     * all troupes with disabled sync locks are placed into the queue.
-     */
-    async initiateSync(troupeId?: string) {
-
+    /** Places troupe into the sync queue if the sync lock is disabled. */
+    async initiateSync(troupeId: string) {
+        const troupe = await this.getTroupeSchema(troupeId, true);
+        assert(!troupe.syncLock, new ClientError("Sync is already in progress"));
+        await addToSyncQueue({ troupeId });
     }
 }

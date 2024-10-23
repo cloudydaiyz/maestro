@@ -1,7 +1,7 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "../cloud/gcp";
 import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "../types/core-types";
-import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, MIME_QUERY, SHEETS_URL_TEMPL } from "../util/constants";
+import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, EVENT_DATA_SOURCE_MIME_QUERIES, SHEETS_URL_TEMPL } from "../util/constants";
 import { AggregationCursor, AnyBulkWriteOperation, BulkWriteResult, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getDataSourceId, getDataSourceUrl, getDefaultMemberPropertyValue } from "../util/helper";
 import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "../types/service-types";
@@ -132,7 +132,7 @@ export class TroupeSyncService extends BaseDbService {
             // Get the folder's children
             let response: GaxiosResponse<drive_v3.Schema$FileList>;
             try {
-                const q = `(${MIME_QUERY.join(" or ")}) and '${folderId}' in parents`;
+                const q = `(${EVENT_DATA_SOURCE_MIME_QUERIES.join(" or ")}) and '${folderId}' in parents`;
                 response = await this.drive.files.list(
                     { q, fields: "files(id, name, mimeType)", }
                 );
