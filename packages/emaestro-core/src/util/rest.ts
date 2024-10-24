@@ -4,7 +4,7 @@ import { Path } from "path-parser";
 import { ZodError, z } from "zod";
 
 import { MemberPropertyType, MemberPropertyValue, VariableMemberProperties } from "../types/core-types";
-import { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest, ApiType } from "../types/api-types";
+import { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest, ApiType, RegisterRequest, LoginRequest, RefreshCredentialsRequest, DeleteUserRequest } from "../types/api-types";
 import { ClientError } from "./error";
 import { CreateTroupeRequest, SyncRequest, ScheduledTaskRequest } from "../types/service-types";
 import assert from "assert";
@@ -84,8 +84,16 @@ export function newUtilController<T extends Object>(handler: (body: Object) => P
 /** path-parser Path with `T` as the union of the given path params */
 type ParamPath<T extends string> = Path<{[key in T]: string}>;
 
-/** All available paths for the API */
+/** 
+ * All available paths for the API 
+ * NOTE: If :troupeId == "me", then the troupeId is the user's troupe
+ */
 export namespace Paths {
+    export const Register = Path.createPath("/auth/register");
+    export const Login = Path.createPath("/auth/login");
+    export const RefreshCredentials = Path.createPath("/auth/refresh");
+    export const DeleteUser = Path.createPath("/auth/delete");
+
     export const Troupes = Path.createPath("/t");
     export const Troupe: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId");
 
@@ -123,6 +131,27 @@ export namespace BodySchema {
     ]);
 
     // ========== API CONTROLLERS ========== //
+
+    export const RegisterRequest: z.ZodType<RegisterRequest> = z.object({
+        username: z.string(),
+        email: z.string(),
+        password: z.string(),
+        troupeName: z.string(),
+    });
+
+    export const LoginRequest: z.ZodType<LoginRequest> = z.object({
+        usernameOrEmail: z.string(),
+        password: z.string(),
+    });
+
+    export const RefreshCredentialsRequest: z.ZodType<RefreshCredentialsRequest> = z.object({
+        refreshToken: z.string(),
+    });
+
+    export const DeleteUserRequest: z.ZodType<DeleteUserRequest> = z.object({
+        usernameOrEmail: z.string(),
+        password: z.string(),
+    });
 
     export const CreateTroupeRequest: z.ZodType<CreateTroupeRequest> = z.object({
         name: z.string(),

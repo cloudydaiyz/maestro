@@ -5,7 +5,7 @@ import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from 
 import { getDefaultMemberPropertyValue, randomElement, verifyMemberPropertyType } from "../../util/helper";
 import { TroupeApiService } from "../../services/api";
 import { DbSetupConfig, defaultConfig } from "./db-config";
-import { cleanDbConnections, startDb, stopDb } from "../../util/resources";
+import { cleanDbConnections, cleanLogs, startDb, stopDb } from "../../util/resources";
 import assert from "assert";
 
 export default function () {
@@ -38,12 +38,12 @@ export default function () {
             cleanupService.audienceColl.deleteMany({}),
             cleanupService.eventsAttendedColl.deleteMany({}),
         ]);
-
         await cleanDbConnections();
     });
 
     // Stop the server
     afterAll(async () => {
+        await cleanLogs();
         await stopDb();
     });
 

@@ -11,8 +11,6 @@ import { cleanLogs } from "../../util/resources";
 const { dbSetup } = init();
 
 describe("google sheets log service", () => {
-    afterAll(async () => { await cleanLogs() });
-
     it("should create a log correctly for troupe", async () => {
         const config = await dbSetup(defaultConfig);
         const service = new GoogleSheetsLogService();

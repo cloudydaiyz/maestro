@@ -9,13 +9,67 @@ import { DEV_MODE } from "./util/env";
 import { BaseDbService } from "./services/base";
 import { addToSyncQueue, bulkAddToSyncQueue } from "./cloud/gcp";
 import { SyncRequest } from "./types/service-types";
+import { AuthService } from "./services/auth";
 
+const initAuthService = AuthService.create();
 const initApiService = TroupeApiService.create();
 const initCoreService = TroupeCoreService.create();
 const initSyncService = TroupeSyncService.create();
 
 export const apiController = newController(async (path, method, headers, body) => {
-    const [apiService, coreService] = await Promise.all([initApiService, initCoreService]);
+    const [authService, apiService, coreService] = await Promise.all([initAuthService, initApiService, initCoreService]);
+
+    const registerPath = Paths.Register.test(path);
+    if(registerPath) {
+        if(method == "POST") {
+            const {username, email, password, troupeName} = BodySchema.RegisterRequest.parse(body);
+            return {
+                status: 200,
+                headers: {},
+                body: await authService.register(username, email, password, troupeName),
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const loginPath = Paths.Login.test(path);
+    if(loginPath) {
+        if(method == "POST") {
+            const {usernameOrEmail, password} = BodySchema.LoginRequest.parse(body);
+            return {
+                status: 200,
+                headers: {},
+                body: await authService.login(usernameOrEmail, password),
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const refreshPath = Paths.RefreshCredentials.test(path);
+    if(refreshPath) {
+        if(method == "POST") {
+            const {refreshToken} = BodySchema.RefreshCredentialsRequest.parse(body);
+            return {
+                status: 200,
+                headers: {},
+                body: await authService.refreshCredentials(refreshToken),
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const deleteUserPath = Paths.DeleteUser.test(path);
+    if(deleteUserPath) {
+        if(method == "DELETE") {
+            const {usernameOrEmail, password} = BodySchema.DeleteUserRequest.parse(body);
+            await authService.deleteUser(usernameOrEmail, password);
+            return {
+                status: 204,
+                headers: {},
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
 
     const troupesPath = Paths.Troupes.test(path);
     if(troupesPath) {

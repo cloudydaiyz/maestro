@@ -14,16 +14,6 @@ import { TroupeCoreService } from "../../services/core";
 const { dbSetup } = init();
 
 describe("troupe sync service", () => {
-    const logService = new GoogleSheetsLogService();
-    let currentLog: string | null;
-
-    afterEach(async () => { 
-        if(currentLog) {
-            console.log(`Deleting log sheet at: ${currentLog}`);
-            await logService.deleteLog(currentLog);
-        }
-    });
-
     it("should sync correctly", async () => {
         const config = await dbSetup(onlyEventTypesConfig);
         const troupeId = config.troupes!["A"].id!;
@@ -100,6 +90,7 @@ describe("troupe sync service", () => {
     });
 
     it("should update sync log correctly", async () => {
+        const logService = new GoogleSheetsLogService();
         const config = await dbSetup(onlyEventTypesConfig);
         const troupeId = config.troupes!["A"].id!;
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
@@ -109,7 +100,7 @@ describe("troupe sync service", () => {
         const coreService = await TroupeCoreService.create();
 
         // Create a new log for the updated troupe
-        currentLog = await coreService.newTroupeLog(troupeId);
+        const currentLog = await coreService.newTroupeLog(troupeId);
 
         // Sync the troupe and ensure no errors are thrown
         await expect(syncService.sync(troupeId)).resolves.not.toThrow();

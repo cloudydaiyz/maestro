@@ -117,3 +117,26 @@ export type UpdateMemberRequest = ApiType<{
     },
     removeProperties?: string[],
 }>;
+
+// == AUTH == //
+
+export type RegisterRequest = {
+    username: string,
+    email: string,
+    password: string,
+    troupeName: string,
+}
+
+export type LoginRequest = {
+    usernameOrEmail: string,
+    password: string,
+}
+
+export type RefreshCredentialsRequest = {
+    refreshToken: string,
+}
+
+export type DeleteUserRequest = {
+    usernameOrEmail: string,
+    password: string,
+}

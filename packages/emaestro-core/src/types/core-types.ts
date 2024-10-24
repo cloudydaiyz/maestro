@@ -231,14 +231,13 @@ export interface PercentageStatistics {
 // == USERS ==
 
 export interface UserSchema {
+    username: string,
     email: string,
-    password: string, // encrypted at rest
-    troupeId?: string,
-}
-
-export interface UserSessionSchema {
-    userId: string,
-    accessToken: string,
-    refreshToken: string,
-    expiration: Date,
+    hashedPassword: string,
+    troupeId: string,
+    troupeAccess: {
+        troupeId: string,
+        accessLevel: number,
+    }[],
+    createdAt: Date,
 }

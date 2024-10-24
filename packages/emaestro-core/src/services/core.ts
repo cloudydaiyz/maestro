@@ -87,6 +87,12 @@ export class TroupeCoreService extends BaseDbService {
         });
     }
 
+    async getTroupeByName(name: string) {
+        const troupe = this.troupeColl.findOne({name});
+        assert(troupe, "Troupe not found");
+        return troupe;
+    }
+
     /** Places all troupes into the sync queue with sync locks disabled */
     async syncTroupes() {
         const requests: SyncRequest[] = await this.troupeColl.find({}).toArray()
