@@ -9,6 +9,8 @@ export const MAX_PAGE_SIZE = 30;
 
 export const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+.[a-zA-Z]{2,}$/;
 
+export const TOKEN_HEADER_REGEX = /^Bearer\s+(?<token>.+)$/;
+
 // == Constants for event source URLs ==
 export const DRIVE_FOLDER_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/(?<id>[^\/&?#]+).*/;
 export const DRIVE_FOLDER_URL_TEMPL = "https://drive.google.com/drive/folders/<id>";

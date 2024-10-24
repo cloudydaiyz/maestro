@@ -9,12 +9,13 @@
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "build": "tsc -b",
+    "build": "tsc -b && npm --prefix=packages/emaestro-core i && npm --prefix=packages/emaestro-gcp i",
+    "ci": "npm --prefix=packages/emaestro-core ci && npm --prefix=packages/emaestro-gcp ci",
     "start": "dotenvx run -- npm --prefix=packages/emaestro-gcp start",
-    "dev-server": "dotenvx run -- npm --prefix=packages/emaestro-core start",
-    "quick": "dotenvx run -- npm --prefix=packages/emaestro-core run quick",
     "test": "dotenvx run -- npm --prefix=packages/emaestro-core run test",
-    "coverage": "dotenvx run -- npm --prefix=packages/emaestro-core run coverage"
+    "coverage": "dotenvx run -- npm --prefix=packages/emaestro-core run coverage",
+    "core-server": "dotenvx run -- npm --prefix=packages/emaestro-core start",
+    "quick": "dotenvx run -- npm --prefix=packages/emaestro-core run quick"
   },
   "devDependencies": {
     "@dotenvx/dotenvx": "^1.20.0",

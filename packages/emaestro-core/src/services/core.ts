@@ -87,8 +87,9 @@ export class TroupeCoreService extends BaseDbService {
         });
     }
 
+    /** Retrieves a troupe schema with the given name */
     async getTroupeByName(name: string) {
-        const troupe = this.troupeColl.findOne({name});
+        const troupe = this.troupeColl.findOne({ name });
         assert(troupe, "Troupe not found");
         return troupe;
     }

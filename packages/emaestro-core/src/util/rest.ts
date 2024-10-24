@@ -5,9 +5,10 @@ import { ZodError, z } from "zod";
 
 import { MemberPropertyType, MemberPropertyValue, VariableMemberProperties } from "../types/core-types";
 import { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest, ApiType, RegisterRequest, LoginRequest, RefreshCredentialsRequest, DeleteUserRequest } from "../types/api-types";
-import { ClientError } from "./error";
+import { AuthenticationError, ClientError } from "./error";
 import { CreateTroupeRequest, SyncRequest, ScheduledTaskRequest } from "../types/service-types";
 import assert from "assert";
+import { TOKEN_HEADER_REGEX } from "./constants";
 
 /** Controller function to handle routing */
 export type ApiResponse = {

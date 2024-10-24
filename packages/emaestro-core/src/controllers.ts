@@ -2,14 +2,14 @@ import EventEmitter from "events";
 import { TroupeApiService } from "./services/api";
 import { TroupeCoreService } from "./services/core";
 import { TroupeSyncService } from "./services/sync";
-import { ClientError } from "./util/error";
+import { AuthenticationError, ClientError } from "./util/error";
 import { BodySchema, Paths, newController, newUtilController } from "./util/rest";
 import { z } from "zod";
 import { DEV_MODE } from "./util/env";
 import { BaseDbService } from "./services/base";
-import { addToSyncQueue, bulkAddToSyncQueue } from "./cloud/gcp";
 import { SyncRequest } from "./types/service-types";
 import { AuthService } from "./services/auth";
+import assert from "assert";
 
 const initAuthService = AuthService.create();
 const initApiService = TroupeApiService.create();
@@ -61,6 +61,7 @@ export const apiController = newController(async (path, method, headers, body) =
     const deleteUserPath = Paths.DeleteUser.test(path);
     if(deleteUserPath) {
         if(method == "DELETE") {
+            assert(authService.fromHeaders(headers).validate(), new AuthenticationError("Invalid credentials"));
             const {usernameOrEmail, password} = BodySchema.DeleteUserRequest.parse(body);
             await authService.deleteUser(usernameOrEmail, password);
             return {
@@ -74,6 +75,7 @@ export const apiController = newController(async (path, method, headers, body) =
     const troupesPath = Paths.Troupes.test(path);
     if(troupesPath) {
         if(method == "POST") {
+            assert(authService.fromHeaders(headers).validate(), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
@@ -86,18 +88,21 @@ export const apiController = newController(async (path, method, headers, body) =
     const troupePath = Paths.Troupe.test(path);
     if(troupePath) {
         if(method == "GET") {
+            assert(authService.fromHeaders(headers).validate(null, troupePath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.getTroupe(troupePath.troupeId),
             }
         } else if(method == "PUT") {
+            assert(authService.fromHeaders(headers).validate(null, troupePath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.updateTroupe(troupePath.troupeId, BodySchema.UpdateTroupeRequest.parse(body)),
             }
         } else if(method == "DELETE") {
+            assert(authService.fromHeaders(headers).validate(null, troupePath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             await coreService.deleteTroupe(troupePath.troupeId);
             return {
                 status: 200,
@@ -110,12 +115,14 @@ export const apiController = newController(async (path, method, headers, body) =
     const eventsPath = Paths.Events.test(path);
     if(eventsPath) {
         if(method == "POST") {
+            assert(authService.fromHeaders(headers).validate(null, eventsPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.createEvent(eventsPath.troupeId, BodySchema.CreateEventRequest.parse(body)),
             }
         } else if(method == "GET") {
+            assert(authService.fromHeaders(headers).validate(null, eventsPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
@@ -128,18 +135,21 @@ export const apiController = newController(async (path, method, headers, body) =
     const eventPath = Paths.Event.test(path);
     if(eventPath) {
         if(method == "GET") {
+            assert(authService.fromHeaders(headers).validate(null, eventPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.getEvent(eventPath.eventId, eventPath.troupeId),
             }
         } else if(method == "PUT") {
+            assert(authService.fromHeaders(headers).validate(null, eventPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.updateEvent(eventPath.troupeId, eventPath.eventId, BodySchema.UpdateEventRequest.parse(body)),
             }
         } else if(method == "DELETE") {
+            assert(authService.fromHeaders(headers).validate(null, eventPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             await apiService.deleteEvent(eventPath.troupeId, eventPath.eventId);
             return {
                 status: 204,
@@ -152,6 +162,7 @@ export const apiController = newController(async (path, method, headers, body) =
     const eventTypesPath = Paths.EventTypes.test(path);
     if(eventTypesPath) {
         if(method == "POST") {
+            assert(authService.fromHeaders(headers).validate(null, eventTypesPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
@@ -164,18 +175,21 @@ export const apiController = newController(async (path, method, headers, body) =
     const eventTypePath = Paths.EventType.test(path);
     if(eventTypePath) {
         if(method == "GET") {
+            assert(authService.fromHeaders(headers).validate(null, eventTypePath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.getEventType(eventTypePath.eventTypeId, eventTypePath.troupeId),
             }
         } else if(method == "PUT") {
+            assert(authService.fromHeaders(headers).validate(null, eventTypePath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.updateEventType(eventTypePath.troupeId, eventTypePath.eventTypeId, BodySchema.UpdateEventTypeRequest.parse(body)),
             }
         } else if(method == "DELETE") {
+            assert(authService.fromHeaders(headers).validate(null, eventTypePath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             await apiService.deleteEventType(eventTypePath.troupeId, eventTypePath.eventTypeId);
             return {
                 status: 204,
@@ -188,12 +202,14 @@ export const apiController = newController(async (path, method, headers, body) =
     const audiencePath = Paths.Audience.test(path);
     if(audiencePath) {
         if(method == "POST") {
+            assert(authService.fromHeaders(headers).validate(null, audiencePath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.createMember(audiencePath.troupeId, BodySchema.CreateMemberRequest.parse(body)),
             }
         } else if(method == "GET") {
+            assert(authService.fromHeaders(headers).validate(null, audiencePath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
@@ -206,18 +222,21 @@ export const apiController = newController(async (path, method, headers, body) =
     const memberPath = Paths.Member.test(path);
     if(memberPath) {
         if(method == "GET") {
+            assert(authService.fromHeaders(headers).validate(null, memberPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.getMember(memberPath.memberId, memberPath.troupeId),
             }
         } else if(method == "PUT") {
+            assert(authService.fromHeaders(headers).validate(null, memberPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             return {
                 status: 200,
                 headers: {},
                 body: await apiService.updateMember(memberPath.troupeId, memberPath.memberId, BodySchema.UpdateMemberRequest.parse(body)),
             }
         } else if(method == "DELETE") {
+            assert(authService.fromHeaders(headers).validate(null, memberPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             await apiService.deleteMember(memberPath.troupeId, memberPath.memberId);
             return {
                 status: 204,
@@ -230,6 +249,7 @@ export const apiController = newController(async (path, method, headers, body) =
     const syncPath = Paths.Sync.test(path);
     if(syncPath) {
         if(method == "POST") {
+            assert(authService.fromHeaders(headers).validate(null, syncPath.troupeId, 0), new AuthenticationError("Invalid credentials"));
             console.log("Sending sync event for troupe " + syncPath.troupeId);
 
             // Send the sync event to the (dev/actual) sync service

@@ -7,6 +7,9 @@
     "emaestro"
   ],
   "version": "1.0.0",
+  "repository": {
+    "url": "https://github.com/cloudydaiyz/emaestro/packages/emaestro-core"
+  },
   "exports": {
     ".": {
       "types": "./dist/controllers.d.ts",
@@ -32,11 +35,12 @@
     "coverage": "tsc && npx jest --coverage"
   },
   "dependencies": {
+    "@google-cloud/tasks": "^5.5.1",
     "@shogo82148/a1notation": "^0.2.1",
-    "@types/jsonwebtoken": "^9.0.7",
     "bcrypt": "^5.1.1",
     "csv-parse": "^5.5.6",
     "dayjs": "^1.11.13",
+    "googleapis": "^144.0.0",
     "jsonwebtoken": "^9.0.2",
     "mongodb": "^6.9.0",
     "path-parser": "^6.1.0",
@@ -44,17 +48,15 @@
     "zxcvbn": "^4.4.2"
   },
   "devDependencies": {
-    "@google-cloud/tasks": "^5.5.1",
     "@types/bcrypt": "^5.0.2",
     "@types/express": "^5.0.0",
     "@types/jest": "^29.5.13",
+    "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^22.7.4",
     "@types/zxcvbn": "^4.4.5",
     "express": "^4.21.1",
-    "googleapis": "^144.0.0",
     "jest": "^29.7.0",
     "mongodb-memory-server": "^10.1.2",
-    "ts-node": "^10.9.2",
-    "typescript": "^5.3.3"
+    "ts-node": "^10.9.2"
   }
 }

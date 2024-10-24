@@ -1,9 +1,9 @@
 import { BaseDbService } from "./base";
 import { Collection, ObjectId, WithId } from "mongodb";
 import { UserSchema } from "../types/core-types";
-import { DB_NAME, EMAIL_REGEX } from "../util/constants";
+import { DB_NAME, EMAIL_REGEX, TOKEN_HEADER_REGEX } from "../util/constants";
 import { TroupeCoreService } from "./core";
-import { ClientError } from "../util/error";
+import { AuthenticationError, ClientError } from "../util/error";
 import { ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET } from "../util/env";
 import { arrayToObject } from "../util/helper";
 
@@ -37,6 +37,7 @@ type Credentials = { accessToken: string, refreshToken: string };
  */
 export class AuthService extends BaseDbService {
     userColl: Collection<UserSchema>;
+    currentToken: string | null = null;
 
     constructor() { 
         super();
@@ -102,7 +103,10 @@ export class AuthService extends BaseDbService {
     }
 
     /** Validates a given access token */
-    validate(accessToken: string, troupeId?: string, accessLevel = 0): boolean {
+    validate(accessToken = this.currentToken, troupeId?: string, accessLevel = 0): boolean {
+        if(accessToken == null) accessToken = this.currentToken;
+        if(!accessToken) return false;
+
         try {
             const payload = jwt.verify(accessToken, ACCESS_TOKEN_SECRET!) as AccessTokenPayload;
             return troupeId ? payload[troupeId] >= accessLevel : true;
@@ -127,5 +131,20 @@ export class AuthService extends BaseDbService {
         const deletedUser = await this.userColl.findOneAndDelete({ $or: [{email: usernameOrEmail}, {username: usernameOrEmail}] });
         assert(deletedUser, new ClientError("User not found"));
         await TroupeCoreService.create().then(c => c.deleteTroupe(deletedUser.troupeId));
+    }
+
+    /** 
+     * Populates this service with the token obtained from the "Authorization" header. 
+     * Returns this service to allow for chaining.
+     */
+    fromHeaders(headers: {"Authorization"?: string}): AuthService {
+        const authHeader = headers["Authorization"];
+        assert(authHeader, new AuthenticationError("Missing Authorization header"));
+    
+        const token = TOKEN_HEADER_REGEX.exec(authHeader)?.groups?.token;
+        assert(token, new AuthenticationError("Invalid Authorization header"));
+        
+        this.currentToken = token;
+        return this;
     }
 }

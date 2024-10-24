@@ -9,3 +9,36 @@
 <p align="center">
 <strong>emaestro</strong> is an event analytics service that collects aggregate membership data from your events, allowing you to effectively track event and membership data. Based on <a href="https://github.com/cloudydaiyz/membership-logger">membership-logger</a>.
 </p>
+
+## Overview
+
+This repository provides the backend for the project. For the frontend, look at the [emaestro-ui](https://github.com/cloudydaiyz/emaestro-ui) repository. Note that this project uses MongoDB as its database provider. In order for services to properly run in production, you must have a MongoDB (or MongoDB Atlas) instance up and running.
+
+## Packages
+
+- [`emaestro-core`](packages/emaestro-core) - The core backend functionality for the emaestro project. This package provides the controllers for the API service, sync service, and scheduled tasks services, as well as types used for the services.
+
+- [`emaestro-gcp`](packages/emaestro-gcp) - The GCP Cloud Run Functions defined by the project. This package contains definitions for each function to deploy to GCP.
+
+## Installation
+
+Ensure you have Node.js version 20 installed on your computer. 
+
+1. Run `npm install` to install dependencies for the root package.
+2. Run `npm run build` to transpile ts code and install dependencies for all child packages.
+
+## Environment Variables
+
+Environment variables are required to be set in order to run the code from the child packages. You can either define these environment variables globally, or create a `.env` file to define the variables specifically within this repository. Look at [`.temp.env`](./.temp.env) for information on each environment variable. 
+
+The `.env` file is injected into each command via [`dotenvx`](https://github.com/dotenvx/dotenvx).
+
+## Commands
+
+Before running commands, ensure that you have all necessary environment variables set.
+
+- `npm start`: Runs the API server in `packages/emaestro-gcp`
+- `npm test`: Runs jest tests in `packages/emaestro-core`
+- `npm run build`: Transpiles TS code and installs dependencies for all folders in `/packages`
+- `npm run quick`: Runs the `quick-test.ts` file in `packages/emaestro-core/src` if available. This allows you to run unique, isolated code with access to the functionality provided by the core package.
+- `npm run coverage`: Runs jest tests in `packages/emaestro-core` and displays test coverage
