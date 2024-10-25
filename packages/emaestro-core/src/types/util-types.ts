@@ -21,8 +21,6 @@ export type Replace<T, A, B> = T extends A
     ? Array<Replace<T[number], A, B>>
     : B;
 
-type t = null extends Object ? "a" : "b";
-
 /** Replaces immutable properties in object with mutable properties */
 export type Mutable<T extends Object> = { -readonly [P in keyof T]: T[P] }
 

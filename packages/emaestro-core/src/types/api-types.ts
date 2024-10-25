@@ -1,7 +1,7 @@
 // Public facing types to use for API endpoints
 
 import { ObjectId, WithId } from "mongodb";
-import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, VariableMemberProperties, BaseMemberPropertyTypes, MemberPropertyTypeToValue } from "./core-types";
+import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, VariableMemberProperties, BaseMemberPropertyTypes, MemberPropertyTypeToValue, TroupeDashboardSchema } from "./core-types";
 import { Id, NullOptional, Replace, WeakPartial } from "./util-types";
 
 /** Converts T to a JSON serializable format */
@@ -16,6 +16,8 @@ export type PublicEvent = ApiType<EventSchema> & Id;
 export type EventType = ApiType<EventTypeSchema> & Id;
 
 export type Member = ApiType<MemberSchema> & Id;
+
+export type TroupeDashboard = ApiType<TroupeDashboardSchema>;
 
 // == API Request Types ==
 

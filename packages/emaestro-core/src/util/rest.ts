@@ -127,6 +127,7 @@ export namespace Paths {
 
     export const Troupes = Path.createPath("/t");
     export const Troupe: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId");
+    export const Dashboard: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/dashboard");
 
     export const Events: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/e");
     export const Event: ParamPath<"troupeId"|"eventId"> = Path.createPath("/t/:troupeId/e/:eventId");

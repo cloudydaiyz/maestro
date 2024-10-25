@@ -74,6 +74,12 @@ export class BaseDbService {
         return member;
     }
 
+    async getDashboardSchema(troupeId: string): Promise<WithId<TroupeDashboardSchema>> {
+        const dashboard = await this.dashboardColl.findOne({ troupeId });
+        assert(dashboard, new ClientError("Unable to find dashboard"));
+        return dashboard;
+    }
+
     async close() { return removeDbConnection(this.client) }
 }
 

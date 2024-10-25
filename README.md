@@ -22,7 +22,7 @@ This repository provides the backend for the project. For the frontend, look at 
 
 ## Installation
 
-Ensure you have Node.js version 20 installed on your computer. 
+Make sure that Node.js version 20.0.0 or higher is installed on your device. 
 
 1. Run `npm install` to install dependencies for the root package.
 2. Run `npm run build` to transpile ts code and install dependencies for all child packages.

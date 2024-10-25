@@ -16,7 +16,7 @@ const initApiService = TroupeApiService.create();
 const initCoreService = TroupeCoreService.create();
 const initSyncService = TroupeSyncService.create();
 
-// All paths in the API with a prefix of `/t/:troupeId` will be handled by this controller
+/** All paths in the API with a prefix of `/t/:troupeId` will be handled by this controller to simplify authentication. */ 
 const apiTroupePathsHandler: ApiController = async (path, method, headers, body) => {
     const [authService, apiService, coreService] = await Promise.all([initAuthService, initApiService, initCoreService]);
     const accessToken = "_accessToken" in headers ? headers["_accessToken"] as AccessTokenPayload | null : null;
@@ -51,6 +51,19 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
             return {
                 status: 200,
                 headers: {},
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const dashboardPath = Paths.Dashboard.test(path);
+    if(dashboardPath) {
+        if(method == "GET") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            return {
+                status: 200,
+                headers: {},
+                body: await apiService.getDashboard(troupeId),
             }
         }
         throw new ClientError("Invalid method for path");

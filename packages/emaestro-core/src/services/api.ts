@@ -3,8 +3,8 @@
 import { AnyBulkWriteOperation, ObjectId, PullOperator, PushOperator, UpdateFilter, WithId } from "mongodb";
 import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "../util/constants";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints } from "../types/core-types";
-import { ApiType, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
-import { Mutable, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "../types/util-types";
+import { ApiType, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
+import { Mutable, Replace, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "../types/util-types";
 import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
 import { verifyApiMemberPropertyType } from "../util/helper";
@@ -18,6 +18,28 @@ import { addToSyncQueue } from "../cloud/gcp";
  */
 export class TroupeApiService extends BaseDbService {
     constructor() { super() }
+
+    /** Retrieves troupe dashboard */
+    async getDashboard(troupeId: string): Promise<TroupeDashboard> {
+        const {_id, ...publicDashboard} = await this.getDashboardSchema(troupeId);
+
+        const newUpcomingBirthdays: Replace<TroupeDashboardSchema["upcomingBirthdays"]["members"], string, string> = [];
+        for(const member of publicDashboard.upcomingBirthdays.members) {
+            newUpcomingBirthdays.push({
+                ...member,
+                birthday: member.birthday.toISOString(),
+            });
+        }
+
+        return {
+            ...publicDashboard,
+            upcomingBirthdays: {
+                ...publicDashboard.upcomingBirthdays,
+                members: newUpcomingBirthdays,
+            },
+            lastUpdated: publicDashboard.lastUpdated.toISOString(),
+        };
+    }
 
     /** Retrieves troupe or parses existing troupe into public format */ 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {
