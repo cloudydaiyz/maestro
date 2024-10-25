@@ -14,7 +14,6 @@ init();
 // beforeEach(async () => { config = await dbSetup(defaultConfig) });
 
 describe("basic auth", () => {
-    
     afterEach(async () => {
         const auth = await AuthService.create();
         await auth.userColl.deleteMany({});
@@ -72,13 +71,15 @@ describe("basic auth", () => {
         const troupeId = await auth.register("user1", "good.email@gmail.com", pass, "new troupe");
         const {accessToken, refreshToken} = await auth.login("user1", pass);
 
-        expect(auth.validate(accessToken)).toBe(true);
+        const payload1 = auth.extractAccessTokenPayload(accessToken);
+        expect(auth.validate(payload1)).toBe(true);
 
         await expect(api.getTroupe(troupeId)).resolves.not.toThrow();
 
         const newCreds = await auth.refreshCredentials(refreshToken);
 
-        expect(auth.validate(newCreds.accessToken)).toBe(true);
+        const payload2 = auth.extractAccessTokenPayload(newCreds.accessToken);
+        expect(auth.validate(payload2)).toBe(true);
     });
 
     test("delete", async () => {

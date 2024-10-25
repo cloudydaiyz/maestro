@@ -35,7 +35,7 @@ export async function init(): Promise<ControllerModule> {
         // Set up scheduled tasks
         setInterval(() => {
             controllers.scheduleServer.emit("task", { taskType: "sync" });
-        }, 10000);
+        }, 120000);
     }
     return controllers;
 }

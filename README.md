@@ -40,5 +40,21 @@ Before running commands, ensure that you have all necessary environment variable
 - `npm start`: Runs the API server in `packages/emaestro-gcp`
 - `npm test`: Runs jest tests in `packages/emaestro-core`
 - `npm run build`: Transpiles TS code and installs dependencies for all folders in `/packages`
+- `npm run ci`: Performs a [clean install](https://docs.npmjs.com/cli/v10/commands/npm-ci) for all packages in the project
 - `npm run quick`: Runs the `quick-test.ts` file in `packages/emaestro-core/src` if available. This allows you to run unique, isolated code with access to the functionality provided by the core package.
 - `npm run coverage`: Runs jest tests in `packages/emaestro-core` and displays test coverage
+- `npm run core-server`: Runs the (dev) server created by `packages/emaestro-core`
+
+## Debugging
+
+This repository comes with support for the Visual Studio Code debugger. 
+
+- `gcp-server (api) | emaestro-gcp` configuration - debugs `npm start`
+- `core-server | emaestro-core` configuration - debugs `npm run core-server`
+- `quick-test | emaestro-core` configuration - debugs `npm run quick`
+- `*.spec.ts (tests) | emaestro-core` configuration - runs jest in watch mode, and debugs any individual jest test file in `packages/emaestro-core`
+
+For more resources on debugging:
+
+- See [`.vscode/launch.json`](.vscode/launch.json) for configuration details.
+- See [Debugging in VS Code](https://code.visualstudio.com/docs/editor/debugging) for how to use the VS Code debugger.

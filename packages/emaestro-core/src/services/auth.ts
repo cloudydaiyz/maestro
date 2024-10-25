@@ -12,19 +12,22 @@ import bcrypt from "bcrypt";
 import assert from "assert";
 import jwt from "jsonwebtoken";
 
-type AccessTokenPayload = {
+type Credentials = { accessToken: string, refreshToken: string };
+
+export type AccessTokenPayload = { 
     userId: string,
     troupeId: string,
-} & { 
-    // List of troupe IDs the user has access to and their role
-    [troupeId: string]: number 
+    [troupeId: string]: number | string,
 };
 
-type RefreshTokenPayload = {
+export type RefreshTokenPayload = {
     userId: string,
 }
 
-type Credentials = { accessToken: string, refreshToken: string };
+export interface AuthorizationHeader extends Record<string, any> {
+    Authorization?: string,
+    authorization?: string,
+}
 
 /**
  * User authentication service, responsible for creating, validating, and refreshing user sessions.
@@ -37,7 +40,6 @@ type Credentials = { accessToken: string, refreshToken: string };
  */
 export class AuthService extends BaseDbService {
     userColl: Collection<UserSchema>;
-    currentToken: string | null = null;
 
     constructor() { 
         super();
@@ -52,11 +54,16 @@ export class AuthService extends BaseDbService {
             user = findUser!;
         }
 
-        const accessTokenPayload = {
-            [`${user.troupeId}`]: 0, 
-            ...arrayToObject(user.troupeAccess, (val) => [val.troupeId, val.accessLevel]),
+        const troupeAccess = arrayToObject<UserSchema["troupeAccess"][number], { [troupeId: string]: number }>(
+            user.troupeAccess, (val) => { return [val.troupeId, val.accessLevel] }
+        );
+
+        const accessTokenPayload: AccessTokenPayload = {
             userId: user._id.toHexString(),
-        } as AccessTokenPayload;
+            troupeId: user.troupeId,
+            [`${user.troupeId}`]: 0, 
+            ...troupeAccess,
+        };
         return jwt.sign(accessTokenPayload, ACCESS_TOKEN_SECRET!, { expiresIn: "30m" });
     }
 
@@ -102,19 +109,6 @@ export class AuthService extends BaseDbService {
         return { accessToken, refreshToken };
     }
 
-    /** Validates a given access token */
-    validate(accessToken = this.currentToken, troupeId?: string, accessLevel = 0): boolean {
-        if(accessToken == null) accessToken = this.currentToken;
-        if(!accessToken) return false;
-
-        try {
-            const payload = jwt.verify(accessToken, ACCESS_TOKEN_SECRET!) as AccessTokenPayload;
-            return troupeId ? payload[troupeId] >= accessLevel : true;
-        } catch(e) {
-            return false;
-        }
-    }
-
     /** Refreshes access credentials */
     async refreshCredentials(refreshToken: string): Promise<Credentials> {
         const payload = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET!) as RefreshTokenPayload;
@@ -137,14 +131,36 @@ export class AuthService extends BaseDbService {
      * Populates this service with the token obtained from the "Authorization" header. 
      * Returns this service to allow for chaining.
      */
-    fromHeaders(headers: {"Authorization"?: string}): AuthService {
-        const authHeader = headers["Authorization"];
-        assert(authHeader, new AuthenticationError("Missing Authorization header"));
+    fromHeaders(headers: AuthorizationHeader): AccessTokenPayload | null {
+        const authHeader = headers["Authorization"] || headers["authorization"];
+        if(!authHeader) return null;
     
         const token = TOKEN_HEADER_REGEX.exec(authHeader)?.groups?.token;
-        assert(token, new AuthenticationError("Invalid Authorization header"));
+        if(!token) return null;
         
-        this.currentToken = token;
-        return this;
+        return this.extractAccessTokenPayload(token);
+    }
+
+    /** Extracts the payload from an access token if valid, null otherwise */
+    extractAccessTokenPayload(accessToken: string): AccessTokenPayload | null {
+        try {
+            assert(accessToken, new AuthenticationError("Missing access token"));
+            const payload = jwt.verify(accessToken, ACCESS_TOKEN_SECRET!);
+            assert(typeof payload == "object" && typeof payload.userId == "string" && typeof payload.troupeId == "string");
+            return payload as AccessTokenPayload;
+        } catch(e) {
+            return null;
+        }
+    }
+
+    /** Validates a given access token */
+    validate(accessToken: AccessTokenPayload | null, troupeId?: string, accessLevel = 0): boolean {
+        if(!accessToken) return false;
+        try {
+            assert(!troupeId || typeof accessToken[troupeId] == "number", new ClientError("Invalid access token"));
+            return troupeId ? accessToken[troupeId] as number >= accessLevel : true;
+        } catch(e) {
+            return false;
+        }
     }
 }

@@ -1,4 +1,4 @@
-import { init } from '@cloudydaiyz/emaestro-core/server';
+import { init, exit } from '@cloudydaiyz/emaestro-core/server';
 import { ApiResponse } from '@cloudydaiyz/emaestro-core/types/rest';
 import * as functions from '@google-cloud/functions-framework';
 import assert from "assert";
@@ -15,6 +15,10 @@ function sendResponse(httpRes: functions.Response, apiRes: ApiResponse) {
 
 // Initialize the controllers with lazy import
 init().then(c => controllers = c);
+
+// Graceful shutdown on SIGINT (Ctrl+C) and SIGTERM
+process.on('SIGINT', async () => { console.log('SIGINT signal received.'); await exit() });
+process.on('SIGTERM', async () => { console.log('SIGTERM signal received.'); await exit() });
 
 // API HTTP function
 functions.http('api', async (req, res) => {
