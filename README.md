@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">
-<sup>emaestro</sup>
+<sup>emaestro-core</sup>
 </h1>
 
 <p align="center">
@@ -12,7 +12,12 @@
 
 ## Overview
 
-This repository provides the backend for the project. For the frontend, look at the [emaestro-ui](https://github.com/cloudydaiyz/emaestro-ui) repository. Note that this project uses MongoDB as its database provider. In order for services to properly run in production, you must have a MongoDB (or MongoDB Atlas) instance up and running.
+This repository provides the backend for the emaestro project. For other relevant repositories, check out the following links:
+
+- [`emaestro-ui`](https://github.com/cloudydaiyz/emaestro-ui) (Frontend)
+- [`emaestro-cloud`](https://github.com/cloudydaiyz/emaestro-cloud) (Cloud)
+
+Note that this project uses MongoDB as its database provider. In order for services to properly run in production, you must have a MongoDB (or MongoDB Atlas) instance up and running.
 
 ## Packages
 

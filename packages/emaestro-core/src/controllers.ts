@@ -228,7 +228,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
 };
 
 const authMiddleware: ApiMiddleware = async (path, method, headers: AuthorizationHeader, body, next) => {
-    const authService = await initAuthService;
+    const [authService] = await Promise.all([initAuthService]);
 
     const registerPath = Paths.Register.test(path);
     if(registerPath) {
@@ -297,7 +297,7 @@ export const syncController = newUtilController(async (body) => {
 });
 
 export const scheduleController = newUtilController(async (body) => {
-    const [ coreService ] = await Promise.all([initCoreService]);
+    const [coreService] = await Promise.all([initCoreService]);
     const parsedBody = BodySchema.ScheduledTaskRequest.parse(body);
 
     console.log(`Performing scheduled task (${parsedBody.taskType})...`);
