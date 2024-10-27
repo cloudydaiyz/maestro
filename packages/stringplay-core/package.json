@@ -1,15 +1,15 @@
 {
-  "name": "@cloudydaiyz/emaestro-core",
-  "description": "Main package for the emaestro project",
+  "name": "@cloudydaiyz/stringplay-core",
+  "description": "Main package for the stringplay project",
   "author": "Kylan Duncan",
   "license": "ISC",
   "keywords": [
-    "emaestro"
+    "stringplay"
   ],
   "version": "1.0.0",
   "repository": {
-    "url": "https://github.com/cloudydaiyz/emaestro",
-    "directory": "packages/emaestro-core"
+    "url": "https://github.com/cloudydaiyz/stringplay",
+    "directory": "packages/stringplay-core"
   },
   "exports": {
     ".": {

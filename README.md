@@ -3,27 +3,28 @@
 </p>
 
 <h1 align="center">
-<sup>emaestro-core</sup>
+<sup>stringplay-core</sup>
 </h1>
 
 <p align="center">
-<strong>emaestro</strong> is an event analytics service that collects aggregate membership data from your events, allowing you to effectively track event and membership data. Based on <a href="https://github.com/cloudydaiyz/membership-logger">membership-logger</a>.
+<strong>stringplay</strong> is an event analytics service that collects aggregate membership data from your events, allowing you to effectively track event and membership data. Based on <a href="https://github.com/cloudydaiyz/membership-logger">membership-logger</a>.
 </p>
 
 ## Overview
 
-This repository provides the backend for the emaestro project. For other relevant repositories, check out the following links:
+This repository provides the backend for the stringplay project. For other relevant repositories, check out the following links:
 
-- [`emaestro-ui`](https://github.com/cloudydaiyz/emaestro-ui) (Frontend)
-- [`emaestro-cloud`](https://github.com/cloudydaiyz/emaestro-cloud) (Cloud)
+- [`stringplay`](https://github.com/cloudydaiyz/stringplay) (Main)
+- [`stringplay-ui`](https://github.com/cloudydaiyz/stringplay-ui) (Frontend)
+- [`stringplay-cloud`](https://github.com/cloudydaiyz/stringplay-cloud) (Cloud)
 
 Note that this project uses MongoDB as its database provider. In order for services to properly run in production, you must have a MongoDB (or MongoDB Atlas) instance up and running.
 
 ## Packages
 
-- [`emaestro-core`](packages/emaestro-core) - The core backend functionality for the emaestro project. This package provides the controllers for the API service, sync service, and scheduled tasks services, as well as types used for the services.
+- [`stringplay-core`](packages/stringplay-core) - The core backend functionality for the stringplay project. This package provides the controllers for the API service, sync service, and scheduled tasks services, as well as types used for the services.
 
-- [`emaestro-gcp`](packages/emaestro-gcp) - The GCP Cloud Run Functions defined by the project. This package contains definitions for each function to deploy to GCP.
+- [`stringplay-gcp`](packages/stringplay-gcp) - The GCP Cloud Run Functions defined by the project. This package contains definitions for each function to deploy to GCP.
 
 ## Installation
 
@@ -42,22 +43,22 @@ The `.env` file is injected into each command via [`dotenvx`](https://github.com
 
 Before running commands, ensure that you have all necessary environment variables set.
 
-- `npm start`: Runs the API server in `packages/emaestro-gcp`
-- `npm test`: Runs jest tests in `packages/emaestro-core`
+- `npm start`: Runs the API server in `packages/stringplay-gcp`
+- `npm test`: Runs jest tests in `packages/stringplay-core`
 - `npm run build`: Transpiles TS code and installs dependencies for all folders in `/packages`
 - `npm run ci`: Performs a [clean install](https://docs.npmjs.com/cli/v10/commands/npm-ci) for all packages in the project
-- `npm run quick`: Runs the `quick-test.ts` file in `packages/emaestro-core/src` if available. This allows you to run unique, isolated code with access to the functionality provided by the core package.
-- `npm run coverage`: Runs jest tests in `packages/emaestro-core` and displays test coverage
-- `npm run core-server`: Runs the (dev) server created by `packages/emaestro-core`
+- `npm run quick`: Runs the `quick-test.ts` file in `packages/stringplay-core/src` if available. This allows you to run unique, isolated code with access to the functionality provided by the core package.
+- `npm run coverage`: Runs jest tests in `packages/stringplay-core` and displays test coverage
+- `npm run core-server`: Runs the (dev) server created by `packages/stringplay-core`
 
 ## Debugging
 
 This repository comes with support for the Visual Studio Code debugger. 
 
-- `gcp-server (api) | emaestro-gcp` configuration - debugs `npm start`
-- `core-server | emaestro-core` configuration - debugs `npm run core-server`
-- `quick-test | emaestro-core` configuration - debugs `npm run quick`
-- `*.spec.ts (tests) | emaestro-core` configuration - runs jest in watch mode, and debugs any individual jest test file in `packages/emaestro-core`
+- `gcp-server (api) | stringplay-gcp` configuration - debugs `npm start`
+- `core-server | stringplay-core` configuration - debugs `npm run core-server`
+- `quick-test | stringplay-core` configuration - debugs `npm run quick`
+- `*.spec.ts (tests) | stringplay-core` configuration - runs jest in watch mode, and debugs any individual jest test file in `packages/stringplay-core`
 
 For more resources on debugging:
 

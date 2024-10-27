@@ -1,18 +1,19 @@
 {
-  "name": "@cloudydaiyz/emaestro-gcp",
+  "name": "@cloudydaiyz/stringplay-gcp",
+  "private": true,
   "version": "0.0.0",
-  "description": "Cloud run functions for the emaestro project",
+  "description": "Cloud run functions for the stringplay project",
   "author": "Kylan Duncan",
   "license": "ISC",
   "keywords": [
-    "emaestro"
+    "stringplay"
   ],
   "main": "index.js",
   "scripts": {
     "start": "tsc && functions-framework --target=api"
   },
   "dependencies": {
-    "@cloudydaiyz/emaestro-core": "file:../emaestro-core",
+    "@cloudydaiyz/stringplay-core": "file:../stringplay-core",
     "@google-cloud/functions-framework": "^3.4.2",
     "googleapis": "^144.0.0"
   },

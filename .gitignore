@@ -4,6 +4,6 @@ dist
 quick-test*.*
 .env
 service-key.json
-packages/emaestro-gcp/index.js
-packages/emaestro-gcp/index.d.ts
+packages/stringplay-gcp/index.js
+packages/stringplay-gcp/index.d.ts
 *.tsbuildinfo

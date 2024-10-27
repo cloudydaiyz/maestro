@@ -1,9 +1,9 @@
-import { init, exit } from '@cloudydaiyz/emaestro-core/server';
-import { ApiResponse } from '@cloudydaiyz/emaestro-core/types/rest';
+import { init, exit } from '@cloudydaiyz/stringplay-core/server';
+import { ApiResponse } from '@cloudydaiyz/stringplay-core/types/rest';
 import * as functions from '@google-cloud/functions-framework';
 import assert from "assert";
 
-type ControllerModule = typeof import("@cloudydaiyz/emaestro-core");
+type ControllerModule = typeof import("@cloudydaiyz/stringplay-core");
 let controllers: ControllerModule;
 
 /** Sends the API response in a HTTP response */

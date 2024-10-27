@@ -1,21 +1,22 @@
 {
-  "name": "emaestro-root",
+  "name": "@cloudydaiyz/stringplay-core-root",
+  "private": true,
   "version": "0.0.0",
-  "description": "Root package for the emaestro project",
+  "description": "Root package for the stringplay project",
   "author": "Kylan Duncan",
   "keywords": [
-    "emaestro"
+    "stringplay"
   ],
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "build": "tsc -b && npm --prefix=packages/emaestro-core i && npm --prefix=packages/emaestro-gcp i",
-    "ci": "npm --prefix=packages/emaestro-core ci && npm --prefix=packages/emaestro-gcp ci",
-    "start": "dotenvx run -- npm --prefix=packages/emaestro-gcp start",
-    "test": "dotenvx run -- npm --prefix=packages/emaestro-core run test",
-    "coverage": "dotenvx run -- npm --prefix=packages/emaestro-core run coverage",
-    "core-server": "dotenvx run -- npm --prefix=packages/emaestro-core start",
-    "quick": "dotenvx run -- npm --prefix=packages/emaestro-core run quick"
+    "build": "tsc -b && npm --prefix=packages/stringplay-core i && npm --prefix=packages/stringplay-gcp i",
+    "ci": "npm --prefix=packages/stringplay-core ci && npm --prefix=packages/stringplay-gcp ci",
+    "start": "dotenvx run -- npm --prefix=packages/stringplay-gcp start",
+    "test": "dotenvx run -- npm --prefix=packages/stringplay-core run test",
+    "coverage": "dotenvx run -- npm --prefix=packages/stringplay-core run coverage",
+    "core-server": "dotenvx run -- npm --prefix=packages/stringplay-core start",
+    "quick": "dotenvx run -- npm --prefix=packages/stringplay-core run quick"
   },
   "devDependencies": {
     "@dotenvx/dotenvx": "^1.20.0",

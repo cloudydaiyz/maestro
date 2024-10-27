@@ -191,7 +191,7 @@ async function dbSetup(config: DbSetupConfig) {
             "Member ID": customMemberId,
             "First Name": "Member",
             "Last Name": crypto.randomUUID(),
-            "Email": customMemberId + "@emaestro.com",
+            "Email": customMemberId + "@stringplay.com",
             "Birthday": new Date(),
         };
 
@@ -224,7 +224,7 @@ async function dbSetup(config: DbSetupConfig) {
                 "Member ID": request.properties?.["Member ID"] || { value: customMemberId, override: false },
                 "First Name": request.properties?.["First Name"] || { value: "Member", override: false },
                 "Last Name": request.properties?.["Last Name"] || { value: crypto.randomUUID(), override: false },
-                "Email": request.properties?.["Email"] || { value: customMemberId + "@emaestro.com", override: false },
+                "Email": request.properties?.["Email"] || { value: customMemberId + "@stringplay.com", override: false },
                 "Birthday": request.properties?.["Birthday"] || { value: new Date(), override: false },
             },
             points: {

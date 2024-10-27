@@ -3,7 +3,7 @@
   "files": [],
   "include": [],
   "references": [
-    { "path": "./packages/emaestro-core" }, 
-    { "path": "./packages/emaestro-gcp" }
+    { "path": "./packages/stringplay-core" }, 
+    { "path": "./packages/stringplay-gcp" }
   ]
 }
