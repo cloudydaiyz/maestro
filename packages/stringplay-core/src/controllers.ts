@@ -1,5 +1,5 @@
 import EventEmitter from "events";
-import { TroupeApiService } from "./services/api";
+import { StringplayApiService } from "./services/api";
 import { TroupeCoreService } from "./services/core";
 import { TroupeSyncService } from "./services/sync";
 import { AuthenticationError, ClientError } from "./util/error";
@@ -8,11 +8,12 @@ import { z } from "zod";
 import { DEV_MODE } from "./util/env";
 import { BaseDbService } from "./services/base";
 import { SyncRequest } from "./types/service-types";
-import { AccessTokenPayload, AuthorizationHeader, AuthService } from "./services/auth";
+import { AuthService } from "./services/auth";
 import assert from "assert";
+import { AccessTokenPayload, AuthorizationHeader } from "./types/api-types";
 
 const initAuthService = AuthService.create();
-const initApiService = TroupeApiService.create();
+const initApiService = StringplayApiService.create();
 const initCoreService = TroupeCoreService.create();
 const initSyncService = TroupeSyncService.create();
 
@@ -45,14 +46,15 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
                 headers: {},
                 body: await apiService.updateTroupe(troupeId, BodySchema.UpdateTroupeRequest.parse(body)),
             }
-        } else if(method == "DELETE") {
-            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
-            await coreService.deleteTroupe(troupeId);
-            return {
-                status: 200,
-                headers: {},
-            }
-        }
+        } 
+        // else if(method == "DELETE") {
+        //     assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+        //     await coreService.deleteTroupe(troupeId);
+        //     return {
+        //         status: 200,
+        //         headers: {},
+        //     }
+        // }
         throw new ClientError("Invalid method for path");
     }
 

@@ -61,8 +61,14 @@ export class BaseDbService {
         return event;
     }
 
-    async getEventTypeSchema(troupeId: string, eventTypeId: string, clientError?: true): Promise<EventTypeSchema> {
+    async getEventTypeSchema(troupeId: string, eventTypeId: string, clientError?: true): Promise<WithId<EventTypeSchema>> {
         const troupe = await this.getTroupeSchema(troupeId, true);
+        const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
+        assert(eventType, clientError ? new ClientError("Unable to find event type") : "Unable to find event type");
+        return eventType;
+    }
+
+    getEventTypeSchemaFromTroupe(troupe: WithId<TroupeSchema>, eventTypeId: string, clientError?: true): WithId<EventTypeSchema> {
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
         assert(eventType, clientError ? new ClientError("Unable to find event type") : "Unable to find event type");
         return eventType;
@@ -74,9 +80,38 @@ export class BaseDbService {
         return member;
     }
 
-    async getDashboardSchema(troupeId: string): Promise<WithId<TroupeDashboardSchema>> {
+    async getAttendeeSchema(troupeId: string, memberId: string, clientError?: true): Promise<WithId<AttendeeSchema>> {
+        const member = await this.getMemberSchema(troupeId, memberId, clientError);
+        const attendee: WithId<AttendeeSchema> = { ...member, eventsAttended: {} };
+
+        const buckets = await this.eventsAttendedColl.find({ troupeId, memberId }).toArray();
+        for(const bucket of buckets) {
+            attendee.eventsAttended = { ...attendee.eventsAttended, ...bucket.events };
+        }
+        return attendee;
+    }
+
+    async getAttendeeSchemas(troupeId: string, clientError?: true): Promise<WithId<AttendeeSchema>[]> {
+        const members = await this.audienceColl.find({ troupeId }).toArray();
+        const attendees = [];
+        
+        for (const member of members) {
+            const attendee: WithId<AttendeeSchema> = { ...member, eventsAttended: {} };
+            const memberId = member._id.toHexString();
+
+            const buckets = await this.eventsAttendedColl.find({ troupeId, memberId }).toArray();
+            for(const bucket of buckets) {
+                attendee.eventsAttended = { ...attendee.eventsAttended, ...bucket.events };
+            }
+            attendees.push(attendee);
+        }
+
+        return attendees;
+    }
+
+    async getDashboardSchema(troupeId: string, clientError?: true): Promise<WithId<TroupeDashboardSchema>> {
         const dashboard = await this.dashboardColl.findOne({ troupeId });
-        assert(dashboard, new ClientError("Unable to find dashboard"));
+        assert(dashboard, clientError ? new ClientError("Unable to find dashboard") : "Unable to find dashboard");
         return dashboard;
     }
 

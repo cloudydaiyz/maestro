@@ -16,7 +16,6 @@ This repository provides the backend for the stringplay project. For other relev
 
 - [`stringplay`](https://github.com/cloudydaiyz/stringplay) (Main)
 - [`stringplay-ui`](https://github.com/cloudydaiyz/stringplay-ui) (Frontend)
-- [`stringplay-cloud`](https://github.com/cloudydaiyz/stringplay-cloud) (Cloud)
 
 Note that this project uses MongoDB as its database provider. In order for services to properly run in production, you must have a MongoDB (or MongoDB Atlas) instance up and running.
 

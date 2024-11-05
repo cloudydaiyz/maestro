@@ -1,7 +1,7 @@
 import init from "./util/init";
 import { DbSetupConfig, defaultConfig } from "./util/db-config";
 
-import { TroupeApiService } from "../services/api";
+import { StringplayApiService } from "../services/api";
 import { TroupeCoreService } from "../services/core";
 import { test, describe } from "@jest/globals";
 
@@ -14,7 +14,7 @@ describe("basic api operations", () => {
 
     test("get troupe", async () => {
         const core = await TroupeCoreService.create();
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
 
         await expect(api.getTroupe("test")).rejects.toThrow();
 
@@ -26,7 +26,7 @@ describe("basic api operations", () => {
     test("create event", async () => {
         const troupeId = config.troupes!["A"].id!;
 
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
 
         const event = await api.createEvent(troupeId, {
             title: "test",
@@ -42,7 +42,7 @@ describe("basic api operations", () => {
         const observedMemberId = config.members!["2"].id!;
         const secondEventId = config.events!["second"].id!;
 
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
 
         const updatedEvent1 = await api.updateEvent(troupeId, secondEventId, {
             title: "test2",
@@ -96,7 +96,7 @@ describe("basic api operations", () => {
         const fourthEventId = config.events!["fourth"].id!;
         const fourthEventValue = config.events!["fourth"].event!.value;
 
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
 
         // Observe the impact of updating the event value on attendees (in this case, member 2)
         const observedMemberId = config.members!["2"].id!;
@@ -128,7 +128,7 @@ describe("basic api operations", () => {
         const fourthEventId = config.events!["fourth"].id!;
         const fourthEventValue = config.events!["fourth"].event!.value;
 
-        const api = await TroupeApiService.create()
+        const api = await StringplayApiService.create()
 
         // Observe the impact of deleting the event on attendees (in this case, member 2)
         const originalPoints = config.members!["2"].member!.points["Total"];
@@ -158,7 +158,7 @@ describe("basic api operations", () => {
         const secondEventId = config.events!["second"].id!;
         const fifthEventId = config.events!["fifth"].id!;
 
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
 
         const originalValue = config.eventTypes!["alright events"].value!;
         const originalPoints = config.members!["2"].member!.points["Total"];
@@ -201,7 +201,7 @@ describe("basic api operations", () => {
         const secondEventId = config.events!["second"].id!;
         const fifthEventId = config.events!["fifth"].id!;
 
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
 
         const originalValue = config.eventTypes!["alright events"].value!;
         const originalPoints = config.members!["2"].member!.points["Total"];
@@ -241,7 +241,7 @@ describe("basic api operations", () => {
         const troupeId = config.troupes!["A"].id!;
         const observedMemberId = config.members!["2"].id!;
 
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
 
         await expect(api.updateMember(troupeId, observedMemberId, {
             removeProperties: ["Last Name"],
@@ -266,7 +266,7 @@ describe("basic api operations", () => {
         const observedMemberId = config.members!["2"].id!;
 
         // Check if member and buckets are deleted
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
 
         await api.deleteMember(troupeId, observedMemberId);
 

@@ -1,7 +1,7 @@
 import init from "./util/init";
 import { DbSetupConfig, defaultConfig } from "./util/db-config";
 
-import { TroupeApiService } from "../services/api";
+import { StringplayApiService } from "../services/api";
 import { TroupeCoreService } from "../services/core";
 import { test, describe } from "@jest/globals";
 import { AuthService } from "../services/auth";
@@ -65,7 +65,7 @@ describe("basic auth", () => {
 
     test("validate and refresh", async () => {
         const auth = await AuthService.create();
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
 
         const pass = crypto.randomUUID();
         const troupeId = await auth.register("user1", "good.email@gmail.com", pass, "new troupe");
@@ -73,8 +73,6 @@ describe("basic auth", () => {
 
         const payload1 = auth.extractAccessTokenPayload(accessToken);
         expect(auth.validate(payload1)).toBe(true);
-
-        await expect(api.getTroupe(troupeId)).resolves.not.toThrow();
 
         const newCreds = await auth.refreshCredentials(refreshToken);
 
@@ -84,13 +82,11 @@ describe("basic auth", () => {
 
     test("delete", async () => {
         const auth = await AuthService.create();
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
         
         const pass = crypto.randomUUID();
         const troupeId = await auth.register("user1", "good.email@gmail.com", pass, "new troupe");
 
         await expect(auth.deleteUser("user1", pass)).resolves.not.toThrow();
-
-        await expect(api.getTroupe(troupeId)).rejects.toThrow();
     });
 });

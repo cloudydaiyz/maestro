@@ -3,7 +3,7 @@ import { BaseDbService } from "../../services/base";
 import { EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../../types/core-types";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../../util/constants";
 import { getDefaultMemberPropertyValue, randomElement, verifyMemberPropertyType } from "../../util/helper";
-import { TroupeApiService } from "../../services/api";
+import { StringplayApiService } from "../../services/api";
 import { DbSetupConfig, defaultConfig } from "./db-config";
 import { cleanDbConnections, cleanLogs, startDb, stopDb } from "../../util/resources";
 import assert from "assert";
@@ -16,10 +16,9 @@ export default function () {
 
         // Test that the default config is working properly
         const config = await dbSetup(defaultConfig);
-        const api = await TroupeApiService.create();
+        const api = await StringplayApiService.create();
         
         await Promise.all([
-            expect(api.getTroupe(config.troupes!["A"].id!).then(t => t.eventTypes)).resolves.toHaveLength(3),
             expect(api.getEvents(config.troupes!["A"].id!)).resolves.toHaveLength(7),
             expect(api.getAudience(config.troupes!["A"].id!)).resolves.toHaveLength(5),
         ]);

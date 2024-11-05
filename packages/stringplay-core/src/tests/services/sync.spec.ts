@@ -7,7 +7,7 @@ import { GoogleSheetsLogService } from "../../services/logs/gsheets-log";
 import { ObjectId, WithId } from "mongodb";
 import { AttendeeSchema, EventSchema, EventsAttendedBucketSchema } from "../../types/core-types";
 import { TroupeSyncService } from "../../services/sync";
-import { TroupeApiService } from "../../services/api";
+import { StringplayApiService } from "../../services/api";
 import { PublicEvent, UpdateEventRequest } from "../../types/api-types";
 import { TroupeCoreService } from "../../services/core";
 
@@ -20,7 +20,7 @@ describe("troupe sync service", () => {
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
 
         const syncService = await TroupeSyncService.create();
-        const apiService = await TroupeApiService.create();
+        const apiService = await StringplayApiService.create();
 
         // Sync the troupe and ensure no errors are thrown
         await expect(syncService.sync(troupeId, true)).resolves.not.toThrow();
@@ -96,7 +96,7 @@ describe("troupe sync service", () => {
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
 
         const syncService = await TroupeSyncService.create();
-        const apiService = await TroupeApiService.create();
+        const apiService = await StringplayApiService.create();
         const coreService = await TroupeCoreService.create();
 
         // Create a new log for the updated troupe

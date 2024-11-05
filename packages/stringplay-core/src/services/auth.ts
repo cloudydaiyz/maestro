@@ -11,23 +11,7 @@ import zxcvbn from "zxcvbn";
 import bcrypt from "bcrypt";
 import assert from "assert";
 import jwt from "jsonwebtoken";
-
-type Credentials = { accessToken: string, refreshToken: string };
-
-export type AccessTokenPayload = { 
-    userId: string,
-    troupeId: string,
-    [troupeId: string]: number | string,
-};
-
-export type RefreshTokenPayload = {
-    userId: string,
-}
-
-export interface AuthorizationHeader extends Record<string, any> {
-    Authorization?: string,
-    authorization?: string,
-}
+import { AccessTokenPayload, RefreshTokenPayload, Credentials, AuthorizationHeader, SpringplayAuthApi } from "../types/api-types";
 
 /**
  * User authentication service, responsible for creating, validating, and refreshing user sessions.
@@ -38,7 +22,7 @@ export interface AuthorizationHeader extends Record<string, any> {
  * **FUTURE:**
  * - Convert JWTs to session tokens with refresh token families to allow for revocation
  */
-export class AuthService extends BaseDbService {
+export class AuthService extends BaseDbService implements SpringplayAuthApi {
     userColl: Collection<UserSchema>;
 
     constructor() { 
@@ -79,8 +63,7 @@ export class AuthService extends BaseDbService {
         return jwt.sign(refreshTokenPayload, REFRESH_TOKEN_SECRET!, { expiresIn: "7d" });
     }
 
-    /** Creates a new account with an associated troupe */
-    async register(username: string, email: string, password: string, troupeName: string): Promise<string> {
+    async register(username: string, email: string, password: string, troupeName: string): Promise<void> {
         assert(EMAIL_REGEX.test(email), new ClientError("Invalid email"));
         assert(zxcvbn(password).score >= 3, new ClientError("Password is too weak"));
         assert(!(await this.userColl.findOne({ $or: [ {email}, {username} ] })), new ClientError("User already exists"));
@@ -95,8 +78,6 @@ export class AuthService extends BaseDbService {
 
         const insertUser = await this.userColl.insertOne({ username, email, hashedPassword, troupeId, troupeAccess: [], createdAt: new Date() });
         assert(insertUser.acknowledged, "Failed to create user");
-
-        return troupeId;
     }
     
     /** Creates a new user session and returns the associated access and refresh tokens */
@@ -109,7 +90,6 @@ export class AuthService extends BaseDbService {
         return { accessToken, refreshToken };
     }
 
-    /** Refreshes access credentials */
     async refreshCredentials(refreshToken: string): Promise<Credentials> {
         const payload = jwt.verify(refreshToken, REFRESH_TOKEN_SECRET!) as RefreshTokenPayload;
         const user = await this.userColl.findOne({ _id: new ObjectId(payload.userId) });
@@ -119,7 +99,6 @@ export class AuthService extends BaseDbService {
         return { accessToken, refreshToken: newRefreshToken };
     }
 
-    /** Deletes the account & troupe associated with the account */
     async deleteUser(usernameOrEmail: string, password: string): Promise<void> {
         assert(this.login(usernameOrEmail, password), new ClientError("Invalid credentials"));
         const deletedUser = await this.userColl.findOneAndDelete({ $or: [{email: usernameOrEmail}, {username: usernameOrEmail}] });

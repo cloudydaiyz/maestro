@@ -127,6 +127,8 @@ export namespace Paths {
 
     export const Troupes = Path.createPath("/t");
     export const Troupe: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId");
+
+    export const Console: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/console");
     export const Dashboard: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/dashboard");
 
     export const Events: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/e");
@@ -135,8 +137,11 @@ export namespace Paths {
     export const EventTypes: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/et");
     export const EventType: ParamPath<"troupeId"|"eventTypeId"> = Path.createPath("/t/:troupeId/et/:eventTypeId");
 
-    export const Audience: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/a");
-    export const Member: ParamPath<"troupeId"|"memberId"> = Path.createPath("/t/:troupeId/a/:memberId");
+    export const Audience: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/m");
+    export const Member: ParamPath<"troupeId"|"memberId"> = Path.createPath("/t/:troupeId/m/:memberId");
+
+    export const Attendees: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/a");
+    export const Attendee: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/a");
 
     export const Sync: ParamPath<"troupeId"> = Path.createPath("/t/:troupeId/sync");
 }

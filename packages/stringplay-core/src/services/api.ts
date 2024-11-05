@@ -2,24 +2,47 @@
 
 import { AnyBulkWriteOperation, ObjectId, PullOperator, PushOperator, UpdateFilter, WithId } from "mongodb";
 import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "../util/constants";
-import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints } from "../types/core-types";
-import { ApiType, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
+import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints, AttendeeSchema } from "../types/core-types";
+import { ApiType, Attendee, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
 import { Mutable, Replace, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "../types/util-types";
 import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
 import { verifyApiMemberPropertyType } from "../util/helper";
-import assert from "assert";
 import { addToSyncQueue } from "../cloud/gcp";
+import assert from "assert";
 
 /**
- * Provides methods for interacting with the Troupe API. The structure of all given parameters will
+ * Provides method definitions for the API. The structure of all given parameters will
  * not be checked (e.g. data type, constant range boundaries), but any checks requiring database access 
  * will be performed on each parameter.
  */
-export class TroupeApiService extends BaseDbService {
+export class StringplayApiService extends BaseDbService implements SpringplayCoreApi {
     constructor() { super() }
 
-    /** Retrieves troupe dashboard */
+    async getConsoleData(troupeId: string): Promise<ConsoleData> {
+        const [
+            dashboard,
+            troupe,
+            events,
+            eventTypes,
+            attendees
+        ] = await Promise.all([
+            this.getDashboard(troupeId),
+            this.getTroupe(troupeId),
+            this.getEvents(troupeId),
+            this.getEventTypes(troupeId),
+            this.getAttendees(troupeId),
+        ]);
+        
+        return {
+            dashboard,
+            troupe,
+            events,
+            eventTypes,
+            attendees
+        };
+    }
+
     async getDashboard(troupeId: string): Promise<TroupeDashboard> {
         const {_id, ...publicDashboard} = await this.getDashboardSchema(troupeId);
 
@@ -38,10 +61,9 @@ export class TroupeApiService extends BaseDbService {
                 members: newUpcomingBirthdays,
             },
             lastUpdated: publicDashboard.lastUpdated.toISOString(),
-        };
+        }
     }
 
-    /** Retrieves troupe or parses existing troupe into public format */ 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {
         let publicTroupe: WeakPartial<WithId<TroupeSchema>, "_id"> = typeof troupe == "string" 
             ? await this.getTroupeSchema(troupe, true)
@@ -52,7 +74,7 @@ export class TroupeApiService extends BaseDbService {
         delete publicTroupe._id;
 
         // Get the public version of the event types
-        const eventTypes = await Promise.all(publicTroupe.eventTypes.map((et) => this.getEventType(et)));
+        // const eventTypes = await Promise.all(publicTroupe.eventTypes.map((et) => this.getEventType(et)));
 
         // Get the public version of the point types and synchronized point types
         let pointTypes: Troupe["pointTypes"] = {} as Troupe["pointTypes"];
@@ -78,20 +100,11 @@ export class TroupeApiService extends BaseDbService {
             ...publicTroupe,
             lastUpdated: publicTroupe.lastUpdated.toISOString(),
             id,
-            eventTypes,
             pointTypes,
             synchronizedPointTypes,
         }
     }
 
-    /**
-     * Updates troupe and returns troupe in public format. 
-     * 
-     * Wait until next sync to:
-     * - update properties of each member with the properties of the new origin event
-     * - update the properties of members to have the correct type (in case they made a mistake)
-     * - update the point types of members to have the correct type & amt of points*
-     */
     async updateTroupe(troupeId: string, request: UpdateTroupeRequest): Promise<Troupe> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot update troupe while sync is in progress"));
@@ -190,12 +203,6 @@ export class TroupeApiService extends BaseDbService {
         return this.getTroupe(newTroupe);
     }
 
-    /** 
-     * Creates and returns a new event in the given troupe. 
-     * 
-     * Wait until next sync to:
-     * - Retrieve attendees and field information for the event
-     */
     async createEvent(troupeId: string, request: CreateEventRequest): Promise<PublicEvent> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot create event while sync is in progress"));
@@ -230,7 +237,6 @@ export class TroupeApiService extends BaseDbService {
         return this.getEvent({...event, _id: insertedEvent.insertedId});
     }
 
-    /** Retrieves event or parses existing event into public format */ 
     async getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent> {
         assert(typeof event != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event."))
@@ -248,21 +254,11 @@ export class TroupeApiService extends BaseDbService {
         }
     }
 
-    /** Retrieve all events in public format */ 
     async getEvents(troupeId: string): Promise<PublicEvent[]> {
         const events = await this.eventColl.find({ troupeId }).toArray();
         return Promise.all(events.map((e) => this.getEvent(e)));
     }
 
-    /**
-     * Update event in the given troupe and returns event in public format. If event has 
-     * an event type but the user updates the value field, the event type for the event 
-     * is removed. You cannot update with the event type and value fields at the same time.
-     * 
-     * Wait until next sync to:
-     * - Update member properties for the event attendees
-     * - Update the synchronized field to property mapping
-     */
     async updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest): Promise<PublicEvent> {
         const [troupe, oldEvent] = await Promise.all([
             this.getTroupeSchema(troupeId, true),
@@ -401,12 +397,6 @@ export class TroupeApiService extends BaseDbService {
         return this.getEvent(newEvent);
     }
 
-    /**
-     * Deletes an event in the given troupe. 
-     * 
-     * Wait until next sync to:
-     * - Update member points for types that the event is in data range for*
-     */
     async deleteEvent(troupeId: string, eventId: string): Promise<void> {
         const [troupe, event] = await Promise.all([
             this.getTroupeSchema(troupeId, true), 
@@ -440,12 +430,6 @@ export class TroupeApiService extends BaseDbService {
         assert(deletedEvent, new ClientError("Failed to delete event"));
     }
 
-    /**
-     * Creates and returns a new event type in the given troupe. 
-     * 
-     * Wait until next sync to:
-     * - Obtain the events from source folders for the event type
-     */
     async createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<EventType> {
 
         // Ensure given source folder URIs are valid Google Drive folders
@@ -473,13 +457,14 @@ export class TroupeApiService extends BaseDbService {
         return this.getEventType(type);
     }
 
-    /** Retrieves event type or parses existing event type into public format */
-    async getEventType(eventType: string | WithId<EventTypeSchema>, troupeId?: string): Promise<EventType> {
+    async getEventType(eventType: string | WithId<EventTypeSchema>, troupeId?: string, troupe?: WithId<TroupeSchema>): Promise<EventType> {
         assert(typeof eventType != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event type."))
-        let eType: WeakPartial<WithId<EventTypeSchema>, "_id"> = typeof eventType == "string" 
-            ? await this.getEventTypeSchema(troupeId!, eventType, true)
-            : eventType;
+        let eType: WeakPartial<WithId<EventTypeSchema>, "_id"> = typeof eventType != "string" 
+            ? eventType
+            : troupe
+            ? this.getEventTypeSchemaFromTroupe(troupe, eventType, true)
+            : await this.getEventTypeSchema(troupeId!, eventType, true);
         const eid = eType._id!.toHexString();
         delete eType._id;
 
@@ -490,12 +475,11 @@ export class TroupeApiService extends BaseDbService {
         }
     }
 
-    /** 
-     * Updates event type in the given troupe and returns event type in public format.
-     * 
-     * Wait until next sync to:
-     * - Retrieve events and attendees from the updated source folder URIs
-     */ 
+    async getEventTypes(troupeId: string): Promise<EventType[]> {
+        const troupe = await this.getTroupeSchema(troupeId, true);
+        return Promise.all(troupe.eventTypes.map(et => this.getEventType(et._id.toHexString())))
+    }
+
     async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<EventType> {
 
         // Ensure given source folder URIs are valid Google Drive folders
@@ -642,7 +626,6 @@ export class TroupeApiService extends BaseDbService {
         return this.getEventType(newEventType);
     }
 
-    /** Deletes an event type in the given troupe. */
     async deleteEventType(troupeId: string, eventTypeId: string): Promise<void> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot delete event type while sync is in progress"));
@@ -686,7 +669,6 @@ export class TroupeApiService extends BaseDbService {
         assert(deleteEventTypeResult.modifiedCount, "Failed to delete event type");
     }
 
-    /** Creates and returns a new member in the given troupe. */
     async createMember(troupeId: string, request: CreateMemberRequest): Promise<Member> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot create member while sync is in progress"));
@@ -718,10 +700,10 @@ export class TroupeApiService extends BaseDbService {
         return this.getMember({ ...member, _id: insertedMember.insertedId });
     }
 
-    /** Retrieve member in public format. */
     async getMember(member: string | WithId<MemberSchema>, troupeId?: string): Promise<Member> {
         assert(typeof member != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event."))
+        
         const m: WeakPartial<WithId<MemberSchema>, "_id"> = typeof member == "string"
             ? await this.getMemberSchema(troupeId!, member, true)
             : member;
@@ -746,17 +728,53 @@ export class TroupeApiService extends BaseDbService {
         };
     }
 
-    /** Retrieve all members in public format */ 
-    async getAudience(troupeId: string): Promise<Member[]> {
-        const audience = await this.audienceColl.find({ troupeId }).toArray();
-        return Promise.all(audience.map((m) => this.getMember(m)));
+    async getAttendee(member: string | WithId<AttendeeSchema>, troupeId?: string): Promise<Attendee> {
+        assert(typeof member != "string" || troupeId != null, 
+            new ClientError("Must have a troupe ID to retrieve event."));
+        
+        const m: WeakPartial<WithId<AttendeeSchema>, "_id" | "eventsAttended"> = typeof member == "string"
+            ? await this.getAttendeeSchema(troupeId!, member, true)
+            : member;
+        const memberId = m._id!.toHexString();
+        delete m._id;
+        
+        const properties = {} as ApiType<MemberSchema["properties"]>;
+        for(const key in m.properties) {
+            properties[key] = {
+                value: m.properties[key].value instanceof Date 
+                    ? m.properties[key]!.value!.toString()
+                    : m.properties[key].value as ApiType<MemberPropertyValue>,
+                override: m.properties[key].override,
+            }
+        }
+
+        const eventsAttended = [];
+        for(const event in m.eventsAttended) {
+            eventsAttended.push(event);
+        }
+        return {
+            ...m,
+            id: memberId,
+            lastUpdated: m.lastUpdated.toISOString(),
+            properties,
+            eventsAttended,
+        };
     }
 
-    /** Update or delete (optional) properties for single member */
+    async getAudience(troupeId: string): Promise<Member[]> {
+        const audience = await this.audienceColl.find({ troupeId }).toArray();
+        return Promise.all(audience.map(m => this.getMember(m)));
+    }
+
+    async getAttendees(troupeId: string): Promise<Attendee[]> {
+        const audience = await this.getAttendeeSchemas(troupeId, true);
+        return Promise.all(audience.map(m => this.getAttendee(m)));
+    }
+
     async updateMember(troupeId: string, memberId: string, request: UpdateMemberRequest): Promise<Member> {
-        const [troupe, member] = await Promise.all([
+        const [troupe, /* member */] = await Promise.all([
             this.getTroupeSchema(troupeId, true),
-            this.getMemberSchema(troupeId, memberId, true)
+            // this.getMemberSchema(troupeId, memberId, true)
         ]);
         assert(!troupe.syncLock, new ClientError("Cannot update member while sync is in progress"));
 
@@ -821,10 +839,6 @@ export class TroupeApiService extends BaseDbService {
         return this.getMember(newMember);
     }
 
-    /** 
-     * Deletes a member in the given troupe. Member may still be generated on sync; 
-     * this removes the existing data associated with a member. 
-     */
     async deleteMember(troupeId: string, memberId: string): Promise<void> {
         const res = await Promise.all([
             this.audienceColl.deleteOne({ _id: new ObjectId(memberId), troupeId }),
@@ -833,8 +847,7 @@ export class TroupeApiService extends BaseDbService {
         assert(res.every(r => r.acknowledged), "Failed to delete member data");
     }
 
-    /** Places troupe into the sync queue if the sync lock is disabled. */
-    async initiateSync(troupeId: string) {
+    async initiateSync(troupeId: string): Promise<void> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Sync is already in progress"));
         await addToSyncQueue({ troupeId });
