@@ -1,0 +1,32 @@
+{
+  "name": "@cloudydaiyz/stringplay-client",
+  "description": "API client package for the stringplay project",
+  "author": "Kylan Duncan",
+  "license": "ISC",
+  "version": "1.0.0",
+  "keywords": [
+    "stringplay"
+  ],
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    }
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "axios": "^1.7.7"
+  },
+  "devDependencies": {
+    "@cloudydaiyz/stringplay-core": "file:../stringplay-core",
+    "@types/node": "^22.9.0"
+  },
+  "files": [
+    "index.js",
+    "index.js.map",
+    "index.d.ts",
+    "index.d.ts.map"
+  ]
+}

@@ -10,8 +10,8 @@
   "license": "ISC",
   "main": "index.js",
   "scripts": {
-    "build": "tsc -b && npm --prefix=packages/stringplay-core i && npm --prefix=packages/stringplay-gcp i",
-    "ci": "npm --prefix=packages/stringplay-core ci && npm --prefix=packages/stringplay-gcp ci",
+    "build": "tsc -b && npm --prefix=packages/stringplay-core i && npm --prefix=packages/stringplay-core i && npm --prefix=packages/stringplay-gcp i",
+    "ci": "npm --prefix=packages/stringplay-core ci && npm --prefix=packages/stringplay-client ci && npm --prefix=packages/stringplay-gcp ci",
     "start": "dotenvx run -- npm --prefix=packages/stringplay-gcp start",
     "test": "dotenvx run -- npm --prefix=packages/stringplay-core run test",
     "coverage": "dotenvx run -- npm --prefix=packages/stringplay-core run coverage",

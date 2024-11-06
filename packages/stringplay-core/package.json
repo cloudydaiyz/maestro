@@ -8,7 +8,7 @@
   ],
   "version": "1.0.0",
   "repository": {
-    "url": "https://github.com/cloudydaiyz/stringplay",
+    "url": "https://github.com/cloudydaiyz/stringplay-core",
     "directory": "packages/stringplay-core"
   },
   "exports": {

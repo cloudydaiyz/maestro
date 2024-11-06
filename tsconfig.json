@@ -4,6 +4,7 @@
   "include": [],
   "references": [
     { "path": "./packages/stringplay-core" }, 
+    { "path": "./packages/stringplay-client" }, 
     { "path": "./packages/stringplay-gcp" }
   ]
 }

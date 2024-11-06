@@ -1,6 +1,4 @@
-import { WithId } from "mongodb";
-import { Attendee, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, Credentials, EventType, Member, PublicEvent, SpringplayAuthApi, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
-import { TroupeSchema, EventSchema, MemberSchema, AttendeeSchema } from "../types/core-types";
+import { Attendee, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, Credentials, EventType, Member, PublicEvent, SpringplayAuthApi, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "@cloudydaiyz/stringplay-core/types/api";
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 import path from "path";
 import assert from "assert";
@@ -38,7 +36,8 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
         assert(this.credentials, new StringplayApiClientError("Authorization required for this command"))
         return { 
             ...(requireAuth && this.credentials ? {'Authorization': `Bearer ${this.credentials.accessToken}`} : {}), 
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            // "Accept": "application/json"
         };
     }
 
