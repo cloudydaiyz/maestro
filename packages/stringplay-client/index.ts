@@ -3,6 +3,8 @@ import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 import path from "path";
 import assert from "assert";
 
+import { PathParsers } from "@cloudydaiyz/stringplay-core/routes";
+
 /** Catches and relays API client input based errors */ 
 export class StringplayApiClientError extends Error {
     constructor(message: string) {
@@ -52,7 +54,7 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
 
     register(username: string, email: string, password: string, troupeName: string): Promise<AxiosResponse<void>> {
         return axios.post(
-            path.join(this.uri, '/auth', 'register'), 
+            path.join(this.uri, PathParsers.Register.build()), 
             { username, email, password, troupeName },
             { headers: this.headers(false) },
         );
@@ -60,7 +62,7 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
 
     login(usernameOrEmail: string, password: string): Promise<AxiosResponse<Credentials>> {
         return axios.post(
-            path.join(this.uri, '/auth', 'login'), 
+            path.join(this.uri, PathParsers.Login.build()), 
             { usernameOrEmail, password },
             { headers: this.headers(false) },
         );
@@ -68,7 +70,7 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
 
     refreshCredentials(refreshToken: string): Promise<AxiosResponse<Credentials>> {
         return axios.post(
-            path.join(this.uri, '/auth', 'refresh'), 
+            path.join(this.uri, PathParsers.RefreshCredentials.build()), 
             { refreshToken },
             { headers: this.headers(false) },
         );
@@ -76,7 +78,7 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
 
     deleteUser(usernameOrEmail: string, password: string): Promise<AxiosResponse<void>> {
         return axios.post(
-            path.join(this.uri, '/auth', 'delete'), 
+            path.join(this.uri, PathParsers.DeleteUser.build()), 
             { usernameOrEmail, password },
             { headers: this.headers(false) },
         );
@@ -84,154 +86,154 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
 
     getConsoleData(troupeId: string): Promise<AxiosResponse<ConsoleData>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId, 'console'),
+            path.join(this.uri, PathParsers.Console.build({ troupeId })),
             { headers: this.headers(true) },
         );
     }
 
-    async getDashboard(troupeId: string): Promise<AxiosResponse<TroupeDashboard>> {
+    getDashboard(troupeId: string): Promise<AxiosResponse<TroupeDashboard>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId, 'dashboard'),
+            path.join(this.uri, PathParsers.Dashboard.build({ troupeId })),
             { headers: this.headers(true) },
         );
     }
 
-    async getTroupe(troupeId: string): Promise<AxiosResponse<Troupe>> {
+    getTroupe(troupeId: string): Promise<AxiosResponse<Troupe>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId),
+            path.join(this.uri, PathParsers.Troupe.build({ troupeId })),
             { headers: this.headers(true) },
         );
     }
 
-    async updateTroupe(troupeId: string, request: UpdateTroupeRequest): Promise<AxiosResponse<Troupe>> {
+    updateTroupe(troupeId: string, request: UpdateTroupeRequest): Promise<AxiosResponse<Troupe>> {
         return axios.put(
-            path.join(this.uri, '/t', troupeId),
+            path.join(this.uri, PathParsers.Troupe.build({ troupeId })),
             request,
             { headers: this.headers(true) },
         );
     }
 
-    async createEvent(troupeId: string, request: CreateEventRequest): Promise<AxiosResponse<PublicEvent>> {
+    createEvent(troupeId: string, request: CreateEventRequest): Promise<AxiosResponse<PublicEvent>> {
         return axios.post(
-            path.join(this.uri, '/t', troupeId, 'e'),
+            path.join(this.uri, PathParsers.Events.build({ troupeId })),
             request,
             { headers: this.headers(true) },
         );
     }
 
-    async getEvent(eventId: string, troupeId: string): Promise<AxiosResponse<PublicEvent>> {
+    getEvent(eventId: string, troupeId: string): Promise<AxiosResponse<PublicEvent>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId, 'e', eventId),
+            path.join(this.uri, PathParsers.Event.build({ troupeId, eventId })),
             { headers: this.headers(true) },
         );
     }
 
-    async getEvents(troupeId: string): Promise<AxiosResponse<PublicEvent[]>> {
+    getEvents(troupeId: string): Promise<AxiosResponse<PublicEvent[]>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId, 'e'),
+            path.join(this.uri, PathParsers.Events.build({ troupeId })),
             { headers: this.headers(true) },
         );
     }
 
-    async updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest): Promise<AxiosResponse<PublicEvent>> {
+    updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest): Promise<AxiosResponse<PublicEvent>> {
         return axios.put(
-            path.join(this.uri, '/t', troupeId, 'e', eventId),
+            path.join(this.uri, PathParsers.Event.build({ troupeId, eventId })),
             request,
             { headers: this.headers(true) },
         );
     }
 
-    async deleteEvent(troupeId: string, eventId: string): Promise<AxiosResponse<void>> {
+    deleteEvent(troupeId: string, eventId: string): Promise<AxiosResponse<void>> {
         return axios.delete(
-            path.join(this.uri, '/t', troupeId, 'e', eventId),
+            path.join(this.uri, PathParsers.Event.build({ troupeId, eventId })),
             { headers: this.headers(true) },
         );
     }
 
-    async createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<AxiosResponse<EventType>> {
+    createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<AxiosResponse<EventType>> {
         return axios.post(
-            path.join(this.uri, '/t', troupeId, 'et'),
+            path.join(this.uri, PathParsers.EventTypes.build({ troupeId })),
             request,
             { headers: this.headers(true) },
         );
     }
 
-    async getEventTypes(troupeId: string): Promise<AxiosResponse<EventType[]>> {
+    getEventTypes(troupeId: string): Promise<AxiosResponse<EventType[]>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId, 'et'),
+            path.join(this.uri, PathParsers.EventTypes.build({ troupeId })),
             { headers: this.headers(true) },
         );
     }
 
-    async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<AxiosResponse<EventType>> {
+    updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<AxiosResponse<EventType>> {
         return axios.put(
-            path.join(this.uri, '/t', troupeId, 'et', eventTypeId),
+            path.join(this.uri, PathParsers.EventType.build({ troupeId, eventTypeId })),
             request,
             { headers: this.headers(true) },
         );
     }
 
-    async deleteEventType(troupeId: string, eventTypeId: string): Promise<AxiosResponse<void>> {
+    deleteEventType(troupeId: string, eventTypeId: string): Promise<AxiosResponse<void>> {
         return axios.delete(
-            path.join(this.uri, '/t', troupeId, 'et', eventTypeId),
+            path.join(this.uri, PathParsers.EventType.build({ troupeId, eventTypeId })),
             { headers: this.headers(true) },
         );
     }
 
-    async createMember(troupeId: string, request: CreateMemberRequest): Promise<AxiosResponse<Member>> {
+    createMember(troupeId: string, request: CreateMemberRequest): Promise<AxiosResponse<Member>> {
         return axios.post(
-            path.join(this.uri, '/t', troupeId, 'a'),
+            path.join(this.uri, PathParsers.Audience.build({ troupeId })),
             request,
             { headers: this.headers(true) },
         );
     }
 
-    async getMember(memberId: string, troupeId: string): Promise<AxiosResponse<Member>> {
+    getMember(memberId: string, troupeId: string): Promise<AxiosResponse<Member>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId, 'm', memberId),
+            path.join(this.uri, PathParsers.Member.build({ troupeId, memberId })),
             { headers: this.headers(true) },
         );
     }
 
-    async getAttendee(memberId: string, troupeId: string): Promise<AxiosResponse<Attendee>> {
+    getAttendee(memberId: string, troupeId: string): Promise<AxiosResponse<Attendee>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId, 'a', memberId),
+            path.join(this.uri, PathParsers.Member.build({ troupeId, memberId })),
             { headers: this.headers(true) },
         );
     }
 
-    async getAudience(troupeId: string): Promise<Member[]> {
+    getAudience(troupeId: string): Promise<AxiosResponse<Member[]>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId, 'm'),
+            path.join(this.uri, PathParsers.Audience.build({ troupeId })),
             { headers: this.headers(true) },
         );
     }
 
-    async getAttendees(troupeId: string): Promise<Attendee[]> {
+    getAttendees(troupeId: string): Promise<AxiosResponse<Attendee[]>> {
         return axios.get(
-            path.join(this.uri, '/t', troupeId, 'a'),
+            path.join(this.uri, PathParsers.Attendees.build({ troupeId })),
             { headers: this.headers(true) },
         );
     }
 
-    async updateMember(troupeId: string, memberId: string, request: UpdateMemberRequest): Promise<Member> {
+    updateMember(troupeId: string, memberId: string, request: UpdateMemberRequest): Promise<AxiosResponse<Member>> {
         return axios.put(
-            path.join(this.uri, '/t', troupeId, 'm', memberId),
+            path.join(this.uri, PathParsers.Member.build({ troupeId, memberId })),
             request,
             { headers: this.headers(true) },
         );
     }
 
-    async deleteMember(troupeId: string, memberId: string): Promise<void> {
+    deleteMember(troupeId: string, memberId: string): Promise<AxiosResponse<void>> {
         return axios.delete(
-            path.join(this.uri, '/t', troupeId, 'm', memberId),
+            path.join(this.uri, PathParsers.Member.build({ troupeId, memberId })),
             { headers: this.headers(true) },
         );
     }
 
-    async initiateSync(troupeId: string): Promise<void> {
+    initiateSync(troupeId: string): Promise<void> {
         return axios.post(
-            path.join(this.uri, '/t', troupeId, 'sync'),
+            path.join(this.uri, PathParsers.Sync.build({ troupeId })),
             undefined,
             { headers: this.headers(true) },
         );

@@ -1,5 +1,5 @@
 import init from "./util/init";
-import { DbSetupConfig, defaultConfig } from "./util/db-config";
+import { SystemSetupConfig, defaultConfig } from "./util/test-config";
 
 import { StringplayApiService } from "../services/api";
 import { TroupeCoreService } from "../services/core";
@@ -7,7 +7,7 @@ import { test, describe } from "@jest/globals";
 
 const { dbSetup } = init();
 
-let config: DbSetupConfig;
+let config: SystemSetupConfig;
 beforeEach(async () => { config = await dbSetup(defaultConfig) });
 
 describe("basic api operations", () => {

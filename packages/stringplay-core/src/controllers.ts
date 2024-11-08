@@ -3,7 +3,7 @@ import { StringplayApiService } from "./services/api";
 import { TroupeCoreService } from "./services/core";
 import { TroupeSyncService } from "./services/sync";
 import { AuthenticationError, ClientError } from "./util/error";
-import { ApiController, ApiMiddleware, BodySchema, Paths, newController, newControllerWithMiddleware, newUtilController } from "./util/rest";
+import { ApiController, ApiMiddleware, newController, newControllerWithMiddleware, newUtilController } from "./util/rest";
 import { z } from "zod";
 import { DEV_MODE } from "./util/env";
 import { BaseDbService } from "./services/base";
@@ -11,6 +11,7 @@ import { SyncRequest } from "./types/service-types";
 import { AuthService } from "./services/auth";
 import assert from "assert";
 import { AccessTokenPayload, AuthorizationHeader } from "./types/api-types";
+import { PathParsers, BodySchema } from "./routes";
 
 const initAuthService = AuthService.create();
 const initApiService = StringplayApiService.create();
@@ -22,7 +23,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
     const [authService, apiService, coreService] = await Promise.all([initAuthService, initApiService, initCoreService]);
     const accessToken = "_accessToken" in headers ? headers["_accessToken"] as AccessTokenPayload | null : null;
 
-    let troupeId = Paths.Troupe.partialTest(path)?.troupeId;
+    let troupeId = PathParsers.Troupe.partialTest(path)?.troupeId;
     if(!troupeId) {
         throw new Error("Invalid path");
     } else if(troupeId == "me") {
@@ -30,7 +31,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         troupeId = accessToken.troupeId;
     }
 
-    const troupePath = Paths.Troupe.test(path);
+    const troupePath = PathParsers.Troupe.test(path);
     if(troupePath) {
         if(method == "GET") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
@@ -58,7 +59,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         throw new ClientError("Invalid method for path");
     }
 
-    const dashboardPath = Paths.Dashboard.test(path);
+    const dashboardPath = PathParsers.Dashboard.test(path);
     if(dashboardPath) {
         if(method == "GET") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
@@ -71,7 +72,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         throw new ClientError("Invalid method for path");
     }
 
-    const eventsPath = Paths.Events.test(path);
+    const eventsPath = PathParsers.Events.test(path);
     if(eventsPath) {
         if(method == "POST") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
@@ -91,7 +92,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         throw new ClientError("Invalid method for path");
     }
 
-    const eventPath = Paths.Event.test(path);
+    const eventPath = PathParsers.Event.test(path);
     if(eventPath) {
         if(method == "GET") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
@@ -118,7 +119,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         throw new ClientError("Invalid method for path");
     }
 
-    const eventTypesPath = Paths.EventTypes.test(path);
+    const eventTypesPath = PathParsers.EventTypes.test(path);
     if(eventTypesPath) {
         if(method == "POST") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
@@ -131,7 +132,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         throw new ClientError("Invalid method for path");
     }
 
-    const eventTypePath = Paths.EventType.test(path);
+    const eventTypePath = PathParsers.EventType.test(path);
     if(eventTypePath) {
         if(method == "GET") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
@@ -158,7 +159,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         throw new ClientError("Invalid method for path");
     }
 
-    const audiencePath = Paths.Audience.test(path);
+    const audiencePath = PathParsers.Audience.test(path);
     if(audiencePath) {
         if(method == "POST") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
@@ -178,7 +179,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         throw new ClientError("Invalid method for path");
     }
 
-    const memberPath = Paths.Member.test(path);
+    const memberPath = PathParsers.Member.test(path);
     if(memberPath) {
         if(method == "GET") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
@@ -205,7 +206,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         throw new ClientError("Invalid method for path");
     }
 
-    const syncPath = Paths.Sync.test(path);
+    const syncPath = PathParsers.Sync.test(path);
     if(syncPath) {
         if(method == "POST") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
@@ -232,7 +233,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
 const authMiddleware: ApiMiddleware = async (path, method, headers: AuthorizationHeader, body, next) => {
     const [authService] = await Promise.all([initAuthService]);
 
-    const registerPath = Paths.Register.test(path);
+    const registerPath = PathParsers.Register.test(path);
     if(registerPath) {
         if(method == "POST") {
             const {username, email, password, troupeName} = BodySchema.RegisterRequest.parse(body);
@@ -245,7 +246,7 @@ const authMiddleware: ApiMiddleware = async (path, method, headers: Authorizatio
         throw new ClientError("Invalid method for path");
     }
 
-    const loginPath = Paths.Login.test(path);
+    const loginPath = PathParsers.Login.test(path);
     if(loginPath) {
         if(method == "POST") {
             const {usernameOrEmail, password} = BodySchema.LoginRequest.parse(body);
@@ -258,7 +259,7 @@ const authMiddleware: ApiMiddleware = async (path, method, headers: Authorizatio
         throw new ClientError("Invalid method for path");
     }
 
-    const refreshPath = Paths.RefreshCredentials.test(path);
+    const refreshPath = PathParsers.RefreshCredentials.test(path);
     if(refreshPath) {
         if(method == "POST") {
             const {refreshToken} = BodySchema.RefreshCredentialsRequest.parse(body);
@@ -271,7 +272,7 @@ const authMiddleware: ApiMiddleware = async (path, method, headers: Authorizatio
         throw new ClientError("Invalid method for path");
     }
 
-    const deleteUserPath = Paths.DeleteUser.test(path);
+    const deleteUserPath = PathParsers.DeleteUser.test(path);
     if(deleteUserPath) {
         if(method == "POST") {
             const {usernameOrEmail, password} = BodySchema.DeleteUserRequest.parse(body);

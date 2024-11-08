@@ -1,5 +1,5 @@
 import init from "../util/init";
-import { defaultConfig, noMembersConfig } from "../util/db-config";
+import { defaultConfig, noMembersConfig } from "../util/test-config";
 
 import { describe } from "@jest/globals";
 import { objectToArray } from "../../util/helper";

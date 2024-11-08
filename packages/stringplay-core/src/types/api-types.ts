@@ -1,9 +1,40 @@
 // Public facing types to use for API endpoints
 
-import { ObjectId, WithId } from "mongodb";
-import { EventSchema, EventTypeSchema, FieldToPropertyMap, MemberPropertyType, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, VariableMemberProperties, BaseMemberPropertyTypes, MemberPropertyTypeToValue, TroupeDashboardSchema, AttendeeSchema } from "./core-types";
+import { WithId } from "mongodb";
+import { EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, BaseMemberPropertyTypes, MemberPropertyTypeToValue, TroupeDashboardSchema, AttendeeSchema } from "./core-types";
 import { Id, NullOptional, Replace, WeakPartial } from "./util-types";
 import { AxiosResponse } from "axios";
+
+/** 
+ * All available paths for the API 
+ * NOTE: If :troupeId == "me", then the troupeId is the user's troupe
+ */
+export namespace Paths {
+    export const Register = "/auth/register";
+    export const Login = "/auth/login";
+    export const RefreshCredentials = "/auth/refresh";
+    export const DeleteUser = "/auth/delete";
+
+    export const Troupes = "/t";
+    export const Troupe = "/t/:troupeId";
+
+    export const Console = "/t/:troupeId/console";
+    export const Dashboard = "/t/:troupeId/dashboard";
+
+    export const Events = "/t/:troupeId/e";
+    export const Event = "/t/:troupeId/e/:eventId";
+
+    export const EventTypes = "/t/:troupeId/et";
+    export const EventType = "/t/:troupeId/et/:eventTypeId";
+
+    export const Audience = "/t/:troupeId/m";
+    export const Member = "/t/:troupeId/m/:memberId";
+
+    export const Attendees = "/t/:troupeId/a";
+    export const Attendee = "/t/:troupeId/a";
+
+    export const Sync = "/t/:troupeId/sync";
+}
 
 /** Converts T to a JSON serializable format */
 export type ApiType<T> = NullOptional<Replace<T, string|boolean|number|null|undefined, string>>;

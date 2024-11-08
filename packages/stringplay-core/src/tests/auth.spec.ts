@@ -1,5 +1,5 @@
 import init from "./util/init";
-import { DbSetupConfig, defaultConfig } from "./util/db-config";
+import { SystemSetupConfig, defaultConfig } from "./util/test-config";
 
 import { StringplayApiService } from "../services/api";
 import { TroupeCoreService } from "../services/core";

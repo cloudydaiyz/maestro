@@ -1,13 +1,14 @@
 // Implementation for client-facing controller methods
 
-import { AnyBulkWriteOperation, ObjectId, PullOperator, PushOperator, UpdateFilter, WithId } from "mongodb";
+import { AnyBulkWriteOperation, ObjectId, WithId } from "mongodb";
 import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "../util/constants";
-import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints, AttendeeSchema } from "../types/core-types";
-import { ApiType, Attendee, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
-import { Mutable, Replace, SetOperator, UnsetOperator, UpdateOperator, WeakPartial } from "../types/util-types";
+import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints, AttendeeSchema } from "../types/core-types";
+import { Attendee, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
+import { SetOperator, UnsetOperator, UpdateOperator } from "../types/util-types";
 import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
 import { verifyApiMemberPropertyType } from "../util/helper";
+import { toAttendee, toEventType, toMember, toPublicEvent, toTroupe, toTroupeDashboard } from "../util/api-transform";
 import { addToSyncQueue } from "../cloud/gcp";
 import assert from "assert";
 
@@ -44,65 +45,15 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
     }
 
     async getDashboard(troupeId: string): Promise<TroupeDashboard> {
-        const {_id, ...publicDashboard} = await this.getDashboardSchema(troupeId);
-
-        const newUpcomingBirthdays: Replace<TroupeDashboardSchema["upcomingBirthdays"]["members"], string, string> = [];
-        for(const member of publicDashboard.upcomingBirthdays.members) {
-            newUpcomingBirthdays.push({
-                ...member,
-                birthday: member.birthday.toISOString(),
-            });
-        }
-
-        return {
-            ...publicDashboard,
-            upcomingBirthdays: {
-                ...publicDashboard.upcomingBirthdays,
-                members: newUpcomingBirthdays,
-            },
-            lastUpdated: publicDashboard.lastUpdated.toISOString(),
-        }
+        return toTroupeDashboard(await this.getDashboardSchema(troupeId));
     }
 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {
-        let publicTroupe: WeakPartial<WithId<TroupeSchema>, "_id"> = typeof troupe == "string" 
+        return toTroupe(
+            typeof troupe == "string" 
             ? await this.getTroupeSchema(troupe, true)
-            : troupe;
-        
-        // Remove the ObjectId to replace with a string ID
-        const id = publicTroupe._id!.toHexString();
-        delete publicTroupe._id;
-
-        // Get the public version of the event types
-        // const eventTypes = await Promise.all(publicTroupe.eventTypes.map((et) => this.getEventType(et)));
-
-        // Get the public version of the point types and synchronized point types
-        let pointTypes: Troupe["pointTypes"] = {} as Troupe["pointTypes"];
-        let synchronizedPointTypes: Troupe["synchronizedPointTypes"] = {} as Troupe["synchronizedPointTypes"];
-
-        for(const key in publicTroupe.pointTypes) {
-            const data = publicTroupe.pointTypes[key];
-            pointTypes[key] = {
-                startDate: data.startDate.toISOString(),
-                endDate: data.endDate.toISOString(),
-            }
-        }
-
-        for(const key in publicTroupe.synchronizedPointTypes) {
-            const data = publicTroupe.synchronizedPointTypes[key];
-            synchronizedPointTypes[key] = {
-                startDate: data.startDate.toISOString(),
-                endDate: data.endDate.toISOString(),
-            }
-        }
-
-        return {
-            ...publicTroupe,
-            lastUpdated: publicTroupe.lastUpdated.toISOString(),
-            id,
-            pointTypes,
-            synchronizedPointTypes,
-        }
+            : troupe
+        );
     }
 
     async updateTroupe(troupeId: string, request: UpdateTroupeRequest): Promise<Troupe> {
@@ -239,19 +190,13 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
 
     async getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent> {
         assert(typeof event != "string" || troupeId != null, 
-            new ClientError("Must have a troupe ID to retrieve event."))
-        let publicEvent: WeakPartial<WithId<EventSchema>, "_id"> = typeof event == "string" 
+            new ClientError("Must have a troupe ID to retrieve event."));
+        
+        return toPublicEvent(
+            typeof event == "string" 
             ? await this.getEventSchema(troupeId!, event, true)
-            : event;
-        const eid = publicEvent._id!.toHexString();
-        delete publicEvent._id;
-
-        return {
-            ...publicEvent,
-            id: eid,
-            lastUpdated: publicEvent.lastUpdated.toISOString(),
-            startDate: publicEvent.startDate.toISOString(),
-        }
+            : event
+        )
     }
 
     async getEvents(troupeId: string): Promise<PublicEvent[]> {
@@ -460,19 +405,14 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
     async getEventType(eventType: string | WithId<EventTypeSchema>, troupeId?: string, troupe?: WithId<TroupeSchema>): Promise<EventType> {
         assert(typeof eventType != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event type."))
-        let eType: WeakPartial<WithId<EventTypeSchema>, "_id"> = typeof eventType != "string" 
+        
+        return toEventType(
+            typeof eventType != "string" 
             ? eventType
             : troupe
             ? this.getEventTypeSchemaFromTroupe(troupe, eventType, true)
-            : await this.getEventTypeSchema(troupeId!, eventType, true);
-        const eid = eType._id!.toHexString();
-        delete eType._id;
-
-        return {
-            ...eType,
-            id: eid,
-            lastUpdated: eType.lastUpdated.toISOString(),
-        }
+            : await this.getEventTypeSchema(troupeId!, eventType, true)
+        );
     }
 
     async getEventTypes(troupeId: string): Promise<EventType[]> {
@@ -704,61 +644,22 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         assert(typeof member != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event."))
         
-        const m: WeakPartial<WithId<MemberSchema>, "_id"> = typeof member == "string"
+        return toMember(
+            typeof member == "string"
             ? await this.getMemberSchema(troupeId!, member, true)
-            : member;
-        const memberId = m._id!.toHexString();
-        delete m._id;
-
-        const properties = {} as ApiType<MemberSchema["properties"]>;
-        for(const key in m.properties) {
-            properties[key] = {
-                value: m.properties[key].value instanceof Date 
-                    ? m.properties[key]!.value!.toString()
-                    : m.properties[key].value as ApiType<MemberPropertyValue>,
-                override: m.properties[key].override,
-            }
-        }
-
-        return {
-            ...m,
-            id: memberId,
-            lastUpdated: m.lastUpdated.toISOString(),
-            properties,
-        };
+            : member
+        );
     }
 
     async getAttendee(member: string | WithId<AttendeeSchema>, troupeId?: string): Promise<Attendee> {
         assert(typeof member != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event."));
         
-        const m: WeakPartial<WithId<AttendeeSchema>, "_id" | "eventsAttended"> = typeof member == "string"
+        return toAttendee(
+            typeof member == "string"
             ? await this.getAttendeeSchema(troupeId!, member, true)
-            : member;
-        const memberId = m._id!.toHexString();
-        delete m._id;
-        
-        const properties = {} as ApiType<MemberSchema["properties"]>;
-        for(const key in m.properties) {
-            properties[key] = {
-                value: m.properties[key].value instanceof Date 
-                    ? m.properties[key]!.value!.toString()
-                    : m.properties[key].value as ApiType<MemberPropertyValue>,
-                override: m.properties[key].override,
-            }
-        }
-
-        const eventsAttended = [];
-        for(const event in m.eventsAttended) {
-            eventsAttended.push(event);
-        }
-        return {
-            ...m,
-            id: memberId,
-            lastUpdated: m.lastUpdated.toISOString(),
-            properties,
-            eventsAttended,
-        };
+            : member
+        )
     }
 
     async getAudience(troupeId: string): Promise<Member[]> {
