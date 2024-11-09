@@ -1,10 +1,8 @@
-// Helper functions
+// General helper functions
 
-import dayjs, { Dayjs } from "dayjs";
-import { ApiType } from "../types/api-types";
-import { EventDataSource, MemberPropertyType, MemberPropertyValue } from "../types/core-types";
+import type { ApiType } from "../types/api-types";
+import type { EventDataSource, MemberPropertyType, MemberPropertyValue } from "../types/core-types";
 import { DRIVE_FOLDER_REGEX, FORMS_REGEX, FORMS_URL_TEMPL, SHEETS_REGEX, SHEETS_URL_TEMPL } from "./constants";
-import crypto from "crypto";
 
 /**
  * Replaces the `<id>` placeholder in the given URL with the provided ID based on the data source
@@ -123,85 +121,19 @@ export function arrayToObject<T, U>(
     return obj;
 }
 
-/**
- * Extracts the JSON data from the encrypted string and returns it as a typed object.
- * The same string should return the same object.
- * @param key The key to use for decryption
- * @param iv The initialization vector (IV) used for encryption
+/** 
+ * Returns a pseudo version of MongoDB's ObjectID. 
+ * Useful for decoupling from MongoDB dependencies. 
  */
-export function decrypt<T>(encrypted: string, key: string, iv: Buffer | string): T {
-    if(typeof iv == "string") iv = Buffer.from(iv, "base64");
-
-    let decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
-    let decrypted = decipher.update(encrypted, "hex", "utf-8");
-    decrypted += decipher.final("utf-8");
-    return JSON.parse(decrypted) as T;
-};
-
-/**
- * Converts the data into a JSON string and encrypts it. The same object should return the same string.
- * @param key The key to use for encryption
- * @param iv The initialization vector (IV) to use for encryption
- */
-export function encrypt<T>(data: T, key: string, iv: Buffer | string): string {
-    const jsonifiedData = JSON.stringify(data);
-    if(typeof iv == "string") iv = Buffer.from(iv, "base64");
-
-    let cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
-    let encrypted = cipher.update(jsonifiedData, "utf-8", "hex");
-    encrypted += cipher.final("hex");
-    return encrypted;
-};
-
-/** Generates a random string with the given length */
-export function randomString(length?: number): string {
-    if(!length) length = 16; // for creating initialization vectors
-    return crypto.randomBytes(length).toString("base64");
+export function generatePseudoObjectId(): string {
+    return Math.floor(Date.now() / 1000).toString(16);
 }
 
-/** Standardized date parsing */
-export class DateParser {
-    private date: Dayjs;
-    /** Supported date formats */
-    public static formats = [
-        "M/D/YYYY",
-        "M/D/YYYY H:mm:ss",
-        "MM-DD",
-        "YYYY-MM-DD",
-        "MM-DD HH:MM",
-        "YYYY-MM-DD HH:MM"
-    ] as const;
-
-    constructor(date: Date | Dayjs) {
-        this.date = dayjs(date);
+/** Assertion function defined outside of Node.js */
+export function assert(value: unknown, message?: string | Error): asserts value {
+    if(!value) {
+        if(message instanceof Error) throw message;
+        if(typeof message == 'string') throw new Error(message);
+        throw new Error('Assertion failed.');
     }
-
-    /** 
-     * Parses the input string into a DateParser object using one of the supported formats (see {@link DateParser.formats}). 
-     * Returns null if the input doesn't match any of the formats.
-     */
-    static parse(input: string): DateParser | null {
-        for(const format of DateParser.formats) {
-            const d = dayjs(input, format, true);
-            if(d.isValid()) return new DateParser(d);
-        }
-        return null;
-    }
-
-    /** Stringified date as `MM-DD-YYYY` format */
-    toString(): string {
-        return dayjs(this.date).format("MM-DD-YYYY");
-    }
-
-    static toString(date: Date | Dayjs): string {
-        return (new DateParser(date)).toString();
-    }
-
-    toDate(): Date {
-        return this.date.toDate();
-    }
-
-    toDayJs(): Dayjs {
-        return this.date;
-    }
-}
+};

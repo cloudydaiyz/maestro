@@ -1,8 +1,8 @@
 // Data schema for the core data types
 
-import { ObjectId, WithId } from "mongodb";
+import type { WithId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, BIRTHDAY_UPDATE_FREQUENCIES, EVENT_DATA_SOURCES, MEMBER_PROPERTY_TYPES } from "../util/constants";
-import { Mutable } from "./util-types";
+import type { Mutable } from "./util-types";
 
 // == TROUPE ==
 export interface TroupeSchema {

@@ -1,16 +1,14 @@
 // Transforms data
 
-import { WithId } from "mongodb";
-import { ApiType, Attendee, EventType, Member, PublicEvent, Troupe, TroupeDashboard } from "../types/api-types";
-import { AttendeeSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
-import { Replace } from "../types/util-types";
+import type { ApiType, Attendee, EventType, Member, PublicEvent, Troupe, TroupeDashboard } from "../types/api-types";
+import type { AttendeeSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
+import type { Replace } from "../types/util-types";
 
 /** Converts troupe dashboard schema to its public, api-facing counterpart */
-export function toTroupeDashboard(schema: WithId<TroupeDashboardSchema>): TroupeDashboard {
-    const {_id, ...publicDashboard} = schema;
+export function toTroupeDashboard(schema: TroupeDashboardSchema, id: string): TroupeDashboard {
 
     const newUpcomingBirthdays: Replace<TroupeDashboardSchema["upcomingBirthdays"]["members"], string, string> = [];
-    for(const member of publicDashboard.upcomingBirthdays.members) {
+    for(const member of schema.upcomingBirthdays.members) {
         newUpcomingBirthdays.push({
             ...member,
             birthday: member.birthday.toISOString(),
@@ -18,21 +16,19 @@ export function toTroupeDashboard(schema: WithId<TroupeDashboardSchema>): Troupe
     }
 
     return {
-        ...publicDashboard,
+        ...schema,
+        id,
         upcomingBirthdays: {
-            ...publicDashboard.upcomingBirthdays,
+            ...schema.upcomingBirthdays,
             members: newUpcomingBirthdays,
         },
-        lastUpdated: publicDashboard.lastUpdated.toISOString(),
+        lastUpdated: schema.lastUpdated.toISOString(),
     }
 }
 
 /** Converts troupe schema to its public, api-facing counterpart */
-export function toTroupe(schema: WithId<TroupeSchema>): Troupe {
-    const { _id, ...publicTroupe } = schema;
-
-    // Replace the ObjectId with a string ID
-    const id = _id.toHexString();
+export function toTroupe(schema: TroupeSchema, id: string): Troupe {
+    const { eventTypes, ...publicTroupe } = schema;
 
     // Get the public version of the point types and synchronized point types
     let pointTypes: Troupe["pointTypes"] = {} as Troupe["pointTypes"];
@@ -64,75 +60,65 @@ export function toTroupe(schema: WithId<TroupeSchema>): Troupe {
 }
 
 /** Converts event schema to its public, api-facing counterpart */
-export function toPublicEvent(schema: WithId<EventSchema>): PublicEvent {
-    const { _id, ...publicEvent } = schema;
-    const eid = _id.toHexString();
-
+export function toPublicEvent(schema: EventSchema, id: string): PublicEvent {
     return {
-        ...publicEvent,
-        id: eid,
-        lastUpdated: publicEvent.lastUpdated.toISOString(),
-        startDate: publicEvent.startDate.toISOString(),
+        ...schema,
+        id,
+        lastUpdated: schema.lastUpdated.toISOString(),
+        startDate: schema.startDate.toISOString(),
     }
 }
 
 /** Converts event type schema to its public, api-facing counterpart */
-export function toEventType(schema: WithId<EventTypeSchema>): EventType {
-    const { _id, ...eType } = schema;
-    const eid = _id!.toHexString();
+export function toEventType(schema: EventTypeSchema, id: string): EventType {
 
     return {
-        ...eType,
-        id: eid,
-        lastUpdated: eType.lastUpdated.toISOString(),
+        ...schema,
+        id,
+        lastUpdated: schema.lastUpdated.toISOString(),
     }
 }
 
 /** Converts member schema to its public, api-facing counterpart */
-export function toMember(schema: WithId<MemberSchema>): Member {
-    const { _id, ...m } = schema;
-
-    const memberId = _id.toHexString();
+export function toMember(schema: MemberSchema, id: string): Member {
 
     const properties = {} as ApiType<MemberSchema["properties"]>;
-    for(const key in m.properties) {
+    for(const key in schema.properties) {
         properties[key] = {
-            value: m.properties[key].value instanceof Date 
-                ? m.properties[key]!.value!.toString()
-                : m.properties[key].value as ApiType<MemberPropertyValue>,
-            override: m.properties[key].override,
+            value: schema.properties[key].value instanceof Date 
+                ? schema.properties[key]!.value!.toString()
+                : schema.properties[key].value as ApiType<MemberPropertyValue>,
+            override: schema.properties[key].override,
         }
     }
 
     return {
-        ...m,
-        id: memberId,
-        lastUpdated: m.lastUpdated.toISOString(),
+        ...schema,
+        id,
+        lastUpdated: schema.lastUpdated.toISOString(),
         properties,
     };
 }
 
 /** Converts attendee schema to its public, api-facing counterpart */
-export function toAttendee(schema: WithId<AttendeeSchema>): Attendee {
-    const { _id, ...m } = schema;
-    const memberId = _id.toHexString();
+export function toAttendee(schema: AttendeeSchema, id: string): Attendee {
     
     const properties = {} as ApiType<MemberSchema["properties"]>;
-    for(const key in m.properties) {
+    for(const key in schema.properties) {
         properties[key] = {
-            value: m.properties[key].value instanceof Date 
-                ? m.properties[key]!.value!.toString()
-                : m.properties[key].value as ApiType<MemberPropertyValue>,
-            override: m.properties[key].override,
+            value: schema.properties[key].value instanceof Date 
+                ? schema.properties[key]!.value!.toString()
+                : schema.properties[key].value as ApiType<MemberPropertyValue>,
+            override: schema.properties[key].override,
         }
     }
 
-    const eventsAttended = Object.keys(m.eventsAttended);
+    const eventsAttended = Object.keys(schema.eventsAttended);
     
     return {
-        ...m,
-        id: memberId,
-        lastUpdated: m.lastUpdated.toISOString(),
+        ...schema,
+        id,
+        lastUpdated: schema.lastUpdated.toISOString(),
         properties,
         eventsAttended,
     };

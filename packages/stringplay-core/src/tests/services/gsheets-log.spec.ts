@@ -1,12 +1,11 @@
-import init from "../util/init";
-import { defaultConfig, noMembersConfig } from "../util/test-config";
+import init from "../lifecycle/init";
+import { defaultConfig, noMembersConfig } from "../../util/test-config";
 
 import { describe } from "@jest/globals";
 import { objectToArray } from "../../util/helper";
 import { GoogleSheetsLogService } from "../../services/logs/gsheets-log";
-import { WithId } from "mongodb";
+import type { WithId } from "mongodb";
 import { AttendeeSchema, EventSchema } from "../../types/core-types";
-import { cleanLogs } from "../../util/resources";
 
 const { dbSetup } = init();
 

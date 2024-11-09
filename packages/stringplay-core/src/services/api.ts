@@ -45,15 +45,15 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
     }
 
     async getDashboard(troupeId: string): Promise<TroupeDashboard> {
-        return toTroupeDashboard(await this.getDashboardSchema(troupeId));
+        const dashboardObj = await this.getDashboardSchema(troupeId);
+        return toTroupeDashboard(dashboardObj, dashboardObj._id.toHexString());
     }
 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {
-        return toTroupe(
-            typeof troupe == "string" 
+        const troupeObj = typeof troupe == "string" 
             ? await this.getTroupeSchema(troupe, true)
-            : troupe
-        );
+            : troupe;
+        return toTroupe(troupeObj, troupeObj._id.toHexString());
     }
 
     async updateTroupe(troupeId: string, request: UpdateTroupeRequest): Promise<Troupe> {
@@ -192,11 +192,11 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         assert(typeof event != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event."));
         
-        return toPublicEvent(
-            typeof event == "string" 
+        const eventObj = typeof event == "string" 
             ? await this.getEventSchema(troupeId!, event, true)
-            : event
-        )
+            : event;
+        
+        return toPublicEvent(eventObj, eventObj._id.toHexString());
     }
 
     async getEvents(troupeId: string): Promise<PublicEvent[]> {
@@ -406,13 +406,13 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         assert(typeof eventType != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event type."))
         
-        return toEventType(
-            typeof eventType != "string" 
+        const eventTypeObj = typeof eventType != "string" 
             ? eventType
             : troupe
             ? this.getEventTypeSchemaFromTroupe(troupe, eventType, true)
-            : await this.getEventTypeSchema(troupeId!, eventType, true)
-        );
+            : await this.getEventTypeSchema(troupeId!, eventType, true);
+        
+        return toEventType(eventTypeObj, eventTypeObj._id.toHexString());
     }
 
     async getEventTypes(troupeId: string): Promise<EventType[]> {
@@ -642,24 +642,24 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
 
     async getMember(member: string | WithId<MemberSchema>, troupeId?: string): Promise<Member> {
         assert(typeof member != "string" || troupeId != null, 
-            new ClientError("Must have a troupe ID to retrieve event."))
-        
-        return toMember(
-            typeof member == "string"
+            new ClientError("Must have a troupe ID to retrieve event."));
+
+        const memberObj = typeof member == "string"
             ? await this.getMemberSchema(troupeId!, member, true)
-            : member
-        );
+            : member;
+        
+        return toMember(memberObj, memberObj._id.toHexString());
     }
 
     async getAttendee(member: string | WithId<AttendeeSchema>, troupeId?: string): Promise<Attendee> {
         assert(typeof member != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event."));
-        
-        return toAttendee(
-            typeof member == "string"
+
+        const attendeeObj = typeof member == "string"
             ? await this.getAttendeeSchema(troupeId!, member, true)
-            : member
-        )
+            : member;
+        
+        return toAttendee(attendeeObj, attendeeObj._id.toHexString());
     }
 
     async getAudience(troupeId: string): Promise<Member[]> {

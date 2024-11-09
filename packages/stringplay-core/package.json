@@ -26,14 +26,14 @@
       "default": "./dist/routes.js"
     },
     "./test-config": {
-      "types": "./dist/tests/util/test-config.d.ts",
-      "default": "./dist/tests/util/test-config.js"
+      "types": "./dist/util/test-config.d.ts",
+      "default": "./dist/util/test-config.js"
     },
     "./types/api": {
       "types": "./dist/types/api-types.d.ts"
     },
     "./types/rest": {
-      "types": "./dist/util/rest.d.ts"
+      "types": "./dist/util/server/rest.d.ts"
     }
   },
   "scripts": {

@@ -3,7 +3,7 @@ import { StringplayApiService } from "./services/api";
 import { TroupeCoreService } from "./services/core";
 import { TroupeSyncService } from "./services/sync";
 import { AuthenticationError, ClientError } from "./util/error";
-import { ApiController, ApiMiddleware, newController, newControllerWithMiddleware, newUtilController } from "./util/rest";
+import { ApiController, ApiMiddleware, newController, newControllerWithMiddleware, newUtilController } from "./util/server/rest";
 import { z } from "zod";
 import { DEV_MODE } from "./util/env";
 import { BaseDbService } from "./services/base";

@@ -1,7 +1,7 @@
 // REST API controller and resource generation
 
 import { ZodError } from "zod";
-import { AuthenticationError, ClientError } from "./error";
+import { AuthenticationError, ClientError } from "../error";
 
 /** All available methods for the API */
 export const Methods = {

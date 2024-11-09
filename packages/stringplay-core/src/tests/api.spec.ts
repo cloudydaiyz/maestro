@@ -1,13 +1,14 @@
-import init from "./util/init";
-import { SystemSetupConfig, defaultConfig } from "./util/test-config";
+import init from "./lifecycle/init";
+import { SystemSetupConfig, defaultConfig } from "../util/test-config";
 
 import { StringplayApiService } from "../services/api";
 import { TroupeCoreService } from "../services/core";
 import { test, describe } from "@jest/globals";
+import { ObjectId } from "mongodb";
 
 const { dbSetup } = init();
 
-let config: SystemSetupConfig;
+let config: SystemSetupConfig<ObjectId>;
 beforeEach(async () => { config = await dbSetup(defaultConfig) });
 
 describe("basic api operations", () => {

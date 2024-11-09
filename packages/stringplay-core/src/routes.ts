@@ -3,9 +3,40 @@
 import { Path } from "path-parser";
 import { z } from "zod";
 
-import { MemberPropertyType} from "./types/core-types";
-import { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest, ApiType, RegisterRequest, LoginRequest, RefreshCredentialsRequest, DeleteUserRequest, Paths } from "./types/api-types";
-import { CreateTroupeRequest, SyncRequest, ScheduledTaskRequest } from "./types/service-types";
+import type { MemberPropertyType} from "./types/core-types";
+import type { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest, ApiType, RegisterRequest, LoginRequest, RefreshCredentialsRequest, DeleteUserRequest } from "./types/api-types";
+import type { CreateTroupeRequest, SyncRequest, ScheduledTaskRequest } from "./types/service-types";
+
+/** 
+ * All available paths for the API 
+ * NOTE: If :troupeId == "me", then the troupeId is the user's troupe
+ */
+export namespace Paths {
+    export const Register = "/auth/register";
+    export const Login = "/auth/login";
+    export const RefreshCredentials = "/auth/refresh";
+    export const DeleteUser = "/auth/delete";
+
+    export const Troupes = "/t";
+    export const Troupe = "/t/:troupeId";
+
+    export const Console = "/t/:troupeId/console";
+    export const Dashboard = "/t/:troupeId/dashboard";
+
+    export const Events = "/t/:troupeId/e";
+    export const Event = "/t/:troupeId/e/:eventId";
+
+    export const EventTypes = "/t/:troupeId/et";
+    export const EventType = "/t/:troupeId/et/:eventTypeId";
+
+    export const Audience = "/t/:troupeId/m";
+    export const Member = "/t/:troupeId/m/:memberId";
+
+    export const Attendees = "/t/:troupeId/a";
+    export const Attendee = "/t/:troupeId/a";
+
+    export const Sync = "/t/:troupeId/sync";
+}
 
 /** path-parser Path with `T` as the union of the given path params */
 type ParamPath<T extends string> = Path<{[key in T]: string}>;

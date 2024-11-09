@@ -7,7 +7,7 @@ import { DB_NAME, SHEETS_REGEX } from "../util/constants";
 import { EventDataMap, AttendeeDataMap } from "../types/service-types";
 import { ClientError } from "../util/error";
 import assert from "assert";
-import { newDbConnection, removeDbConnection } from "../util/resources";
+import { newDbConnection, removeDbConnection } from "../util/server/resources";
 
 /** Allows multiple database services to share the same MongoDB connection */
 export class SharedMongoClient {

@@ -1,7 +1,6 @@
-import { WithId } from "mongodb";
-import { Troupe } from "./api-types";
-import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema } from "./core-types";
-import { WeakPartial } from "./util-types";
+import type { WithId } from "mongodb";
+import type { Troupe } from "./api-types";
+import type { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema } from "./core-types";
 
 // Additional API request types
 

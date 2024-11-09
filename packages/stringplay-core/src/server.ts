@@ -4,8 +4,8 @@
 
 import express from "express";
 import { DEV_MODE } from "./util/env";
-import { cleanDbConnections, cleanLogs, startDb } from "./util/resources";
-import { Methods } from "./util/rest";
+import { cleanDbConnections, cleanLogs, startDb } from "./util/server/resources";
+import { Methods } from "./util/server/rest";
 import { Server } from "http";
 
 type ControllerModule = typeof import("./controllers");

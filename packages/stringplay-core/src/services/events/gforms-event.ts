@@ -9,7 +9,8 @@ import { getForms } from "../../cloud/gcp";
 import { GaxiosResponse } from "gaxios";
 import { EventDataService } from "../base";
 import assert from "assert";
-import { DateParser, getDataSourceId } from "../../util/helper";
+import { getDataSourceId } from "../../util/helper";
+import { DateParser } from "../../util/server/date-parser";
 
 export class GoogleFormsEventDataService extends EventDataService {
     forms!: forms_v1.Forms;

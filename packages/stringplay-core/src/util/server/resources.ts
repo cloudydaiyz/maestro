@@ -1,9 +1,8 @@
 // Manages the resources created during app execution
 
 import { MongoMemoryReplSet } from "mongodb-memory-server";
-import { MONGODB_PASS, MONGODB_USER } from "./env";
+import { MONGODB_PASS, MONGODB_USER } from "../env";
 import { MongoClient } from "mongodb";
-import { Server } from "http";
 import assert from "assert";
 
 let mongod: MongoMemoryReplSet | null = null;
@@ -64,7 +63,7 @@ export async function cleanDbConnections() {
 
 export async function cleanLogs() {
     console.log("Cleaning logs");
-    const { GoogleSheetsLogService } = await import("../services/logs/gsheets-log");
+    const { GoogleSheetsLogService } = await import("../../services/logs/gsheets-log");
     const gsheets = new GoogleSheetsLogService();
 
     const deletes: Promise<any>[] = [];

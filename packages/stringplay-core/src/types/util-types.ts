@@ -1,5 +1,5 @@
-import { MatchKeysAndValues, OnlyFieldsOfType, UpdateFilter } from "mongodb";
-import { EventSchema } from "./core-types";
+import type { UpdateFilter } from "mongodb";
+import type { EventSchema } from "./core-types";
 
 /**
  * This creates a version of T (provided type) with the given field (or fields if 
