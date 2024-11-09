@@ -1,6 +1,5 @@
 import type { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../types/core-types";
 import type { Attendee, ConsoleData, EventType, PublicEvent } from "../types/api-types";
-import type { ObjectId, WithId } from "mongodb";
 import type { Id } from "../types/util-types";
 
 import { randomElement, verifyMemberPropertyType, getDefaultMemberPropertyValue, generatePseudoObjectId } from "./helper";
@@ -9,56 +8,52 @@ import { toAttendee, toEventType, toPublicEvent, toTroupe, toTroupeDashboard } f
 
 import { assert } from "./helper";
 
-/** 
- * Configuration for setting up the database with test data. 
- * Using `ObjectId` as the generic type adds `ObjectId`s to each of the entities in this config when populated. 
- * Otherwise, the `ObjectId`s will be omitted.
- */
-export interface SystemSetupConfig<T extends ObjectId | null> {
+/** Configuration for setting up the database with test data. This implementation doesn't use `ObjectId` */
+export interface SystemSetupConfig {
     troupes?: { 
         [customTroupeId: string]: Partial<
-            (Omit<T extends ObjectId ? WithId<TroupeSchema> : TroupeSchema, "pointTypes" | "memberPropertyTypes">)
+            Omit<TroupeSchema, "pointTypes" | "memberPropertyTypes">
             & Id 
             & {
                 memberPropertyTypes: Partial<BaseMemberPropertyTypes> & VariableMemberPropertyTypes,
                 pointTypes: Partial<BasePointTypes> & VariablePointTypes, 
                 
                 /** Populated once after setup is complete */
-                troupe: T extends ObjectId ? WithId<TroupeSchema> : TroupeSchema,
+                troupe: TroupeSchema,
 
                 /** Populated once after setup is complete */
-                dashboard: T extends ObjectId ? WithId<TroupeDashboardSchema> : TroupeDashboardSchema,
+                dashboard: TroupeDashboardSchema,
             }
         >
     };
     eventTypes?: { 
         [customEventTypeId: string]: Partial<
-            (T extends ObjectId ? WithId<EventTypeSchema> : EventTypeSchema) 
+            EventTypeSchema
             & Id 
             & { 
                 customTroupeId: string,
 
                 /** Populated once after setup is complete */
-                eventType: T extends ObjectId ? WithId<EventTypeSchema> : EventTypeSchema,
+                eventType: EventTypeSchema,
             }
         > 
     };
     events?: { 
         [customEventId: string]: Partial<
-            (T extends ObjectId ? WithId<EventSchema> : EventSchema) 
+            EventSchema
             & Id 
             & {
                 customTroupeId: string,
                 customEventTypeId: string,
 
                 /** Populated once after setup is complete */
-                event: T extends ObjectId ? WithId<EventSchema> : EventSchema,
+                event: EventSchema,
             }
         >
     };
     members?: { 
         [customMemberId: string]: Partial<
-            (Omit<T extends ObjectId ? WithId<MemberSchema> : MemberSchema, "properties" | "points">) 
+            Omit<MemberSchema, "properties" | "points">
             & Id 
             & { 
                 customTroupeId: string,
@@ -70,7 +65,7 @@ export interface SystemSetupConfig<T extends ObjectId | null> {
                 eventsAttended: EventsAttendedBucketSchema["events"],
 
                 /** Populated once after setup is complete */
-                member: T extends ObjectId ? WithId<MemberSchema> : MemberSchema,
+                member: MemberSchema,
             }
         >
     };
@@ -80,7 +75,7 @@ export interface SystemSetupConfig<T extends ObjectId | null> {
  * Populates the config with entity data.
  * - Troupe event type array will be empty, unless `populateConfigWithIds` is called
  */
-export function populateConfig(config: SystemSetupConfig<null>) {
+export function populateConfig(config: SystemSetupConfig) {
     config = {
         troupes: config.troupes || {},
         eventTypes: config.eventTypes || {},
@@ -330,7 +325,7 @@ export function populateConfig(config: SystemSetupConfig<null>) {
 }
 
 /** Returns a console for the specified custom troupe ID from the config */
-export function populateConfigAsOneConsole(config: SystemSetupConfig<null>, customTroupeId: string, configPopulated = true): ConsoleData {
+export function populateConfigAsOneConsole(config: SystemSetupConfig, customTroupeId: string, configPopulated = true): ConsoleData {
     if(!configPopulated) populateConfig(config);
 
     const troupe = toTroupe(config.troupes![customTroupeId].troupe!, config.troupes![customTroupeId].id!);
@@ -371,7 +366,7 @@ export function populateConfigAsOneConsole(config: SystemSetupConfig<null>, cust
 export type ConfigToConsoleMap = { [customTroupeId: string]: ConsoleData };
 
 /** Returns a map from custom troupe IDs to its corresponding console */
-export function populateConfigAsConsoles(config: SystemSetupConfig<null>): ConfigToConsoleMap {
+export function populateConfigAsConsoles(config: SystemSetupConfig): ConfigToConsoleMap {
     populateConfig(config);
     
     const configToConsoleMap: ConfigToConsoleMap = {};
@@ -382,7 +377,7 @@ export function populateConfigAsConsoles(config: SystemSetupConfig<null>): Confi
     return configToConsoleMap;
 }
 
-export const defaultConfig: SystemSetupConfig<ObjectId | null> = {
+export const defaultConfig: SystemSetupConfig = {
     troupes: { 
         "A": { 
             name: "test troupe", 
@@ -452,7 +447,7 @@ export const defaultConfig: SystemSetupConfig<ObjectId | null> = {
     }
 };
 
-export const noMembersConfig: SystemSetupConfig<ObjectId | null> = {
+export const noMembersConfig: SystemSetupConfig = {
     troupes: { 
         "A": { 
             name: "test troupe", 
@@ -480,7 +475,7 @@ export const noMembersConfig: SystemSetupConfig<ObjectId | null> = {
     },
 }
 
-export const onlyEventTypesConfig: SystemSetupConfig<ObjectId | null> = {
+export const onlyEventTypesConfig: SystemSetupConfig = {
     troupes: { 
         "A": { 
             name: "test troupe", 

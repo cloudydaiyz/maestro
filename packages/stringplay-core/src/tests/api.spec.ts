@@ -8,7 +8,7 @@ import { ObjectId } from "mongodb";
 
 const { dbSetup } = init();
 
-let config: SystemSetupConfig<ObjectId>;
+let config: SystemSetupConfig;
 beforeEach(async () => { config = await dbSetup(defaultConfig) });
 
 describe("basic api operations", () => {

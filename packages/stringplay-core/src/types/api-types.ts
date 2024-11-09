@@ -5,6 +5,8 @@ import type { EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, T
 import type { Id, NullOptional, Replace, WeakPartial } from "./util-types";
 import type { AxiosResponse } from "axios";
 
+export const apiobj = {};
+
 /** Converts T to a JSON serializable format */
 export type ApiType<T> = NullOptional<Replace<T, string|boolean|number|null|undefined, string>>;
 

@@ -11,7 +11,8 @@ import { SyncRequest } from "./types/service-types";
 import { AuthService } from "./services/auth";
 import assert from "assert";
 import { AccessTokenPayload, AuthorizationHeader } from "./types/api-types";
-import { PathParsers, BodySchema } from "./routes";
+import { PathParsers } from "./routes";
+import { BodySchema } from "./body";
 
 const initAuthService = AuthService.create();
 const initApiService = StringplayApiService.create();

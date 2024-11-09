@@ -3,10 +3,11 @@ import { StringplayApiService } from "../../services/api";
 import { SystemSetupConfig, defaultConfig, populateConfig } from "../../util/test-config";
 import { cleanDbConnections, cleanLogs, startDb, stopDb } from "../../util/server/resources";
 import { ObjectId, WithId } from "mongodb";
-import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../../types/core-types";
+import { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../../util/constants";
 import { randomElement, verifyMemberPropertyType, getDefaultMemberPropertyValue } from "../../util/helper";
 import assert from "assert";
+import { Id } from "../../types/util-types";
 
 interface ConfigWithIds {
     testTroupes: WithId<TroupeSchema>[],
@@ -16,11 +17,73 @@ interface ConfigWithIds {
     testDashboards: WithId<TroupeDashboardSchema>[],
 }
 
+export interface SystemSetupConfigWithIds extends SystemSetupConfig {
+    troupes?: { 
+        [customTroupeId: string]: Partial<
+            Omit<WithId<TroupeSchema>, "pointTypes" | "memberPropertyTypes">
+            & Id 
+            & {
+                memberPropertyTypes: Partial<BaseMemberPropertyTypes> & VariableMemberPropertyTypes,
+                pointTypes: Partial<BasePointTypes> & VariablePointTypes, 
+                
+                /** Populated once after setup is complete */
+                troupe: WithId<TroupeSchema>,
+
+                /** Populated once after setup is complete */
+                dashboard: WithId<TroupeDashboardSchema>,
+            }
+        >
+    };
+    eventTypes?: { 
+        [customEventTypeId: string]: Partial<
+            WithId<EventTypeSchema> 
+            & Id 
+            & { 
+                customTroupeId: string,
+
+                /** Populated once after setup is complete */
+                eventType: WithId<EventTypeSchema>,
+            }
+        > 
+    };
+    events?: { 
+        [customEventId: string]: Partial<
+            WithId<EventSchema>
+            & Id 
+            & {
+                customTroupeId: string,
+                customEventTypeId: string,
+
+                /** Populated once after setup is complete */
+                event: WithId<EventSchema>,
+            }
+        >
+    };
+    members?: { 
+        [customMemberId: string]: Partial<
+            (Omit<WithId<MemberSchema>, "properties" | "points">) 
+            & Id 
+            & { 
+                customTroupeId: string,
+                properties: Partial<BaseMemberProperties> & VariableMemberProperties,
+                points: Partial<BaseMemberPoints> & VariableMemberPoints,
+                customEventAttendedIds: string[],
+
+                /** Uses custom event IDs as keys */
+                eventsAttended: EventsAttendedBucketSchema["events"],
+
+                /** Populated once after setup is complete */
+                member: WithId<MemberSchema>,
+            }
+        >
+    };
+}
+
 /** 
  * Converts `SystemSetupConfig<null>` to `SystemSetupConfig<ObjectId>`
  * by populating an existing system setup config with `ObjectId`s.
  */
-function populateConfigWithIds(config: SystemSetupConfig<ObjectId>): ConfigWithIds {
+function populateConfigWithIds(config: SystemSetupConfigWithIds): ConfigWithIds {
     config = {
         troupes: config.troupes || {},
         eventTypes: config.eventTypes || {},
@@ -265,8 +328,9 @@ function populateConfigWithIds(config: SystemSetupConfig<ObjectId>): ConfigWithI
  * Setup the database with the given configuration, opting out of interaction with
  * external services (Google Sheets, Google Forms, etc.)
  */
-async function dbSetup(config: SystemSetupConfig<ObjectId>) {
-    const { testTroupes, testEvents, testAudience, testEventsAttended, testDashboards } = populateConfigWithIds(config);
+async function dbSetup(config: SystemSetupConfig) {
+    const configWithIds = config as SystemSetupConfigWithIds;
+    const { testTroupes, testEvents, testAudience, testEventsAttended, testDashboards } = populateConfigWithIds(configWithIds);
 
     const db = await BaseDbService.create();
     const operations: Promise<any>[] = [];
@@ -277,7 +341,7 @@ async function dbSetup(config: SystemSetupConfig<ObjectId>) {
     if(testDashboards.length > 0) operations.push(db.dashboardColl.insertMany(testDashboards));
 
     await Promise.all(operations).then(() => db.close());
-    return config;
+    return configWithIds;
 }
 
 export default function () {
