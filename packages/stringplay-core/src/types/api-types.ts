@@ -40,6 +40,9 @@ export interface SpringplayCoreApi {
      */
     createEvent(troupeId: string, request: CreateEventRequest): Promise<PublicEvent | AxiosResponse<PublicEvent>>;
 
+    /** Bulk version of `createEvent` */
+    createEvents(troupeId: string, requests: CreateEventRequest[]): Promise<PublicEvent[] | AxiosResponse<PublicEvent[]>>;
+
     /** Retrieves event or parses existing event into public format */ 
     getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent | AxiosResponse<PublicEvent>>;
 
@@ -57,6 +60,9 @@ export interface SpringplayCoreApi {
      */
     updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest): Promise<PublicEvent | AxiosResponse<PublicEvent>>;
 
+    /** Bulk version of `updateEvent` */
+    updateEvents(troupeId: string, request: BulkUpdateEventRequest): Promise<BulkUpdateEventResponse | AxiosResponse<BulkUpdateEventResponse>>;
+
     /**
      * Deletes an event in the given troupe. 
      * 
@@ -65,6 +71,9 @@ export interface SpringplayCoreApi {
      */
     deleteEvent(troupeId: string, eventId: string): Promise<void | AxiosResponse<void>>;
 
+    /** Bulk version of `deleteEvent` */
+    deleteEvents(troupeId: string, eventIds: string[]): Promise<void | AxiosResponse<void>>
+
     /**
      * Creates and returns a new event type in the given troupe. 
      * 
@@ -72,6 +81,9 @@ export interface SpringplayCoreApi {
      * - Obtain the events from source folders for the event type
      */
     createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<EventType | AxiosResponse<EventType>>;
+
+    /** Bulk version of `createEventType` */
+    createEventTypes(troupeId: string, requests: CreateEventTypeRequest[]): Promise<EventType[] | AxiosResponse<EventType[]>>;
 
     /** Retrieves all event types in public format */
     getEventTypes(troupeId: string): Promise<EventType[] | AxiosResponse<EventType[]>>;
@@ -84,11 +96,20 @@ export interface SpringplayCoreApi {
      */ 
     updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<EventType | AxiosResponse<EventType>>;
 
+    /** Bulk version of `updateEventType` */
+    updateEventTypes(troupeId: string, request: BulkUpdateEventTypeRequest): Promise<BulkUpdateEventTypeResponse | AxiosResponse<BulkUpdateEventTypeResponse>>;
+
     /** Deletes an event type in the given troupe. */
     deleteEventType(troupeId: string, eventTypeId: string): Promise<void | AxiosResponse<void>>;
 
+    /** Bulk version of `deleteEventType` */
+    deleteEventTypes(troupeId: string, eventTypeIds: string[]): Promise<void | AxiosResponse<void>>;
+
     /** Creates and returns a new member in the given troupe. */
     createMember(troupeId: string, request: CreateMemberRequest): Promise<Member | AxiosResponse<Member>>;
+
+    /** Bulk version of `createMember` */
+    createMembers(troupeId: string, requests: CreateMemberRequest[]): Promise<Member[] | AxiosResponse<Member[]>>
 
     /** Retrieve member in public format. */
     getMember(member: string | WithId<MemberSchema>, troupeId?: string): Promise<Member | AxiosResponse<Member>>;
@@ -105,11 +126,17 @@ export interface SpringplayCoreApi {
     /** Update or delete (optional) properties for single member */
     updateMember(troupeId: string, memberId: string, request: UpdateMemberRequest): Promise<Member | AxiosResponse<Member>>;
 
+    /** Bulk version of `updateMember` */
+    updateMembers(troupeId: string, request: BulkUpdateMemberRequest): Promise<BulkUpdateMemberResponse | AxiosResponse<BulkUpdateMemberResponse>>;
+
     /** 
      * Deletes a member in the given troupe. Member may still be generated on sync; 
      * this removes the existing data associated with a member. 
      */
     deleteMember(troupeId: string, memberId: string): Promise<void | AxiosResponse<void>>;
+
+    /** Bulk version of `deleteMember` */
+    deleteMembers(troupeId: string, memberIds: string[]): Promise<void | AxiosResponse<void>>;
 
     /** Places troupe into the sync queue if the sync lock is disabled. */
     initiateSync(troupeId: string): Promise<void | AxiosResponse<void>>;
@@ -204,6 +231,14 @@ export type UpdateEventRequest = ApiType<{
     removeProperties?: string[],
 }>;
 
+export type BulkUpdateEventRequest = {
+    [eventId: string]: UpdateEventRequest
+}
+
+export type BulkUpdateEventResponse = {
+    [eventId: string]: PublicEvent
+}
+
 /** Creates a new event type */
 export type CreateEventTypeRequest = ApiType<Pick<
     EventType,
@@ -223,6 +258,14 @@ export type UpdateEventTypeRequest = ApiType<{
     addSourceFolderUris?: string[],
     removeSourceFolderUris?: string[],
 }>;
+
+export type BulkUpdateEventTypeRequest = {
+    [eventTypeId: string]: UpdateEventTypeRequest
+}
+
+export type BulkUpdateEventTypeResponse = {
+    [eventTypeId: string]: EventType
+}
 
 /**
  * Creates a new member. All required member properties defined by the troupe must be set.
@@ -245,6 +288,14 @@ export type UpdateMemberRequest = ApiType<{
     },
     removeProperties?: string[],
 }>;
+
+export type BulkUpdateMemberRequest = {
+    [eventTypeId: string]: UpdateMemberRequest
+}
+
+export type BulkUpdateMemberResponse = {
+    [eventTypeId: string]: Member
+}
 
 // == AUTH == //
 

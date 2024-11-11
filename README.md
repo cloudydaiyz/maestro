@@ -34,7 +34,7 @@ Make sure that Node.js version 20.0.0 or higher is installed on your device.
 
 ## Environment Variables
 
-Environment variables are required to be set in order to run the code from the child packages. You can either define these environment variables globally, or create a `.env` file to define the variables specifically within this repository. Look at [`.temp.env`](./.temp.env) for information on each environment variable. 
+Environment variables are required to be set in order to run the code from the child packages. You can either define these environment variables globally, or create a `.env` file to define the variables specifically within this repository. Look at [`.env.temp`](./.env.temp) for information on each environment variable. 
 
 The `.env` file is injected into each command via [`dotenvx`](https://github.com/dotenvx/dotenvx).
 

@@ -3,11 +3,11 @@
 import { AnyBulkWriteOperation, ObjectId, WithId } from "mongodb";
 import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "../util/constants";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints, AttendeeSchema } from "../types/core-types";
-import { Attendee, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
+import { Attendee, BulkUpdateEventRequest, BulkUpdateEventResponse, BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse, BulkUpdateMemberRequest, BulkUpdateMemberResponse, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
 import { SetOperator, UnsetOperator, UpdateOperator } from "../types/util-types";
 import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
-import { verifyApiMemberPropertyType } from "../util/helper";
+import { asyncObjectMap, objectMap, verifyApiMemberPropertyType } from "../util/helper";
 import { toAttendee, toEventType, toMember, toPublicEvent, toTroupe, toTroupeDashboard } from "../util/api-transform";
 import { addToSyncQueue } from "../cloud/gcp";
 import assert from "assert";
@@ -188,6 +188,10 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         return this.getEvent({...event, _id: insertedEvent.insertedId});
     }
 
+    async createEvents(troupeId: string, requests: CreateEventRequest[]): Promise<PublicEvent[]> {
+        return Promise.all(requests.map(r => this.createEvent(troupeId, r)));
+    }
+
     async getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent> {
         assert(typeof event != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event."));
@@ -342,6 +346,16 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         return this.getEvent(newEvent);
     }
 
+    async updateEvents(troupeId: string, request: BulkUpdateEventRequest): Promise<BulkUpdateEventResponse> {
+        return asyncObjectMap<BulkUpdateEventRequest, BulkUpdateEventResponse>(
+            request, 
+            async (eventId, request) => [
+                eventId as string, 
+                await this.updateEvent(troupeId, eventId as string, request)
+            ]
+        );
+    }
+
     async deleteEvent(troupeId: string, eventId: string): Promise<void> {
         const [troupe, event] = await Promise.all([
             this.getTroupeSchema(troupeId, true), 
@@ -375,6 +389,10 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         assert(deletedEvent, new ClientError("Failed to delete event"));
     }
 
+    async deleteEvents(troupeId: string, eventIds: string[]): Promise<void> {
+        await Promise.all(eventIds.map(id => this.deleteEvent(troupeId, id)));
+    }
+
     async createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<EventType> {
 
         // Ensure given source folder URIs are valid Google Drive folders
@@ -400,6 +418,10 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         assert(insertResult.matchedCount == 1, new ClientError("Invalid troupe or max event types reached"));
         assert(insertResult.modifiedCount == 1, "Unable to create event type");
         return this.getEventType(type);
+    }
+
+    async createEventTypes(troupeId: string, requests: CreateEventTypeRequest[]): Promise<EventType[]> {
+        return Promise.all(requests.map(r => this.createEventType(troupeId, r)));
     }
 
     async getEventType(eventType: string | WithId<EventTypeSchema>, troupeId?: string, troupe?: WithId<TroupeSchema>): Promise<EventType> {
@@ -566,6 +588,16 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         return this.getEventType(newEventType);
     }
 
+    async updateEventTypes(troupeId: string, request: BulkUpdateEventTypeRequest): Promise<BulkUpdateEventTypeResponse> {
+        return asyncObjectMap<BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse>(
+            request, 
+            async (eventTypeId, request) => [
+                eventTypeId as string, 
+                await this.updateEventType(troupeId, eventTypeId as string, request)
+            ]
+        );
+    }
+
     async deleteEventType(troupeId: string, eventTypeId: string): Promise<void> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot delete event type while sync is in progress"));
@@ -609,6 +641,10 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         assert(deleteEventTypeResult.modifiedCount, "Failed to delete event type");
     }
 
+    async deleteEventTypes(troupeId: string, eventTypeIds: string[]): Promise<void> {
+        await Promise.all(eventTypeIds.map(id => this.deleteEvent(troupeId, id)));
+    }
+
     async createMember(troupeId: string, request: CreateMemberRequest): Promise<Member> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot create member while sync is in progress"));
@@ -638,6 +674,10 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         assert(insertedMember.acknowledged, "Failed to insert member");
 
         return this.getMember({ ...member, _id: insertedMember.insertedId });
+    }
+
+    async createMembers(troupeId: string, requests: CreateMemberRequest[]): Promise<Member[]> {
+        return Promise.all(requests.map(r => this.createMember(troupeId, r)));
     }
 
     async getMember(member: string | WithId<MemberSchema>, troupeId?: string): Promise<Member> {
@@ -740,12 +780,26 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         return this.getMember(newMember);
     }
 
+    async updateMembers(troupeId: string, request: BulkUpdateMemberRequest): Promise<BulkUpdateMemberResponse> {
+        return asyncObjectMap<BulkUpdateMemberRequest, BulkUpdateMemberResponse>(
+            request, 
+            async (memberId, request) => [
+                memberId as string, 
+                await this.updateMember(troupeId, memberId as string, request)
+            ]
+        );
+    }
+
     async deleteMember(troupeId: string, memberId: string): Promise<void> {
         const res = await Promise.all([
             this.audienceColl.deleteOne({ _id: new ObjectId(memberId), troupeId }),
             this.eventsAttendedColl.deleteMany({ troupeId, memberId })
         ]);
         assert(res.every(r => r.acknowledged), "Failed to delete member data");
+    }
+
+    async deleteMembers(troupeId: string, memberIds: string[]): Promise<void> {
+        await Promise.all(memberIds.map(id => this.deleteMember(troupeId, id)));
     }
 
     async initiateSync(troupeId: string): Promise<void> {

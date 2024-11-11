@@ -3,7 +3,7 @@
 import { z } from "zod";
 
 import type { MemberPropertyType} from "./types/core-types";
-import type { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest, ApiType, RegisterRequest, LoginRequest, RefreshCredentialsRequest, DeleteUserRequest } from "./types/api-types";
+import type { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest, ApiType, RegisterRequest, LoginRequest, RefreshCredentialsRequest, DeleteUserRequest, BulkUpdateEventRequest, BulkUpdateEventTypeRequest, BulkUpdateMemberRequest } from "./types/api-types";
 import type { CreateTroupeRequest, SyncRequest, ScheduledTaskRequest } from "./types/service-types";
 
 /** Request body parsers for API are exported from this namespace */
@@ -66,6 +66,8 @@ export namespace BodySchema {
         value: z.number().nullable().optional(),
     });
 
+    export const CreateEventsRequest: z.ZodType<CreateEventRequest[]> = z.array(CreateEventRequest);
+
     export const UpdateEventRequest: z.ZodType<UpdateEventRequest> = z.object({
         title: z.string().nullable().optional(),
         startDate: z.string().nullable().optional(),
@@ -76,11 +78,19 @@ export namespace BodySchema {
         removeProperties: z.string().array().nullable().optional(),
     });
 
+    export const UpdateEventsRequest: z.ZodType<BulkUpdateEventRequest> = z.record(z.string(), UpdateEventRequest);
+
+    export const DeleteEventsRequest: z.ZodType<string[]> = z.array(z.string());
+
     export const CreateEventTypeRequest: z.ZodType<CreateEventTypeRequest> = z.object({
         title: z.string(),
         value: z.number(),
         sourceFolderUris: z.string().array(),
     });
+
+    export const CreateEventTypesRequest: z.ZodType<CreateEventTypeRequest[]> = z.array(CreateEventTypeRequest);
+
+    export const DeleteEventTypesRequest: z.ZodType<string[]> = z.array(z.string());
 
     export const UpdateEventTypeRequest: z.ZodType<UpdateEventTypeRequest> = z.object({
         title: z.string().nullable().optional(),
@@ -88,6 +98,8 @@ export namespace BodySchema {
         addSourceFolderUris: z.string().array().nullable().optional(),
         removeSourceFolderUris: z.string().array().nullable().optional(),
     });
+
+    export const UpdateEventTypesRequest: z.ZodType<BulkUpdateEventTypeRequest> = z.record(z.string(), UpdateEventTypeRequest);
     
     export const CreateMemberRequest: z.ZodType<CreateMemberRequest> = z.object({
         properties: z.object({
@@ -99,6 +111,8 @@ export namespace BodySchema {
         }).catchall(z.union([z.string(), z.boolean(), z.number(), z.null()])),
     });
 
+    export const CreateMembersRequest: z.ZodType<CreateMemberRequest[]> = z.array(CreateMemberRequest);
+
     export const UpdateMemberRequest: z.ZodType<UpdateMemberRequest> = z.object({
         updateProperties: z.record(z.string(), z.object({
             value: z.union([z.string(), z.boolean(), z.number()]).nullable().optional(),
@@ -106,6 +120,10 @@ export namespace BodySchema {
         })).nullable().optional(),
         removeProperties: z.string().array().nullable().optional(),
     });
+
+    export const UpdateMembersRequest: z.ZodType<BulkUpdateMemberRequest> = z.record(z.string(), UpdateMemberRequest);
+
+    export const DeleteMembersRequest: z.ZodType<string[]> = z.array(z.string());
 
     // ========== FOR SERVICE CONTROLLERS ========== //
 

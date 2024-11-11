@@ -48,15 +48,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
                 headers: {},
                 body: await apiService.updateTroupe(troupeId, BodySchema.UpdateTroupeRequest.parse(body)),
             }
-        } 
-        // else if(method == "DELETE") {
-        //     assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
-        //     await coreService.deleteTroupe(troupeId);
-        //     return {
-        //         status: 200,
-        //         headers: {},
-        //     }
-        // }
+        }
         throw new ClientError("Invalid method for path");
     }
 
@@ -88,6 +80,39 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
                 status: 200,
                 headers: {},
                 body: await apiService.getEvents(troupeId),
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const bulkEventsPath = PathParsers.BulkEvents.test(path);
+    if(bulkEventsPath) {
+        if(method == "POST") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            return {
+                status: 200,
+                headers: {},
+                body: await apiService.createEvents(troupeId, BodySchema.CreateEventsRequest.parse(body)),
+            }
+        } else if(method == "PUT") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            return {
+                status: 200,
+                headers: {},
+                body: await apiService.updateEvents(troupeId, BodySchema.UpdateEventsRequest.parse(body)),
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const bulkDeleteEventsPath = PathParsers.BulkDeleteEvents.test(path);
+    if(bulkDeleteEventsPath) {
+        if(method == "POST") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            await apiService.deleteEvents(troupeId, BodySchema.DeleteEventsRequest.parse(body));
+            return {
+                status: 204,
+                headers: {},
             }
         }
         throw new ClientError("Invalid method for path");
@@ -128,6 +153,46 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
                 status: 200,
                 headers: {},
                 body: await apiService.createEventType(troupeId, BodySchema.CreateEventTypeRequest.parse(body)),
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const bulkEventTypesPath = PathParsers.BulkEventTypes.test(path);
+    if(bulkEventTypesPath) {
+        if(method == "POST") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            return {
+                status: 200,
+                headers: {},
+                body: await apiService.createEventTypes(troupeId, BodySchema.CreateEventTypesRequest.parse(body)),
+            }
+        } else if(method == "PUT") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            return {
+                status: 200,
+                headers: {},
+                body: await apiService.updateEventTypes(troupeId, BodySchema.UpdateEventTypesRequest.parse(body)),
+            }
+        } else if(method == "DELETE") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            await apiService.deleteEventTypes(troupeId, BodySchema.DeleteEventTypesRequest.parse(body));
+            return {
+                status: 204,
+                headers: {},
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const bulkDeleteEventTypesPath = PathParsers.BulkDeleteEventTypes.test(path);
+    if(bulkDeleteEventTypesPath) {
+        if(method == "POST") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            await apiService.deleteEventTypes(troupeId, BodySchema.DeleteEventTypesRequest.parse(body));
+            return {
+                status: 204,
+                headers: {},
             }
         }
         throw new ClientError("Invalid method for path");
@@ -175,6 +240,46 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
                 status: 200,
                 headers: {},
                 body: await apiService.getAudience(troupeId),
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const bulkAudiencePath = PathParsers.BulkAudience.test(path);
+    if(bulkAudiencePath) {
+        if(method == "POST") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            return {
+                status: 200,
+                headers: {},
+                body: await apiService.createMembers(troupeId, BodySchema.CreateMembersRequest.parse(body)),
+            }
+        } else if(method == "PUT") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            return {
+                status: 200,
+                headers: {},
+                body: await apiService.updateMembers(troupeId, BodySchema.UpdateMembersRequest.parse(body)),
+            }
+        } else if(method == "DELETE") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            await apiService.deleteMembers(troupeId, BodySchema.DeleteMembersRequest.parse(body));
+            return {
+                status: 204,
+                headers: {},
+            }
+        }
+        throw new ClientError("Invalid method for path");
+    }
+
+    const bulkDeleteAudiencePath = PathParsers.BulkDeleteAudience.test(path);
+    if(bulkDeleteAudiencePath) {
+        if(method == "POST") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            await apiService.deleteMembers(troupeId, BodySchema.DeleteMembersRequest.parse(body));
+            return {
+                status: 204,
+                headers: {},
             }
         }
         throw new ClientError("Invalid method for path");

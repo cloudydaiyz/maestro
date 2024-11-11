@@ -19,12 +19,18 @@ export namespace Paths {
     export const Dashboard = "/t/:troupeId/dashboard";
 
     export const Events = "/t/:troupeId/e";
+    export const BulkEvents = "/t/:troupeId/e/bulk";
+    export const BulkDeleteEvents = "/t/:troupeId/e/bulk/delete";
     export const Event = "/t/:troupeId/e/:eventId";
 
     export const EventTypes = "/t/:troupeId/et";
+    export const BulkEventTypes = "/t/:troupeId/et/bulk";
+    export const BulkDeleteEventTypes = "/t/:troupeId/et/bulk/delete";
     export const EventType = "/t/:troupeId/et/:eventTypeId";
 
     export const Audience = "/t/:troupeId/m";
+    export const BulkAudience = "/t/:troupeId/m/bulk";
+    export const BulkDeleteAudience = "/t/:troupeId/m/bulk/delete";
     export const Member = "/t/:troupeId/m/:memberId";
 
     export const Attendees = "/t/:troupeId/a";
@@ -50,12 +56,18 @@ export namespace PathParsers {
     export const Dashboard: ParamPath<"troupeId"> = Path.createPath(Paths.Dashboard);
 
     export const Events: ParamPath<"troupeId"> = Path.createPath(Paths.Events);
+    export const BulkEvents: ParamPath<"troupeId"> = Path.createPath(Paths.BulkEvents);
+    export const BulkDeleteEvents: ParamPath<"troupeId"> = Path.createPath(Paths.BulkDeleteEvents);
     export const Event: ParamPath<"troupeId"|"eventId"> = Path.createPath(Paths.Event);
 
     export const EventTypes: ParamPath<"troupeId"> = Path.createPath(Paths.EventTypes);
+    export const BulkEventTypes: ParamPath<"troupeId"> = Path.createPath(Paths.BulkEventTypes);
+    export const BulkDeleteEventTypes: ParamPath<"troupeId"> = Path.createPath(Paths.BulkDeleteEventTypes);
     export const EventType: ParamPath<"troupeId"|"eventTypeId"> = Path.createPath(Paths.EventType);
 
     export const Audience: ParamPath<"troupeId"> = Path.createPath(Paths.Audience);
+    export const BulkAudience: ParamPath<"troupeId"> = Path.createPath(Paths.BulkAudience);
+    export const BulkDeleteAudience: ParamPath<"troupeId"> = Path.createPath(Paths.BulkDeleteAudience);
     export const Member: ParamPath<"troupeId"|"memberId"> = Path.createPath(Paths.Member);
 
     export const Attendees: ParamPath<"troupeId"> = Path.createPath(Paths.Attendees);

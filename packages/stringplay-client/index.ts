@@ -1,4 +1,4 @@
-import type { Attendee, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, Credentials, EventType, Member, PublicEvent, SpringplayAuthApi, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "@cloudydaiyz/stringplay-core/types/api";
+import type { Attendee, BulkUpdateEventRequest, BulkUpdateEventResponse, BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse, BulkUpdateMemberRequest, BulkUpdateMemberResponse, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, Credentials, EventType, Member, PublicEvent, SpringplayAuthApi, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "@cloudydaiyz/stringplay-core/types/api";
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 
 /** Assertion function defined outside of Node.js */
@@ -131,6 +131,14 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
         );
     }
 
+    async createEvents(troupeId: string, requests: CreateEventRequest[]): Promise<AxiosResponse<PublicEvent[]>> {
+        return axios.post(
+            getUrl(this.uri, `/t/${troupeId}/e/bulk`),
+            requests,
+            { headers: this.headers(true) },
+        );
+    }
+
     async getEvent(eventId: string, troupeId: string): Promise<AxiosResponse<PublicEvent>> {
         return axios.get(
             getUrl(this.uri, `/t/${troupeId}/e/${eventId}`),
@@ -153,9 +161,25 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
         );
     }
 
+    async updateEvents(troupeId: string, request: BulkUpdateEventRequest): Promise<AxiosResponse<BulkUpdateEventResponse>> {
+        return axios.put(
+            getUrl(this.uri, `/t/${troupeId}/e/bulk`),
+            request,
+            { headers: this.headers(true) },
+        );
+    }
+
     async deleteEvent(troupeId: string, eventId: string): Promise<AxiosResponse<void>> {
         return axios.delete(
             getUrl(this.uri, `/t/${troupeId}/e/${eventId}`),
+            { headers: this.headers(true) },
+        );
+    }
+
+    async deleteEvents(troupeId: string, eventIds: string[]): Promise<AxiosResponse<void>> {
+        return axios.post(
+            getUrl(this.uri, `/t/${troupeId}/e/bulk/delete`),
+            eventIds,
             { headers: this.headers(true) },
         );
     }
@@ -164,6 +188,14 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
         return axios.post(
             getUrl(this.uri, `/t/${troupeId}/et`),
             request,
+            { headers: this.headers(true) },
+        );
+    }
+
+    async createEventTypes(troupeId: string, requests: CreateEventTypeRequest[]): Promise<AxiosResponse<EventType[]>> {
+        return axios.post(
+            getUrl(this.uri, `/t/${troupeId}/et/bulk`),
+            requests,
             { headers: this.headers(true) },
         );
     }
@@ -183,9 +215,25 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
         );
     }
 
+    async updateEventTypes(troupeId: string, request: BulkUpdateEventTypeRequest): Promise<AxiosResponse<BulkUpdateEventTypeResponse>> {
+        return axios.put(
+            getUrl(this.uri, `/t/${troupeId}/et/bulk`),
+            request,
+            { headers: this.headers(true) },
+        );
+    }
+
     async deleteEventType(troupeId: string, eventTypeId: string): Promise<AxiosResponse<void>> {
         return axios.delete(
             getUrl(this.uri, `/t/${troupeId}/et/${eventTypeId}`),
+            { headers: this.headers(true) },
+        );
+    }
+
+    async deleteEventTypes(troupeId: string, eventTypeIds: string[]): Promise<AxiosResponse<void>> {
+        return axios.post(
+            getUrl(this.uri, `/t/${troupeId}/et/bulk/delete`),
+            eventTypeIds,
             { headers: this.headers(true) },
         );
     }
@@ -194,6 +242,14 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
         return axios.post(
             getUrl(this.uri, `/t/${troupeId}/a`),
             request,
+            { headers: this.headers(true) },
+        );
+    }
+
+    async createMembers(troupeId: string, requests: CreateMemberRequest[]): Promise<AxiosResponse<Member[]>> {
+        return axios.post(
+            getUrl(this.uri, `/t/${troupeId}/a/bulk`),
+            requests,
             { headers: this.headers(true) },
         );
     }
@@ -234,9 +290,25 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
         );
     }
 
+    async updateMembers(troupeId: string, request: BulkUpdateMemberRequest): Promise<AxiosResponse<BulkUpdateMemberResponse>> {
+        return axios.put(
+            getUrl(this.uri, `/t/${troupeId}/m/bulk`),
+            request,
+            { headers: this.headers(true) },
+        );
+    }
+
     async deleteMember(troupeId: string, memberId: string): Promise<AxiosResponse<void>> {
         return axios.delete(
             getUrl(this.uri, `/t/${troupeId}/m/${memberId}`),
+            { headers: this.headers(true) },
+        );
+    }
+
+    async deleteMembers(troupeId: string, memberIds: string[]): Promise<AxiosResponse<void>> {
+        return axios.post(
+            getUrl(this.uri, `/t/${troupeId}/m/bulk/delete`),
+            memberIds,
             { headers: this.headers(true) },
         );
     }

@@ -96,6 +96,24 @@ export function objectMap<T, U>(
     return newObj;
 }
 
+export async function asyncObjectMap<T, U>(
+    obj: T, 
+    fn: (key: keyof T, value: T[keyof T]) => Promise<[key: keyof U, value: U[keyof U]]>
+): Promise<U> {
+    const newObj: U = {} as U;
+    const ops = [];
+    for(const key in obj) {
+        ops.push(
+            fn(key, obj[key]).then(res => {
+                const [newKey, newValue] = res;
+                newObj[newKey] = newValue;
+            })
+        );
+    }
+    await Promise.all(ops);
+    return newObj;
+}
+
 /** Converts an object to an array */
 export function objectToArray<T, U>(
     obj: T, 
