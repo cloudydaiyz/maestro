@@ -1,5 +1,5 @@
 import init from "../lifecycle/init";
-import { defaultConfig, noMembersConfig, onlyEventTypesConfig } from "../../util/test-config";
+import { defaultConfig, noMembersConfig, onlyEventTypesConfig } from "../../util/server/test-config";
 
 import { describe } from "@jest/globals";
 import { arrayToObject, deleteFromArray, objectToArray, shuffleArray } from "../../util/helper";

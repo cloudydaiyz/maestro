@@ -155,3 +155,8 @@ export function assert(value: unknown, message?: string | Error): asserts value 
         throw new Error('Assertion failed.');
     }
 };
+
+export function removeId<T>(obj: T & { _id?: any }): T {
+    delete obj._id;
+    return obj;
+}

@@ -1,5 +1,5 @@
 import init from "./lifecycle/init";
-import { SystemSetupConfig, defaultConfig } from "../util/test-config";
+import { SystemSetupConfig, defaultConfig } from "../util/server/test-config";
 
 import { StringplayApiService } from "../services/api";
 import { TroupeCoreService } from "../services/core";

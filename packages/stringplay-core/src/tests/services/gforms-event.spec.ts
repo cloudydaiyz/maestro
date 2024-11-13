@@ -1,5 +1,5 @@
 import init from "../lifecycle/init";
-import { noMembersConfig } from "../../util/test-config";
+import { noMembersConfig } from "../../util/server/test-config";
 
 import { describe } from "@jest/globals";
 import { GoogleFormsEventDataService } from "../../services/events/gforms-event";

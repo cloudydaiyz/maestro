@@ -3,6 +3,7 @@
 import type { ApiType, Attendee, EventType, Member, PublicEvent, Troupe, TroupeDashboard } from "../types/api-types";
 import type { AttendeeSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
 import type { Replace } from "../types/util-types";
+import { removeId } from "./helper";
 
 /** Converts troupe dashboard schema to its public, api-facing counterpart */
 export function toTroupeDashboard(schema: TroupeDashboardSchema, id: string): TroupeDashboard {
@@ -10,13 +11,13 @@ export function toTroupeDashboard(schema: TroupeDashboardSchema, id: string): Tr
     const newUpcomingBirthdays: Replace<TroupeDashboardSchema["upcomingBirthdays"]["members"], string, string> = [];
     for(const member of schema.upcomingBirthdays.members) {
         newUpcomingBirthdays.push({
-            ...member,
+            ...removeId(member),
             birthday: member.birthday.toISOString(),
         });
     }
 
     return {
-        ...schema,
+        ...removeId(schema),
         id,
         upcomingBirthdays: {
             ...schema.upcomingBirthdays,
@@ -51,7 +52,7 @@ export function toTroupe(schema: TroupeSchema, id: string): Troupe {
     }
 
     return {
-        ...publicTroupe,
+        ...removeId(publicTroupe),
         lastUpdated: publicTroupe.lastUpdated.toISOString(),
         id,
         pointTypes,
@@ -62,7 +63,7 @@ export function toTroupe(schema: TroupeSchema, id: string): Troupe {
 /** Converts event schema to its public, api-facing counterpart */
 export function toPublicEvent(schema: EventSchema, id: string): PublicEvent {
     return {
-        ...schema,
+        ...removeId(schema),
         id,
         lastUpdated: schema.lastUpdated.toISOString(),
         startDate: schema.startDate.toISOString(),
@@ -73,7 +74,7 @@ export function toPublicEvent(schema: EventSchema, id: string): PublicEvent {
 export function toEventType(schema: EventTypeSchema, id: string): EventType {
 
     return {
-        ...schema,
+        ...removeId(schema),
         id,
         lastUpdated: schema.lastUpdated.toISOString(),
     }
@@ -93,7 +94,7 @@ export function toMember(schema: MemberSchema, id: string): Member {
     }
 
     return {
-        ...schema,
+        ...removeId(schema),
         id,
         lastUpdated: schema.lastUpdated.toISOString(),
         properties,
@@ -116,7 +117,7 @@ export function toAttendee(schema: AttendeeSchema, id: string): Attendee {
     const eventsAttended = Object.keys(schema.eventsAttended);
     
     return {
-        ...schema,
+        ...removeId(schema),
         id,
         lastUpdated: schema.lastUpdated.toISOString(),
         properties,

@@ -1,59 +1,60 @@
-import type { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../types/core-types";
-import type { Attendee, ConsoleData, EventType, PublicEvent } from "../types/api-types";
-import type { Id } from "../types/util-types";
+import type { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
+import type { Attendee, ConsoleData, EventType, PublicEvent } from "../../types/api-types";
+import type { Id } from "../../types/util-types";
 
-import { randomElement, verifyMemberPropertyType, getDefaultMemberPropertyValue, generatePseudoObjectId } from "./helper";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "./constants";
-import { toAttendee, toEventType, toPublicEvent, toTroupe, toTroupeDashboard } from "./api-transform";
+import { randomElement, verifyMemberPropertyType, getDefaultMemberPropertyValue, generatePseudoObjectId } from "../helper";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../constants";
+import { toAttendee, toEventType, toPublicEvent, toTroupe, toTroupeDashboard } from "../api-transform";
 
-import { assert } from "./helper";
+import { assert } from "../helper";
+import { WithId, ObjectId } from "mongodb";
 
 /** Configuration for setting up the database with test data. This implementation doesn't use `ObjectId` */
 export interface SystemSetupConfig {
     troupes?: { 
         [customTroupeId: string]: Partial<
-            Omit<TroupeSchema, "pointTypes" | "memberPropertyTypes">
+            Omit<WithId<TroupeSchema>, "pointTypes" | "memberPropertyTypes">
             & Id 
             & {
                 memberPropertyTypes: Partial<BaseMemberPropertyTypes> & VariableMemberPropertyTypes,
                 pointTypes: Partial<BasePointTypes> & VariablePointTypes, 
                 
                 /** Populated once after setup is complete */
-                troupe: TroupeSchema,
+                troupe: WithId<TroupeSchema>,
 
                 /** Populated once after setup is complete */
-                dashboard: TroupeDashboardSchema,
+                dashboard: WithId<TroupeDashboardSchema>,
             }
         >
     };
     eventTypes?: { 
         [customEventTypeId: string]: Partial<
-            EventTypeSchema
+            WithId<EventTypeSchema>
             & Id 
             & { 
                 customTroupeId: string,
 
                 /** Populated once after setup is complete */
-                eventType: EventTypeSchema,
+                eventType: WithId<EventTypeSchema>,
             }
         > 
     };
     events?: { 
         [customEventId: string]: Partial<
-            EventSchema
+            WithId<EventSchema>
             & Id 
             & {
                 customTroupeId: string,
                 customEventTypeId: string,
 
                 /** Populated once after setup is complete */
-                event: EventSchema,
+                event: WithId<EventSchema>,
             }
         >
     };
     members?: { 
         [customMemberId: string]: Partial<
-            Omit<MemberSchema, "properties" | "points">
+            Omit<WithId<MemberSchema>, "properties" | "points">
             & Id 
             & { 
                 customTroupeId: string,
@@ -62,18 +63,17 @@ export interface SystemSetupConfig {
                 customEventAttendedIds: string[],
 
                 /** Uses custom event IDs as keys */
-                eventsAttended: EventsAttendedBucketSchema["events"],
+                eventsAttended: WithId<EventsAttendedBucketSchema>["events"],
 
                 /** Populated once after setup is complete */
-                member: MemberSchema,
+                member: WithId<MemberSchema>,
             }
         >
     };
 }
 
-/**
- * Populates the config with entity data.
- * - Troupe event type array will be empty, unless `populateConfigWithIds` is called
+/** 
+ * Populates an existing system setup config
  */
 export function populateConfig(config: SystemSetupConfig) {
     config = {
@@ -85,16 +85,15 @@ export function populateConfig(config: SystemSetupConfig) {
     const customTroupeIds = Object.keys(config.troupes!);
 
     // Create the troupe
-    const configTroupes: TroupeSchema[] = [];
-    const configDashboards: TroupeDashboardSchema[] = [];
+    const testTroupes: WithId<TroupeSchema>[] = [];
+    const testDashboards: WithId<TroupeDashboardSchema>[] = [];
     for(const customTroupeId in config.troupes) {
         const request = config.troupes[customTroupeId];
-        // request._id = new ObjectId();
-        // request.id = request._id.toHexString();
-        request.id = generatePseudoObjectId();
+        request._id = new ObjectId();
+        request.id = request._id.toHexString();
 
-        const newTroupe: TroupeSchema = {
-            // _id: request._id,
+        const newTroupe: WithId<TroupeSchema> = {
+            _id: request._id,
             lastUpdated: request.lastUpdated || new Date(),
             name: request.name || "Test Troupe - " + customTroupeId,
             logSheetUri: request.logSheetUri || "https://example.com",
@@ -106,8 +105,8 @@ export function populateConfig(config: SystemSetupConfig) {
             synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
         };
 
-        const newDashboard: TroupeDashboardSchema = {
-            // _id: new ObjectId(),
+        const newDashboard: WithId<TroupeDashboardSchema> = {
+            _id: new ObjectId(),
             troupeId: request.id,
             lastUpdated: new Date(),
             upcomingBirthdays: {
@@ -129,22 +128,21 @@ export function populateConfig(config: SystemSetupConfig) {
 
         request.troupe = newTroupe;
         request.dashboard = newDashboard;
-        configTroupes.push(newTroupe);
-        configDashboards.push(newDashboard);
+        testTroupes.push(newTroupe);
+        testDashboards.push(newDashboard);
     }
     
     for(const customEventTypeId in config.eventTypes) {
         const request = config.eventTypes[customEventTypeId];
-        // request._id = new ObjectId();
-        // request.id = request._id.toHexString();
-        request.id = generatePseudoObjectId();
+        request._id = new ObjectId();
+        request.id = request._id.toHexString();
 
         const customTroupeId = request.customTroupeId || randomElement(customTroupeIds);
         const troupe = config.troupes![customTroupeId]?.troupe;
         assert(troupe, `Invalid troupe ID specified for test config. Event Type ID: ${customEventTypeId}, Troupe ID: ${customTroupeId}`);
 
-        const newEventType: EventTypeSchema = {
-            // _id: request._id,
+        const newEventType: WithId<EventTypeSchema> = {
+            _id: request._id,
             lastUpdated: request.lastUpdated || new Date(),
             title: request.title || "Test Event Type - " + customEventTypeId,
             value: request.value || Math.round(Math.random() * 25),
@@ -153,15 +151,14 @@ export function populateConfig(config: SystemSetupConfig) {
         };
         
         request.eventType = newEventType;
-        // troupe.eventTypes.push(newEventType);
+        troupe.eventTypes.push(newEventType);
     }
 
-    const configEvents: EventSchema[] = [];
+    const testEvents: WithId<EventSchema>[] = [];
     for(const customEventId in config.events) {
         const request = config.events[customEventId];
-        // request._id = new ObjectId();
-        // request.id = request._id.toHexString();
-        request.id = generatePseudoObjectId();
+        request._id = new ObjectId();
+        request.id = request._id.toHexString();
 
         const customTroupeId = request.customTroupeId || randomElement(customTroupeIds);
         const troupe = config.troupes![customTroupeId]?.troupe;
@@ -170,10 +167,9 @@ export function populateConfig(config: SystemSetupConfig) {
         assert(troupe, `Invalid troupe ID specified for test config. Event ID: ${customEventId}, Troupe ID: ${customTroupeId}`);
         assert(!customEventTypeId || eventType, `Invalid event type ID specified for test config. Event ID: ${customEventId}, Event Type ID: ${customEventTypeId}`);
 
-        const newEvent: EventSchema = {
-            // _id: request._id,
-            // troupeId: troupe._id.toHexString(),
-            troupeId: config.troupes![customTroupeId].id!,
+        const newEvent: WithId<EventSchema> = {
+            _id: request._id,
+            troupeId: troupe._id.toHexString(),
             lastUpdated: request.lastUpdated || new Date(),
             title: request.title || "Test Event - " + customEventId,
             source: request.source || "",
@@ -181,8 +177,7 @@ export function populateConfig(config: SystemSetupConfig) {
             sourceUri: request.sourceUri || "https://example.com/" + customEventId,
             synchronizedSourceUri: request.synchronizedSourceUri || "https://example.com/" + customEventId,
             startDate: request.startDate || new Date(),
-            // eventTypeId: eventType ? eventType._id.toHexString() : undefined,
-            eventTypeId: eventType ? config.eventTypes![customEventTypeId!].id : undefined,
+            eventTypeId: eventType ? eventType._id.toHexString() : undefined,
             eventTypeTitle: eventType ? eventType.title : undefined,
             value: eventType ? eventType.value : request.value || Math.round(Math.random() * 25),
             fieldToPropertyMap: request.fieldToPropertyMap || {},
@@ -190,16 +185,15 @@ export function populateConfig(config: SystemSetupConfig) {
         };
 
         request.event = newEvent;
-        configEvents.push(newEvent);
+        testEvents.push(newEvent);
     }
 
-    const configAudience: MemberSchema[] = [];
-    const configEventsAttended: EventsAttendedBucketSchema[] = [];
+    const testAudience: WithId<MemberSchema>[] = [];
+    const testEventsAttended: WithId<EventsAttendedBucketSchema>[] = [];
     for(const customMemberId in config.members) {
         const request = config.members[customMemberId];
-        // request._id = new ObjectId();
-        // request.id = request._id.toHexString();
-        request.id = generatePseudoObjectId();
+        request._id = new ObjectId();
+        request.id = request._id.toHexString();
 
         const customTroupeId = request.customTroupeId || randomElement(customTroupeIds);
         const troupe = config.troupes![customTroupeId]?.troupe;
@@ -241,10 +235,9 @@ export function populateConfig(config: SystemSetupConfig) {
         }
 
         // Initialize the new member and add it to the test documents
-        const newMember: MemberSchema = {
-            // _id: request._id,
-            // troupeId: troupe._id.toHexString(),
-            troupeId: config.troupes![customTroupeId].id!,
+        const newMember: WithId<MemberSchema> = {
+            _id: request._id,
+            troupeId: troupe._id.toHexString(),
             lastUpdated: request.lastUpdated || new Date(),
             properties: {
                 ...request.properties,
@@ -260,7 +253,7 @@ export function populateConfig(config: SystemSetupConfig) {
             },
         };
         request.member = newMember;
-        configAudience.push(newMember);
+        testAudience.push(newMember);
 
         // Create a single bucket with all the events attended, populated with the events from the request
         request.eventsAttended = {};
@@ -272,8 +265,7 @@ export function populateConfig(config: SystemSetupConfig) {
             assert(event, `Invalid event attended specified for test config. Member ID: ${customMemberId}, Custom Event ID: ${customEventId}`);
                 
             // Update the events attended and increment the member's points if the event is not already in the list
-            // const eventId = event._id.toHexString();
-            const eventId = config.events![customEventId].id!;
+            const eventId = event._id.toHexString();
             if(!(eventId in request.eventsAttended)) {
                 request.eventsAttended[eventId] = {
                     typeId: event.eventTypeId,
@@ -292,8 +284,8 @@ export function populateConfig(config: SystemSetupConfig) {
         }
 
         // Split the collected events into separate buckets and add them to the test documents
-        let newEventsAttended: EventsAttendedBucketSchema = {
-            // _id: new ObjectId(),
+        let newEventsAttended: WithId<EventsAttendedBucketSchema> = {
+            _id: new ObjectId(),
             troupeId: config.troupes![customTroupeId].id!,
             memberId: request.id,
             events: {},
@@ -306,9 +298,9 @@ export function populateConfig(config: SystemSetupConfig) {
             pageSize++;
 
             if(pageSize == MAX_PAGE_SIZE) {
-                configEventsAttended.push(newEventsAttended);
+                testEventsAttended.push(newEventsAttended);
                 newEventsAttended = {
-                    // _id: new ObjectId(),
+                    _id: new ObjectId(),
                     troupeId: newEventsAttended.troupeId,
                     memberId: newEventsAttended.memberId,
                     events: {},
@@ -318,10 +310,10 @@ export function populateConfig(config: SystemSetupConfig) {
             }
         }
 
-        if(pageSize > 0) configEventsAttended.push(newEventsAttended);
+        if(pageSize > 0) testEventsAttended.push(newEventsAttended);
     }
 
-    return { configTroupes, configEvents, configAudience, configEventsAttended, configDashboards };
+    return { testTroupes, testEvents, testAudience, testEventsAttended, testDashboards };
 }
 
 /** Returns a console for the specified custom troupe ID from the config */
@@ -334,7 +326,9 @@ export function populateConfigAsOneConsole(config: SystemSetupConfig, customTrou
     const eventTypes: EventType[] = [];
     for(const customEventTypeId in config.eventTypes) {
         const { customTroupeId: ctid, eventType, id } = config.eventTypes[customEventTypeId];
-        if(ctid == customTroupeId) eventTypes.push(toEventType(eventType!, id!));
+        if(ctid == customTroupeId) {
+            eventTypes.push(toEventType(eventType!, id!));
+        }
     }
 
     const events: PublicEvent[] = [];
@@ -390,9 +384,9 @@ export const defaultConfig: SystemSetupConfig = {
         } 
     },
     eventTypes: {
-        "cool events": { value: 10 },
-        "alright events": { value: 3 },
-        "uncool events": { value: -7 },
+        "cool events": { value: 10, customTroupeId: "A" },
+        "alright events": { value: 3, customTroupeId: "A" },
+        "uncool events": { value: -7, customTroupeId: "A" },
     },
     events: { 
         "first": { title: "test event 1", customTroupeId: "A", customEventTypeId: "cool events" }, 
@@ -460,9 +454,9 @@ export const noMembersConfig: SystemSetupConfig = {
         } 
     },
     eventTypes: {
-        "cool events": { value: 10 },
-        "alright events": { value: 3 },
-        "uncool events": { value: -7 },
+        "cool events": { value: 10, customTroupeId: "A" },
+        "alright events": { value: 3, customTroupeId: "A" },
+        "uncool events": { value: -7, customTroupeId: "A" },
     },
     events: { 
         "first": { title: "test event 1", customTroupeId: "A", customEventTypeId: "cool events", source: "Google Forms", sourceUri: "https://docs.google.com/forms/d/1zmXsG53ymMTY16OoPR0VD7mqqP94HcPILskiOA7lOA4" }, 
@@ -488,6 +482,10 @@ export const onlyEventTypesConfig: SystemSetupConfig = {
         } 
     },
     eventTypes: {
-        "cool events": { value: 10, sourceFolderUris: [ "https://drive.google.com/drive/folders/1gQAhRgA7RzOPe_7YWdjniBiK8Q97yV8D" ] },
+        "cool events": { 
+            value: 10, 
+            sourceFolderUris: [ "https://drive.google.com/drive/folders/1gQAhRgA7RzOPe_7YWdjniBiK8Q97yV8D" ],
+            customTroupeId: "A",
+        },
     },
 }
