@@ -1,3 +1,9 @@
+// TODO: make an env converter / adapter that prefixes env names to VITE_ so that 
+// these can be pulled into @cloudydaiyz/springplay-shared
+// https://vite.dev/guide/env-and-mode.html#env-files
+
+// export const STRINGPLAY_SERVER_PORT = process.env.STRINGPLAY_SERVER_PORT;
+
 export const MONGODB_URI = process.env.MONGODB_URI;
 export const MONGODB_USER = process.env.MONGODB_USER;
 export const MONGODB_PASS = process.env.MONGODB_PASS;

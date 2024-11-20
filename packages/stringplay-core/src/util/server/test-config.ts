@@ -1,9 +1,9 @@
-import type { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
+import type { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, FieldToPropertyMap, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
 import type { Attendee, ConsoleData, EventType, PublicEvent } from "../../types/api-types";
 import type { Id } from "../../types/util-types";
 
 import { randomElement, verifyMemberPropertyType, getDefaultMemberPropertyValue, generatePseudoObjectId } from "../helper";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE } from "../constants";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE, MEMBER_PROPERTY_TYPES } from "../constants";
 import { toAttendee, toEventType, toPublicEvent, toTroupe, toTroupeDashboard } from "../api-transform";
 
 import { assert } from "../helper";
@@ -72,10 +72,23 @@ export interface SystemSetupConfig {
     };
 }
 
+function generateRandomFieldToPropertyMap() {
+    const map: FieldToPropertyMap = {};
+    const properties = Object.keys(BASE_MEMBER_PROPERTY_TYPES);
+    const numFields = Math.floor(Math.random() * properties.length);
+    for(let i = 0; i < numFields; i++) {
+        const index = Math.floor(Math.random() * properties.length);
+        const field = "How much wood can a woodchuck chuck if a woodchuck could chuck would?";
+        const property = properties.splice(index, 1)[0];
+        map[new ObjectId().toHexString()] = { field, property };
+    }
+    return map;
+}
+
 /** 
  * Populates an existing system setup config
  */
-export function populateConfig(config: SystemSetupConfig) {
+export function populateConfig(config: SystemSetupConfig, populateFieldToPropertyMap?: boolean) {
     config = {
         troupes: config.troupes || {},
         eventTypes: config.eventTypes || {},
@@ -167,6 +180,8 @@ export function populateConfig(config: SystemSetupConfig) {
         assert(troupe, `Invalid troupe ID specified for test config. Event ID: ${customEventId}, Troupe ID: ${customTroupeId}`);
         assert(!customEventTypeId || eventType, `Invalid event type ID specified for test config. Event ID: ${customEventId}, Event Type ID: ${customEventTypeId}`);
 
+        const baseFieldToPropertyMap = populateFieldToPropertyMap ? generateRandomFieldToPropertyMap() : {};
+
         const newEvent: WithId<EventSchema> = {
             _id: request._id,
             troupeId: troupe._id.toHexString(),
@@ -180,8 +195,8 @@ export function populateConfig(config: SystemSetupConfig) {
             eventTypeId: eventType ? eventType._id.toHexString() : undefined,
             eventTypeTitle: eventType ? eventType.title : undefined,
             value: eventType ? eventType.value : request.value || Math.round(Math.random() * 25),
-            fieldToPropertyMap: request.fieldToPropertyMap || {},
-            synchronizedFieldToPropertyMap: request.synchronizedFieldToPropertyMap || {},
+            fieldToPropertyMap: { ...baseFieldToPropertyMap, ...(request.fieldToPropertyMap || {}) },
+            synchronizedFieldToPropertyMap: { ...baseFieldToPropertyMap, ...(request.synchronizedFieldToPropertyMap || {}) },
         };
 
         request.event = newEvent;
@@ -317,8 +332,8 @@ export function populateConfig(config: SystemSetupConfig) {
 }
 
 /** Returns a console for the specified custom troupe ID from the config */
-export function populateConfigAsOneConsole(config: SystemSetupConfig, customTroupeId: string, configPopulated = true): ConsoleData {
-    if(!configPopulated) populateConfig(config);
+export function populateConfigAsOneConsole(config: SystemSetupConfig, customTroupeId: string, configPopulated = true, populateFieldToPropertyMap?: boolean): ConsoleData {
+    if(!configPopulated) populateConfig(config, populateFieldToPropertyMap);
 
     const troupe = toTroupe(config.troupes![customTroupeId].troupe!, config.troupes![customTroupeId].id!);
     const dashboard = toTroupeDashboard(config.troupes![customTroupeId].dashboard!, config.troupes![customTroupeId].id!);
@@ -360,8 +375,8 @@ export function populateConfigAsOneConsole(config: SystemSetupConfig, customTrou
 export type ConfigToConsoleMap = { [customTroupeId: string]: ConsoleData };
 
 /** Returns a map from custom troupe IDs to its corresponding console */
-export function populateConfigAsConsoles(config: SystemSetupConfig): ConfigToConsoleMap {
-    populateConfig(config);
+export function populateConfigAsConsoles(config: SystemSetupConfig, populateFieldToPropertyMap?: boolean): ConfigToConsoleMap {
+    populateConfig(config, populateFieldToPropertyMap);
     
     const configToConsoleMap: ConfigToConsoleMap = {};
     for(const customTroupeId in config.troupes) {
