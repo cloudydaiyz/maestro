@@ -24,7 +24,7 @@ export class StringplayApiClientError extends Error {
 
 /** Provides method definitions for interacting with the API. */
 export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi {
-    uri: string;
+    readonly uri: string;
     credentials?: Credentials;
 
     constructor(uri = "", accessToken?: string, refreshToken?: string) {
@@ -38,17 +38,16 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
     }
 
     /** 
-     * Returns the headers to use for requests 
+     * Returns the default headers to use for requests 
      * 
      * @param {boolean} requireAuth whether or not to check if this client is authenticated and, 
      * if so, add the authorization header
      */
     private headers(requireAuth: boolean): AxiosRequestConfig['headers'] {
-        assert(this.credentials, new StringplayApiClientError("Authorization required for this command"))
+        assert(!requireAuth || this.credentials, new StringplayApiClientError("Authorization required for this command"))
         return { 
             ...(requireAuth && this.credentials ? {'Authorization': `Bearer ${this.credentials.accessToken}`} : {}), 
             "Content-Type": "application/json",
-            // "Accept": "application/json"
         };
     }
 
@@ -58,7 +57,15 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
      * @param refreshToken Refresh token
      */
     addCredentials(accessToken: string, refreshToken: string): void {
-        this.credentials = { accessToken, refreshToken }
+        this.credentials = { accessToken, refreshToken };
+    }
+
+    getCredentials(): Credentials | undefined {
+        return this.credentials;
+    }
+
+    removeCredentials(): void {
+        this.credentials = undefined;
     }
 
     register(username: string, email: string, password: string, troupeName: string): Promise<AxiosResponse<void>> {
