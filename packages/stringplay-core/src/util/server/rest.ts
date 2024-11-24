@@ -9,6 +9,7 @@ export const Methods = {
     POST: "POST",
     PUT: "PUT",
     DELETE: "DELETE",
+    OPTIONS: "OPTIONS",
 }
 
 /** Controller function to handle routing */
@@ -20,11 +21,33 @@ export type ApiResponse = {
 
 export type ApiController = (path: string, method: keyof typeof Methods, headers: Object, body: Object) => Promise<ApiResponse>;
 
+// const headers = {
+//     "Access-Control-Allow-Origin": event.headers.origin == "http://localhost:5173" ?
+//         "http://localhost:5173" : "https://qa-pup.pages.dev",
+//     "Access-Control-Allow-Headers": "*",
+//     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+// };
+
+const defaultHeaders = {
+    "Access-Control-Allow-Origin": "http://localhost:5173",
+    "Access-Control-Allow-Headers": "*",
+    "Access-Control-Allow-Methods": Object.keys(Methods).join(','),
+};
+
 /** Creates a new API controller */
 export function newController(handler: ApiController): ApiController {
     return async (path, method, headers, body) => {
         try {
-            return await handler(path, method, headers, body);
+            if(method == "OPTIONS") {
+                return {
+                    status: 204,
+                    headers: defaultHeaders,
+                }
+            }
+
+            const res = await handler(path, method, headers, body);
+            res.headers = { ...res.headers, ...defaultHeaders };
+            return res;
         } catch(e) {
             const err = e as Error;
             console.error(err);
@@ -32,7 +55,7 @@ export function newController(handler: ApiController): ApiController {
             if(err instanceof ZodError) {
                 return {
                     status: 400,
-                    headers: {},
+                    headers: defaultHeaders,
                     body: {
                         error: "Invalid request body",
                     },
@@ -40,7 +63,7 @@ export function newController(handler: ApiController): ApiController {
             } else if(err instanceof ClientError) {
                 return {
                     status: 400,
-                    headers: {},
+                    headers: defaultHeaders,
                     body: {
                         error: err.message,
                     },
@@ -48,7 +71,7 @@ export function newController(handler: ApiController): ApiController {
             } else if(err instanceof AuthenticationError) {
                 return {
                     status: 401,
-                    headers: {},
+                    headers: defaultHeaders,
                     body: {
                         error: err.message,
                     },
@@ -57,7 +80,7 @@ export function newController(handler: ApiController): ApiController {
 
             return {
                 status: 500,
-                headers: {},
+                headers: defaultHeaders,
                 body: {
                     error: "Internal server error",
                 },

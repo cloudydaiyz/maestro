@@ -52,6 +52,18 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
         throw new ClientError("Invalid method for path");
     }
 
+    const consolePath = PathParsers.Console.test(path);
+    if(consolePath) {
+        if(method == "GET") {
+            assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
+            return {
+                status: 200,
+                headers: {},
+                body: await apiService.getConsoleData(troupeId),
+            }
+        }
+    }
+
     const dashboardPath = PathParsers.Dashboard.test(path);
     if(dashboardPath) {
         if(method == "GET") {

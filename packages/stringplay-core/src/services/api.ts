@@ -164,6 +164,7 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         assert(eventDataSource > -1, new ClientError("Invalid source URI"));
         assert(startDate.toString() != "Invalid Date", new ClientError("Invalid date"));
         assert(request.eventTypeId == undefined || request.value == undefined, new ClientError("Unable to define event type and value at same time for event."));
+        assert(request.eventTypeId != undefined || request.value != undefined, new ClientError("One of event type and value must be defined for event."));
         assert(request.eventTypeId == undefined || eventType, new ClientError("Invalid event type ID"));
         
         // Find event type and populate value
@@ -359,7 +360,7 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
     async deleteEvent(troupeId: string, eventId: string): Promise<void> {
         const [troupe, event] = await Promise.all([
             this.getTroupeSchema(troupeId, true), 
-            this.getEventSchema(troupeId, eventId)
+            this.getEventSchema(troupeId, eventId, true)
         ]);
         assert(!troupe.syncLock, new ClientError("Cannot delete event while sync is in progress"));
 
@@ -576,11 +577,20 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
             : null;
 
         // Perform database update
-        const newEventType = await this.troupeColl.findOneAndUpdate(
-            { _id: new ObjectId(troupeId) },
-            eventTypeUpdate,
-            typeIdentifierUsed ? { arrayFilters: [{ "type._id": new ObjectId(eventTypeId) }]} : {}
-        ).then(troupe => troupe?.eventTypes.find((et) => et._id.toHexString() == eventTypeId));
+        const newEventType = await this.troupeColl
+            .findOneAndUpdate(
+                { _id: new ObjectId(troupeId) },
+                eventTypeUpdate,
+                typeIdentifierUsed 
+                    ? { 
+                        arrayFilters: [{ "type._id": new ObjectId(eventTypeId) }], 
+                        returnDocument: "after"
+                    } 
+                    : { returnDocument: "after" }
+            )
+            .then(troupe => troupe?.eventTypes.find(
+                (et) => et._id.toHexString() == eventTypeId
+            ));
         assert(newEventType, "Failed to update event type");
 
         if(updateEvents) await this.eventColl.updateMany({ troupeId, eventTypeId }, eventUpdate);
@@ -642,7 +652,7 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
     }
 
     async deleteEventTypes(troupeId: string, eventTypeIds: string[]): Promise<void> {
-        await Promise.all(eventTypeIds.map(id => this.deleteEvent(troupeId, id)));
+        await Promise.all(eventTypeIds.map(id => this.deleteEventType(troupeId, id)));
     }
 
     async createMember(troupeId: string, request: CreateMemberRequest): Promise<Member> {

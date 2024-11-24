@@ -62,11 +62,9 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
     }
 
     register(username: string, email: string, password: string, troupeName: string): Promise<AxiosResponse<void>> {
-        
         return axios.post(
             getUrl(this.uri, '/auth/register'),
             { username, email, password, troupeName },
-            { headers: this.headers(false) },
         );
     }
 
@@ -74,7 +72,6 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
         return axios.post(
             getUrl(this.uri, '/auth/login'),
             { usernameOrEmail, password },
-            { headers: this.headers(false) },
         );
     }
 
@@ -82,7 +79,7 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
         return axios.post(
             getUrl(this.uri, '/auth/refresh'),
             { refreshToken },
-            { headers: this.headers(false) },
+            // { headers: this.headers(false) },
         );
     }
 
@@ -240,7 +237,7 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
 
     async createMember(troupeId: string, request: CreateMemberRequest): Promise<AxiosResponse<Member>> {
         return axios.post(
-            getUrl(this.uri, `/t/${troupeId}/a`),
+            getUrl(this.uri, `/t/${troupeId}/m`),
             request,
             { headers: this.headers(true) },
         );
@@ -248,7 +245,7 @@ export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi
 
     async createMembers(troupeId: string, requests: CreateMemberRequest[]): Promise<AxiosResponse<Member[]>> {
         return axios.post(
-            getUrl(this.uri, `/t/${troupeId}/a/bulk`),
+            getUrl(this.uri, `/t/${troupeId}/m/bulk`),
             requests,
             { headers: this.headers(true) },
         );

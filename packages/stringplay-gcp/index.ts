@@ -8,7 +8,9 @@ let controllers: ControllerModule;
 
 /** Sends the API response in a HTTP response */
 function sendResponse(httpRes: functions.Response, apiRes: ApiResponse) {
-    httpRes.status(apiRes.status).header(apiRes.headers);
+    console.log(JSON.stringify(apiRes, null, 4));
+    httpRes.status(apiRes.status).set(apiRes.headers);
+
     if(apiRes.body) httpRes.json(apiRes.body);
     httpRes.end();
 }
@@ -22,7 +24,7 @@ process.on('SIGTERM', async () => { console.log('SIGTERM signal received.'); awa
 
 // API HTTP function
 functions.http('api', async (req, res) => {
-    assert(req.method == "GET" || req.method == "POST" || req.method == "PUT" || req.method == "DELETE", "Invalid HTTP method");
+    assert(req.method == "GET" || req.method == "POST" || req.method == "PUT" || req.method == "DELETE" || req.method == "OPTIONS", "Invalid HTTP method");
     await controllers.apiController(req.path, req.method, req.headers, req.body).then((response) => sendResponse(res, response));
 });
 
