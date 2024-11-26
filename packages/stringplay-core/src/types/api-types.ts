@@ -1,7 +1,7 @@
 // Public facing types to use for API endpoints
 
 import type { WithId } from "mongodb";
-import type { EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, BaseMemberPropertyTypes, MemberPropertyTypeToValue, TroupeDashboardSchema, AttendeeSchema } from "./core-types";
+import type { EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberPropertyTypes, VariablePointTypes, EventDataSource, BaseMemberPropertyTypes, MemberPropertyTypeToValue, TroupeDashboardSchema, AttendeeSchema, FieldMatcher, TroupeLimit } from "./core-types";
 import type { Id, NullOptional, Replace, WeakPartial } from "./util-types";
 import type { AxiosResponse } from "axios";
 
@@ -11,7 +11,7 @@ export const apiobj = {};
 export type ApiType<T> = NullOptional<Replace<T, string|boolean|number|null|undefined, string>>;
 
 /** Defines the set of core functions used to interact with the API. */
-export interface SpringplayCoreApi {
+export interface SpringplayApi {
 
     /** Retrieves data for a user's console */
     getConsoleData(troupeId: string): Promise<ConsoleData | AxiosResponse<ConsoleData>>;
@@ -174,6 +174,7 @@ export type TroupeDashboard = ApiType<TroupeDashboardSchema> & Id;
 
 export type ConsoleData = {
     dashboard: TroupeDashboard,
+    limits: TroupeLimit,
     troupe: Troupe,
     events: PublicEvent[],
     eventTypes: EventType[],
@@ -198,6 +199,9 @@ export type UpdateTroupeRequest = ApiType<{
     removeMemberProperties?: string[],
     updatePointTypes?: VariablePointTypes,
     removePointTypes?: string[],
+    updateFieldMatchers?: (FieldMatcher | null)[],
+    /** The indicies of the field matchers to remove */
+    removeFieldMatchers?: number[],
 }>
 
 /**
@@ -225,7 +229,10 @@ export type UpdateEventRequest = ApiType<{
     value?: number,
     /** Updates properties associated with fields. Cannot create new entries. */
     updateProperties?: {
-        [fieldId: string]: string,
+        [fieldId: string]: {
+            property?: string,
+            override?: boolean,
+        },
     },
     /** Removes properties associated with fields */
     removeProperties?: string[],
@@ -304,6 +311,7 @@ export type RegisterRequest = {
     email: string,
     password: string,
     troupeName: string,
+    inviteCode?: string,
 }
 
 export type LoginRequest = {
@@ -320,7 +328,10 @@ export type DeleteUserRequest = {
     password: string,
 }
 
-export type Credentials = { accessToken: string, refreshToken: string };
+export type Credentials = { 
+    accessToken: string, 
+    refreshToken: string 
+};
 
 export type AccessTokenPayload = { 
     userId: string,

@@ -1,7 +1,7 @@
 // General helper functions
 
 import type { ApiType } from "../types/api-types";
-import type { EventDataSource, MemberPropertyType, MemberPropertyValue } from "../types/core-types";
+import type { EventDataSource, FieldMatcher, MemberPropertyType, MemberPropertyValue } from "../types/core-types";
 import { DRIVE_FOLDER_REGEX, FORMS_REGEX, FORMS_URL_TEMPL, SHEETS_REGEX, SHEETS_URL_TEMPL } from "./constants";
 
 /**
@@ -129,7 +129,7 @@ export function objectToArray<T, U>(
 /** Converts an array to an object */
 export function arrayToObject<T, U>(
     arr: T[], 
-    fn: (value: T, index: number) => [key: keyof U, value: U[keyof U]]
+    fn: (value: T, index: number) => [keyof U, U[keyof U]]
 ): U {
     const obj: U = {} as U;
     for(let i = 0; i < arr.length; i++) {
@@ -159,4 +159,14 @@ export function assert(value: unknown, message?: string | Error): asserts value 
 export function removeId<T>(obj: T & { _id?: any }): T {
     delete obj._id;
     return obj;
+}
+
+/** Calculates the regex for the matcher based on its conditions and filters */
+export function getMatcherRegex(matcher: FieldMatcher) {
+    let regex = matcher.fieldExpression;
+    if(matcher.matchCondition == "exact") {
+        if(!regex.startsWith("^")) regex = "^" + regex;
+        if(!regex.endsWith("$")) regex = regex + "$";
+    }
+    return new RegExp(regex, matcher.filters.includes("nocase") ? "i" : undefined);
 }

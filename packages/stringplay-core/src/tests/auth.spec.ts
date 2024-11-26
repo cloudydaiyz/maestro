@@ -1,17 +1,13 @@
 import init from "./lifecycle/init";
 import { SystemSetupConfig, defaultConfig } from "../util/server/test-config";
 
-import { StringplayApiService } from "../services/api";
-import { TroupeCoreService } from "../services/core";
+import { ApiService } from "../services/api";
+import { CoreService } from "../services/core";
 import { test, describe } from "@jest/globals";
 import { AuthService } from "../services/auth";
+import { INVITE_CODES } from "../util/env";
 
 init();
-
-// const { dbSetup } = init();
-
-// let config: DbSetupConfig;
-// beforeEach(async () => { config = await dbSetup(defaultConfig) });
 
 describe("basic auth", () => {
     afterEach(async () => {
@@ -65,7 +61,7 @@ describe("basic auth", () => {
 
     test("validate and refresh", async () => {
         const auth = await AuthService.create();
-        const api = await StringplayApiService.create();
+        const api = await ApiService.create();
 
         const pass = crypto.randomUUID();
         const troupeId = await auth.register("user1", "good.email@gmail.com", pass, "new troupe");
@@ -82,11 +78,30 @@ describe("basic auth", () => {
 
     test("delete", async () => {
         const auth = await AuthService.create();
-        const api = await StringplayApiService.create();
         
         const pass = crypto.randomUUID();
-        const troupeId = await auth.register("user1", "good.email@gmail.com", pass, "new troupe");
+        await auth.register("user1", "good.email@gmail.com", pass, "new troupe");
 
         await expect(auth.deleteUser("user1", pass)).resolves.not.toThrow();
+    });
+
+    test("invite code", async () => {
+        const auth = await AuthService.create();
+        const core = await CoreService.create();
+        const pass = crypto.randomUUID();
+        const validInviteCode = INVITE_CODES ? INVITE_CODES.split(",")[0] : "invalid code";
+        const invalidInviteCode = "invalid code";
+
+        await core.initSystem();
+
+        if(INVITE_CODES) {
+            await expect(
+                auth.register("user1", "good.email@gmail.com", pass, "new troupe", validInviteCode)
+            ).resolves.not.toThrow();
+        }
+
+        await expect(
+            auth.register("user1", "good.email@gmail.com", pass, "new troupe", invalidInviteCode)
+        ).rejects.toThrow();
     });
 });

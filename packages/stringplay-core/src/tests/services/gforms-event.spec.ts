@@ -2,7 +2,7 @@ import init from "../lifecycle/init";
 import { noMembersConfig } from "../../util/server/test-config";
 
 import { describe } from "@jest/globals";
-import { GoogleFormsEventDataService } from "../../services/events/gforms-event";
+import { GoogleFormsEventDataService } from "../../services/sync/events/gforms-event";
 import { EventDataMap, AttendeeDataMap } from "../../types/service-types";
 import { objectMap, objectToArray, verifyMemberPropertyType } from "../../util/helper";
 
@@ -39,7 +39,9 @@ describe("google forms event service", () => {
 
         const fieldIds = Object.keys(observedEvent.fieldToPropertyMap);
         expect(fieldIds.length).toBeGreaterThan(0);
-        expect(fieldIds.every(id => observedEvent.fieldToPropertyMap[id].property == null)).toBeTruthy();
+
+        // Removed since properties can be assigned by field matchers
+        // expect(fieldIds.every(id => observedEvent.fieldToPropertyMap[id].property == null)).toBeTruthy();
         
         // Update property mappings
         const indicies = fieldIds.map((id, i) => i);

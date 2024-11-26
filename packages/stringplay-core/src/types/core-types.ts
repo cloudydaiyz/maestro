@@ -1,10 +1,11 @@
-// Data schema for the core data types
+// Data schema for the core data types, to be stored in the app's database
 
 import type { WithId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, BIRTHDAY_UPDATE_FREQUENCIES, EVENT_DATA_SOURCES, MEMBER_PROPERTY_TYPES } from "../util/constants";
 import type { Mutable } from "./util-types";
 
 // == TROUPE ==
+
 export interface TroupeSchema {
     lastUpdated: Date,
     name: string,
@@ -20,6 +21,8 @@ export interface TroupeSchema {
     /** Valid point types for the troupe */
     pointTypes: BasePointTypes & VariablePointTypes, 
     synchronizedPointTypes: BasePointTypes & VariablePointTypes, 
+    /** Field matchers for the troupe */
+    fieldMatchers: FieldMatcher[],
 }
 
 // == MEMBER PROPERTY TYPES ==
@@ -33,7 +36,7 @@ export interface VariableMemberPropertyTypes {
 
 // Base type for the MemberPropertyTypeToValue interface
 export type MemberPropertyTypeToValueBase = {
-    [key in typeof MEMBER_PROPERTY_TYPES[number]]: unknown;
+    [key in typeof MEMBER_PROPERTY_TYPES[number]]: unknown
 }
 
 // Maps MemberPropertyType to its corresponding value type
@@ -50,6 +53,24 @@ export interface MemberPropertyTypeToValue extends MemberPropertyTypeToValueBase
 
 // Must not have a type of "unknown"
 export type MemberPropertyValue = MemberPropertyTypeToValue[MemberPropertyType];
+
+// == FIELD MATCHER ==
+
+export interface FieldMatcher {
+    /** Condition used to match */
+    matchCondition: FieldMatcherCondition,
+    /** Unique regex used with fields to confirm a match for this matcher */
+    fieldExpression: string,
+    /** Member property in the troupe that this matcher applies to */
+    memberProperty: string,
+    /** Filters applied to the field expression */
+    filters: FieldMatcherFilter[],
+    /** Unique number indicating the precedence this matcher has in the troupe */
+    priority: number,
+}
+
+export type FieldMatcherCondition = "contains" | "exact";
+export type FieldMatcherFilter = "nocase" /** | "trim" | "nowhite" */;
 
 // == POINT TYPES ==
 
@@ -96,6 +117,10 @@ export interface FieldToPropertyMap {
         field: string, 
         /** See {@link BaseMemberProperties} and {@link VariableMemberProperties} */ 
         property: string | null, 
+        /** ID of the associated FieldMatcher, if applicable */
+        matcherId: number | null,
+        /** Whether to prioritize this property during the field matching process, if available */
+        override: boolean,
     },
 }
 
@@ -129,7 +154,7 @@ export interface EventsAttendedBucketSchema {
             typeId?: string,
             value: number,
             startDate: Date,
-        }
+        },
     },
     page: number,
 }
@@ -144,29 +169,6 @@ export type BaseMemberProperties = {
     [key in keyof typeof BASE_MEMBER_PROPERTY_TYPES]: {
         value: MemberPropertyTypeToValue[typeof BASE_MEMBER_PROPERTY_TYPES[key]],
         override: boolean,
-    };
-}
-
-const bmp: BaseMemberProperties = {
-    "Member ID": {
-        value: "",
-        override: false
-    },
-    "First Name": {
-        value: "",
-        override: false
-    },
-    "Last Name": {
-        value: "",
-        override: false
-    },
-    Email: {
-        value: "",
-        override: false
-    },
-    Birthday: {
-        value: null,
-        override: false
     }
 }
 
@@ -182,8 +184,8 @@ export type VariableMemberProperties = {
 // == DASHBOARD ==
 
 export interface TroupeDashboardSchema {
-    troupeId: string,
     lastUpdated: Date,
+    troupeId: string,
 
     upcomingBirthdays: {
         frequency: BirthdayUpdateFrequency,
@@ -200,15 +202,13 @@ export interface TroupeDashboardSchema {
     totalAttendees: number,
     totalEvents: number,
     totalEventTypes: number,
+    avgAttendeesPerEvent: number,
 
     totalAttendeesByEventType: ValueStatistics,
     totalEventsByEventType: ValueStatistics,
-
-    avgAttendeesPerEvent: number, // totalAttendees / totalEvents
-    avgAttendeesByEventType: ValueStatistics, // totalAttendeesByEventType / totalEventsByEventType
-
-    attendeePercentageByEventType: PercentageStatistics, // totalAttendeesByEventType / totalAttendees
-    eventPercentageByEventType: PercentageStatistics, // totalEventsByEventType / totalEvents
+    avgAttendeesByEventType: ValueStatistics,
+    attendeePercentageByEventType: PercentageStatistics,
+    eventPercentageByEventType: PercentageStatistics,
 }
 
 type BirthdayUpdateFrequency = typeof BIRTHDAY_UPDATE_FREQUENCIES[number];
@@ -217,7 +217,7 @@ export interface ValueStatistics {
     [id: string]: {
         title: string,
         value: number,
-    }
+    },
 }
 
 export interface PercentageStatistics {
@@ -241,3 +241,47 @@ export interface UserSchema {
     }[],
     createdAt: Date,
 }
+
+// == INVITE CODES ==
+
+export interface InviteCodeSchema {
+    inviteCodes: string[],
+    usedInviteCodes: {
+        [troupeId: string]: string,
+    },
+}
+
+// == LIMITS ==
+
+export type LimitCollectionSchema = GlobalLimitSchema | LimitSchema;
+
+export interface GlobalLimitSchema {
+    docType: "globalLimit",
+    uninvitedUsersLeft: number,
+}
+
+export type GlobalLimit = Omit<GlobalLimitSchema, "docType">;
+
+export interface LimitSchema {
+    docType: "troupeLimit",
+    troupeId: string,
+    hasInviteCode: boolean,
+
+    getOperationsLeft: number,
+    modifyOperationsLeft: number,
+    manualSyncsLeft: number,
+
+    memberPropertyTypesLeft: number,
+    pointTypesLeft: number,
+    fieldMatchersLeft: number,
+
+    eventTypesLeft: number,
+    sourceFolderUrisLeft: number,
+
+    eventsLeft: number,
+    fieldIdsLeft: number,
+
+    membersLeft: number,
+}
+
+export type TroupeLimit = Omit<LimitSchema, "docType"|"troupeId"|"hasInviteCode">;

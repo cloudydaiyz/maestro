@@ -1,15 +1,15 @@
 import init from "./lifecycle/init";
 
-import { StringplayApiService } from "../services/api";
-import { TroupeCoreService } from "../services/core";
+import { ApiService } from "../services/api";
+import { CoreService } from "../services/core";
 import { test, describe } from "@jest/globals";
 
 const { dbSetup } = init();
 
 describe("basic core operations", () => {
     test("create and delete troupe", async () => {
-        const core = await TroupeCoreService.create();
-        const api = await StringplayApiService.create();
+        const core = await CoreService.create();
+        const api = await ApiService.create();
 
         const troupeId = await core.createTroupe({ name: "test" });
 

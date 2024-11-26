@@ -1,16 +1,16 @@
 // Google Forms data source
 
 import { ObjectId, WithId } from "mongodb";
-import { EventDataMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "../../types/service-types";
-import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "../../types/core-types";
-import { FORMS_REGEX } from "../../util/constants";
+import { EventDataMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "../../../types/service-types";
+import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "../../../types/core-types";
+import { FORMS_REGEX } from "../../../util/constants";
 import { forms_v1 } from "googleapis";
-import { getForms } from "../../cloud/gcp";
+import { getForms } from "../../../cloud/gcp";
 import { GaxiosResponse } from "gaxios";
-import { EventDataService } from "../base";
+import { EventDataService } from "../../base";
 import assert from "assert";
-import { getDataSourceId } from "../../util/helper";
-import { DateParser } from "../../util/server/date-parser";
+import { getDataSourceId } from "../../../util/helper";
+import { DateParser } from "../../../util/server/date-parser";
 
 export class GoogleFormsEventDataService extends EventDataService {
     forms!: forms_v1.Forms;
@@ -75,8 +75,16 @@ export class GoogleFormsEventDataService extends EventDataService {
             const question = item.questionItem;
             if(!field || !fieldId || !question || !question.question) continue;
 
-            let property = event.fieldToPropertyMap[fieldId]?.property;
-            event.fieldToPropertyMap[fieldId] = { field, property: null };
+            // If there's no existing property, see if the troupe has a matcher that
+            // matches with the field for this event
+            const matcherId = this.getMatcherIndex(field);
+            const matcherProperty = matcherId !== null ? this.troupe.fieldMatchers[matcherId].memberProperty : null;
+            let property = event.fieldToPropertyMap[fieldId]?.property || matcherProperty;
+
+            // Init the updated field to property map
+            let override = event.fieldToPropertyMap[fieldId]?.override;
+            event.fieldToPropertyMap[fieldId] = { field, override, matcherId, property: null };
+
             includedFields.push(fieldId);
             if(!property) continue;
 

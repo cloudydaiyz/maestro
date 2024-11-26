@@ -1,5 +1,5 @@
 import { BaseDbService } from "../../services/base";
-import { StringplayApiService } from "../../services/api";
+import { ApiService } from "../../services/api";
 import { SystemSetupConfig, defaultConfig, populateConfig } from "../../util/server/test-config";
 import { cleanDbConnections, cleanLogs, startDb, stopDb } from "../../util/server/resources";
 
@@ -30,7 +30,7 @@ export default function () {
 
         // Test that the default config is working properly
         const config = await dbSetup(defaultConfig);
-        const api = await StringplayApiService.create();
+        const api = await ApiService.create();
         
         await Promise.all([
             expect(api.getEvents(config.troupes!["A"].id!)).resolves.toHaveLength(7),

@@ -1,42 +1,56 @@
 // Implementation for client-facing controller methods
 
-import { AnyBulkWriteOperation, ObjectId, WithId } from "mongodb";
-import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES } from "../util/constants";
-import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints, AttendeeSchema } from "../types/core-types";
-import { Attendee, BulkUpdateEventRequest, BulkUpdateEventResponse, BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse, BulkUpdateMemberRequest, BulkUpdateMemberResponse, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
-import { SetOperator, UnsetOperator, UpdateOperator } from "../types/util-types";
+import { AnyBulkWriteOperation, ObjectId, UpdateFilter, WithId } from "mongodb";
+import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES, DEFAULT_MATCHERS } from "../util/constants";
+import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints, AttendeeSchema, FieldMatcher, TroupeLimit } from "../types/core-types";
+import { Attendee, BulkUpdateEventRequest, BulkUpdateEventResponse, BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse, BulkUpdateMemberRequest, BulkUpdateMemberResponse, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, SpringplayApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
+import { Mutable, SetOperator, UnsetOperator, UpdateOperator } from "../types/util-types";
 import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
 import { asyncObjectMap, objectMap, verifyApiMemberPropertyType } from "../util/helper";
 import { toAttendee, toEventType, toMember, toPublicEvent, toTroupe, toTroupeDashboard } from "../util/api-transform";
 import { addToSyncQueue } from "../cloud/gcp";
 import assert from "assert";
+import { LimitService } from "./limits";
+import { TroupeLimitSpecifier } from "../types/service-types";
 
 /**
  * Provides method definitions for the API. The structure of all given parameters will
  * not be checked (e.g. data type, constant range boundaries), but any checks requiring database access 
  * will be performed on each parameter.
  */
-export class StringplayApiService extends BaseDbService implements SpringplayCoreApi {
-    constructor() { super() }
+export class ApiService extends BaseDbService implements SpringplayApi {
+    limitService!: LimitService;
+
+    constructor() { 
+        super();
+        this.ready = (async () => {
+            this.limitService = await LimitService.create();
+        })();
+    }
 
     async getConsoleData(troupeId: string): Promise<ConsoleData> {
         const [
             dashboard,
+            limits,
             troupe,
             events,
             eventTypes,
             attendees
         ] = await Promise.all([
             this.getDashboard(troupeId),
+            this.getLimits(troupeId),
             this.getTroupe(troupeId),
             this.getEvents(troupeId),
             this.getEventTypes(troupeId),
             this.getAttendees(troupeId),
         ]);
-        
+        const withinLimits = await this.limitService.incrementTroupeLimits(troupeId, { getOperationsLeft: -1 });
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
         return {
             dashboard,
+            limits,
             troupe,
             events,
             eventTypes,
@@ -46,13 +60,31 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
 
     async getDashboard(troupeId: string): Promise<TroupeDashboard> {
         const dashboardObj = await this.getDashboardSchema(troupeId);
+        const withinLimits = await this.limitService.incrementTroupeLimits(troupeId, { getOperationsLeft: -1 });
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
         return toTroupeDashboard(dashboardObj, dashboardObj._id.toHexString());
+    }
+
+    async getLimits(troupeId: string): Promise<TroupeLimit> {
+        const troupeLimits = await this.limitService.checkTroupeLimits(troupeId);
+        assert(troupeLimits, new ClientError(`Invalid troupe ID: ${troupeId}`));
+
+        const withinLimits = await this.limitService.incrementTroupeLimits(troupeId, { getOperationsLeft: -1 });
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
+        const { 
+            _id, docType, troupeId: _, hasInviteCode, 
+            ...publicTroupeLimits 
+        } = troupeLimits;
+        return publicTroupeLimits;
     }
 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {
         const troupeObj = typeof troupe == "string" 
             ? await this.getTroupeSchema(troupe, true)
             : troupe;
+        const withinLimits = await this.limitService.incrementTroupeLimits(troupeObj._id.toHexString(), { getOperationsLeft: -1 });
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
         return toTroupe(troupeObj, troupeObj._id.toHexString());
     }
 
@@ -62,8 +94,11 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
 
         // Prepare for the database update
         const troupeUpdate = { 
-            $set: {} as SetOperator<TroupeSchema>, 
-            $unset: {} as UnsetOperator<TroupeSchema>
+            $set: {} as UpdateOperator<TroupeSchema, "$set">, 
+            $unset: {} as UpdateOperator<TroupeSchema, "$unset">,
+        }
+        const limitSpecifier: TroupeLimitSpecifier = { 
+            modifyOperationsLeft: -1,
         }
 
         // Set the name and the last updated
@@ -79,36 +114,62 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
 
         // Update member properties; must wait until next sync to synchronize member properties.
         if(request.updateMemberProperties) {
-            let numMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
+            const initialNumMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
+            let numMemberProperties = initialNumMemberProperties;
 
             // Ignore member properties to be removed and ensure no base member properties get updated
             for(const key in request.updateMemberProperties) {
-                assert(!(key in BASE_MEMBER_PROPERTY_TYPES), 
-                    new ClientError("Cannot modify base member properties"));
+                assert(
+                    !(key in BASE_MEMBER_PROPERTY_TYPES), 
+                    new ClientError("Cannot modify base member properties")
+                );
                 
                 if(!(request.removeMemberProperties?.includes(key))) {
                     troupeUpdate.$set[`memberPropertyTypes.${key}`] = request.updateMemberProperties[key];
                     if(!(key in troupe.memberPropertyTypes)) numMemberProperties++;
                 }
             }
-
-            assert(numMemberProperties <= MAX_MEMBER_PROPERTIES, 
-                new ClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`));
+            assert(
+                numMemberProperties <= MAX_MEMBER_PROPERTIES, 
+                new ClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`)
+            );
+            
+            // Prepare to decrement the limit
+            const newLimit = initialNumMemberProperties - numMemberProperties;
+            if(newLimit !== 0) {
+                limitSpecifier.memberPropertyTypesLeft = newLimit;
+            }
         }
 
         // Remove member properties & ensure no base member properties are requested for removal
         if(request.removeMemberProperties) {
+            const initialNumMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
+            let numMemberProperties = initialNumMemberProperties;
+
             for(const key of request.removeMemberProperties) {
-                assert(!(key in BASE_MEMBER_PROPERTY_TYPES), 
-                    new ClientError("Cannot delete base member properties"));
-                troupeUpdate.$unset[`memberPropertyTypes.${key}`] = "";
+                assert(
+                    !(key in BASE_MEMBER_PROPERTY_TYPES), 
+                    new ClientError("Cannot delete base member properties")
+                );
+                if(key in troupe.memberPropertyTypes) {
+                    troupeUpdate.$unset[`memberPropertyTypes.${key}`] = "";
+                    numMemberProperties--;
+                }
+            }
+
+            // Prepare to increment the limit
+            const newLimit = initialNumMemberProperties - numMemberProperties;
+            if(newLimit !== 0) {
+                if(!limitSpecifier.memberPropertyTypesLeft) limitSpecifier.memberPropertyTypesLeft = 0;
+                limitSpecifier.memberPropertyTypesLeft += newLimit;
             }
         }
 
         // Update point types
         if(request.updatePointTypes) {
-            let numPointTypes = Object.keys(troupe.pointTypes).length;
-            let newPointTypes = troupe.pointTypes;
+            const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
+            let numPointTypes = initialNumPointTypes;
+            // let newPointTypes = troupe.pointTypes;
 
             for(const key in request.updatePointTypes) {
                 const pointType = {
@@ -124,20 +185,105 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
                     troupeUpdate.$set[`pointTypes.${key}`] = pointType;
                     if(!(key in troupe.pointTypes)) numPointTypes++;
                 }
-                newPointTypes[key] = pointType;
+                // newPointTypes[key] = pointType;
             }
-            assert(numPointTypes <= MAX_POINT_TYPES, 
-                new ClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`));
+            assert(
+                numPointTypes <= MAX_POINT_TYPES, 
+                new ClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`)
+            );
             
             // *FUTURE: Update point calculations for members
 
+            // Prepare to decrement the limit
+            const newLimit = initialNumPointTypes - numPointTypes;
+            if(newLimit !== 0) {
+                limitSpecifier.pointTypesLeft = newLimit;
+            }
         }
 
         // Remove point types
         if(request.removePointTypes) {
+            const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
+            let numPointTypes = initialNumPointTypes;
+
             for(const key of request.removePointTypes) {
                 assert(!(key in BASE_POINT_TYPES_OBJ), new ClientError("Cannot delete base point types"));
-                troupeUpdate.$unset[`pointTypes.${key}`] = "";
+                if(key in troupe.pointTypes) {
+                    troupeUpdate.$unset[`pointTypes.${key}`] = "";
+                    numPointTypes--;
+                }
+            }
+
+            // Prepare to increment the limit
+            const newLimit = initialNumPointTypes - numPointTypes;
+            if(newLimit !== 0) {
+                if(!limitSpecifier.pointTypesLeft) limitSpecifier.pointTypesLeft = 0;
+                limitSpecifier.pointTypesLeft = newLimit;
+            }
+        }
+
+        if(request.updateFieldMatchers) {
+            const initNumMatchers = troupe.fieldMatchers.length;
+            const updatedMatchers = structuredClone(troupe.fieldMatchers);
+
+            for(let i = 0; i < request.updateFieldMatchers.length; i++) {
+                const matcher = request.updateFieldMatchers[i];
+                let unique = true;
+
+                // Ensure uniqueness of regex and priority
+                if(matcher) {
+                    for(let j = 0; unique && j < request.updateFieldMatchers.length; j++) {
+                        if(j == i) continue;
+                        
+                        // Check if this matcher is different from the other matcher
+                        const otherMatcher: FieldMatcher | undefined = request.updateFieldMatchers[j] || troupe.fieldMatchers[j];
+                        const diffFromOtherMatcher = matcher.fieldExpression != otherMatcher.fieldExpression
+                            && matcher.priority != otherMatcher.priority;
+                        unique = unique && (!otherMatcher || diffFromOtherMatcher);
+                    }
+                }
+
+                // Add the matcher if it's unique
+                if(matcher && unique) updatedMatchers.push(matcher);
+            }
+
+            // Ensure the field matchers have the correct ordering before storing
+            updatedMatchers.sort((a, b) => a.priority - b.priority);
+            troupeUpdate.$set.fieldMatchers = updatedMatchers;
+
+            // Prepare to decrement the limit
+            const newLimit = initNumMatchers - updatedMatchers.length;
+            if(newLimit !== 0) {
+                limitSpecifier.fieldMatchersLeft = newLimit;
+            }
+        }
+
+        if(request.removeFieldMatchers) {
+            request.removeFieldMatchers.sort();
+            const initNumMatchers = troupe.fieldMatchers.length;
+            const updatedMatchers = structuredClone(troupe.fieldMatchers);
+
+            // Validate the remove field matchers
+            for(let i = request.removeFieldMatchers.length - 1; i >= 0; i--) {
+                const index = request.removeFieldMatchers[i];
+                const indexOutOfRange = !(0 <= index && index < updatedMatchers.length);
+                const indexNotUnique = index < request.removeFieldMatchers.length - 1 && index == index + 1;
+                if(indexOutOfRange || indexNotUnique) {
+                    request.removeFieldMatchers.slice(i, 1);
+                }
+            }
+
+            // Remove the validated field matchers from the troupe
+            for(let i = request.removeFieldMatchers.length - 1; i >= 0; i--) {
+                const index = request.removeFieldMatchers[i];
+                updatedMatchers.splice(index, 1);
+            }
+            troupeUpdate.$set.fieldMatchers = updatedMatchers;
+
+            // Prepare to increment the limit
+            const newLimit = initNumMatchers - updatedMatchers.length;
+            if(newLimit !== 0) {
+                limitSpecifier.fieldMatchersLeft = newLimit;
             }
         }
 
@@ -149,6 +295,10 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         );
         assert(newTroupe, "Failed to update troupe");
         // *FUTURE: Update members with the new point types
+
+        // Update limits
+        const withinLimits = await this.limitService.incrementTroupeLimits(troupeId, limitSpecifier);
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
         
         // Return public facing version of the new troupe
         return this.getTroupe(newTroupe);
@@ -220,7 +370,6 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         // Initialize fields
         let value = request.value || oldEvent.value;
         let startDate = request.startDate ? new Date(request.startDate) : oldEvent.startDate;
-        let eventType = request.eventTypeId || oldEvent.eventTypeId;
 
         // Prepare for update(s)
         const eventUpdate = { 
@@ -286,19 +435,26 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         // Update known properties in the field to property map of the event
         if(request.updateProperties) {
             for(const key in request.updateProperties) {
-                assert(key in oldEvent.fieldToPropertyMap, new ClientError("Invalid field ID"));
+                assert(key in oldEvent.fieldToPropertyMap, new ClientError(`Invalid field ID ${key}`));
 
                 // Invariant: At most one unique property per field
                 if(!(request.removeProperties?.includes(key))) {
-                    assert(Object.values(oldEvent.fieldToPropertyMap)
+                    const numNonUniqueProperties = Object.values(oldEvent.fieldToPropertyMap)
                         .reduce(
-                            (acc, val) => acc + (
-                                val.property && val.property == request.updateProperties![key] 
-                                ? 1 : 0
-                            ), 
-                        0) == 0,
-                    "Field already present in another property"),
-                    eventUpdate.$set[`fieldToPropertyMap.${key}.property`] = request.updateProperties[key];
+                            (acc, val) => {
+                                if(val.property 
+                                    && val.property == request.updateProperties![key].property
+                                ) {
+                                    return acc + 1;
+                                }
+                                return acc;
+                            },
+                            0
+                        );
+                    assert(numNonUniqueProperties == 0, new ClientError(`Property for field ${key} already present in another field.`));
+                    
+                    eventUpdate.$set[`fieldToPropertyMap.${key}.property`] = request.updateProperties[key].property;
+                    eventUpdate.$set[`fieldToPropertyMap.${key}.override`] = request.updateProperties[key].override;
                 }
             }
         }
@@ -306,7 +462,10 @@ export class StringplayApiService extends BaseDbService implements SpringplayCor
         // Remove properties in the field to property map of the event
         if(request.removeProperties) {
             for(const key of request.removeProperties) {
-                eventUpdate.$set[`fieldToPropertyMap.${key}.property`] = null;
+                if(key in oldEvent.fieldToPropertyMap) {
+                    eventUpdate.$set[`fieldToPropertyMap.${key}.property`] = null;
+                    eventUpdate.$set[`fieldToPropertyMap.${key}.override`] = false;
+                }
             }
         }
         

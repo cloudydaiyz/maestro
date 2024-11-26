@@ -7,11 +7,11 @@ import { getDataSourceId, getDataSourceUrl, getDefaultMemberPropertyValue } from
 import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "../types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "../types/util-types";
-import { GoogleFormsEventDataService } from "./events/gforms-event";
-import { GoogleSheetsEventDataService } from "./events/gsheets-event";
+import { GoogleFormsEventDataService } from "./sync/events/gforms-event";
+import { GoogleSheetsEventDataService } from "./sync/events/gsheets-event";
 import { BaseDbService, EventDataService } from "./base";
 import assert from "assert";
-import { GoogleSheetsLogService } from "./logs/gsheets-log";
+import { GoogleSheetsLogService } from "./sync/logs/gsheets-log";
 
 /**
  * Synchronizes the troupe with its source uris for events and event types, then updates the

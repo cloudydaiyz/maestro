@@ -3,7 +3,7 @@ import type { Attendee, ConsoleData, EventType, PublicEvent } from "../../types/
 import type { Id } from "../../types/util-types";
 
 import { randomElement, verifyMemberPropertyType, getDefaultMemberPropertyValue, generatePseudoObjectId } from "../helper";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_PAGE_SIZE, MEMBER_PROPERTY_TYPES } from "../constants";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, DEFAULT_MATCHERS, MAX_PAGE_SIZE, MEMBER_PROPERTY_TYPES } from "../constants";
 import { toAttendee, toEventType, toPublicEvent, toTroupe, toTroupeDashboard } from "../api-transform";
 
 import { assert } from "../helper";
@@ -80,7 +80,7 @@ function generateRandomFieldToPropertyMap() {
         const index = Math.floor(Math.random() * properties.length);
         const field = "How much wood can a woodchuck chuck if a woodchuck could chuck would?";
         const property = properties.splice(index, 1)[0];
-        map[new ObjectId().toHexString()] = { field, property };
+        map[new ObjectId().toHexString()] = { field, property, matcherId: null, override: false };
     }
     return map;
 }
@@ -116,6 +116,7 @@ export function populateConfig(config: SystemSetupConfig, populateFieldToPropert
             synchronizedMemberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
             pointTypes: { ...BASE_POINT_TYPES_OBJ, ...request.pointTypes },
             synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
+            fieldMatchers: DEFAULT_MATCHERS,
         };
 
         const newDashboard: WithId<TroupeDashboardSchema> = {

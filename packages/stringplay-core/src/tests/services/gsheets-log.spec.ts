@@ -3,7 +3,7 @@ import { defaultConfig, noMembersConfig } from "../../util/server/test-config";
 
 import { describe } from "@jest/globals";
 import { objectToArray } from "../../util/helper";
-import { GoogleSheetsLogService } from "../../services/logs/gsheets-log";
+import { GoogleSheetsLogService } from "../../services/sync/logs/gsheets-log";
 import type { WithId } from "mongodb";
 import { AttendeeSchema, EventSchema } from "../../types/core-types";
 

@@ -1,16 +1,16 @@
 // Google Sheets event data source
 
 import { ObjectId, WithId } from "mongodb";
-import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "../../types/core-types";
-import { EventDataMap, GoogleSheetsQuestionToTypeMap, AttendeeDataMap } from "../../types/service-types";
-import { SHEETS_REGEX } from "../../util/constants";
+import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "../../../types/core-types";
+import { EventDataMap, GoogleSheetsQuestionToTypeMap, AttendeeDataMap } from "../../../types/service-types";
+import { SHEETS_REGEX } from "../../../util/constants";
 
 import { parse } from "csv-parse";
 import { Readable } from "stream";
 import assert from "assert";
-import { EventDataService } from "../base";
-import { getDataSourceId } from "../../util/helper";
-import { DateParser } from "../../util/server/date-parser";
+import { EventDataService } from "../../base";
+import { getDataSourceId } from "../../../util/helper";
+import { DateParser } from "../../../util/server/date-parser";
 
 export class GoogleSheetsEventDataService extends EventDataService {
     results?: string[][];
@@ -26,7 +26,6 @@ export class GoogleSheetsEventDataService extends EventDataService {
     }
 
     async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
-        const troupeId = this.troupe._id.toHexString();
         const spreadsheetId = getDataSourceId("Google Sheets", event.sourceUri)!;
         const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`;
         
@@ -61,8 +60,18 @@ export class GoogleSheetsEventDataService extends EventDataService {
 
         if(this.results.length == 0) {
             row.forEach((label, i) => {
-                const property = event.fieldToPropertyMap[i]?.property;
-                event.fieldToPropertyMap[i] = { field: label.trim(), property: null };
+                const field = label.trim();
+                
+                // If there's no existing property, see if the troupe has a matcher that
+                // matches with the field for this event
+                const matcherId = this.getMatcherIndex(field);
+                const matcherProperty = matcherId !== null ? this.troupe.fieldMatchers[matcherId].memberProperty : null;
+                const property = event.fieldToPropertyMap[i]?.property || matcherProperty;
+
+                // Init the updated field to property map
+                const override = event.fieldToPropertyMap[i]?.override;
+                event.fieldToPropertyMap[i] = { field, override, matcherId, property: null };
+
                 if(!property) return;
                 else if(property == "Member ID") this.containsMemberId = true;
 

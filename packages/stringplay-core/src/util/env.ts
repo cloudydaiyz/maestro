@@ -17,3 +17,4 @@ export const SYNC_QUEUE_NAME = process.env.SYNC_QUEUE_NAME;
 export const SCHEDULE_FUNCTION_URL = process.env.SCHEDULE_FUNCTION_URL;
 export const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 export const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
+export const INVITE_CODES = process.env.INVITE_CODES;

@@ -1,3 +1,5 @@
+import { FieldMatcher, LimitSchema } from "../types/core-types";
+
 export const DB_NAME = "maestro";
 
 export const FULL_DAY = 1000 * 60 * 60 * 24;
@@ -52,3 +54,79 @@ export const EVENT_DATA_SOURCE_REGEX = [FORMS_REGEX, SHEETS_REGEX, DRIVE_FOLDER_
 export const EVENT_DATA_SOURCE_URLS = [FORMS_URL_TEMPL, SHEETS_URL_TEMPL, DRIVE_FOLDER_URL_TEMPL] as const;
 export const EVENT_DATA_SOURCE_MIME_TYPES = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet", "application/vnd.google-apps.folder"] as const;
 export const EVENT_DATA_SOURCE_MIME_QUERIES = EVENT_DATA_SOURCE_MIME_TYPES.map(mimeType => `mimeType = '${mimeType}'`);
+
+export const DEFAULT_MATCHERS: FieldMatcher[] = [
+    {
+        matchCondition: "contains",
+        fieldExpression: "ID",
+        memberProperty: "Member ID",
+        filters: [],
+        priority: 0
+    },
+    {
+        matchCondition: "contains",
+        fieldExpression: "First Name",
+        memberProperty: "First Name",
+        filters: [],
+        priority: 1
+    },
+    {
+        matchCondition: "contains",
+        fieldExpression: "Last Name",
+        memberProperty: "Last Name",
+        filters: [],
+        priority: 2
+    },
+    {
+        matchCondition: "contains",
+        fieldExpression: "Email",
+        memberProperty: "Email",
+        filters: [],
+        priority: 3
+    },
+    {
+        matchCondition: "contains",
+        fieldExpression: "Birthday",
+        memberProperty: "Birthday",
+        filters: [],
+        priority: 4
+    },
+];
+
+export const INVITED_TROUPE_LIMIT : Omit<LimitSchema, "troupeId" | "hasInviteCode"> = {
+    docType: "troupeLimit" as const,
+    getOperationsLeft: 30,
+    modifyOperationsLeft: 30,
+    manualSyncsLeft: 5,
+
+    memberPropertyTypesLeft: 10,
+    pointTypesLeft: 5,
+    fieldMatchersLeft: 15,
+
+    eventTypesLeft: 10,
+    sourceFolderUrisLeft: 20,
+
+    eventsLeft: 100,
+    fieldIdsLeft: 1000,
+
+    membersLeft: 200,
+}
+
+export const UNINVITED_TROUPE_LIMIT: Omit<LimitSchema, "troupeId" | "hasInviteCode"> = {
+    docType: "troupeLimit" as const,
+    getOperationsLeft: 10,
+    modifyOperationsLeft: 10,
+    manualSyncsLeft: 2,
+
+    memberPropertyTypesLeft: 7,
+    pointTypesLeft: 2,
+    fieldMatchersLeft: 10,
+
+    eventTypesLeft: 2,
+    sourceFolderUrisLeft: 2,
+
+    eventsLeft: 20,
+    fieldIdsLeft: 200,
+    
+    membersLeft: 200,
+}

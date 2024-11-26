@@ -1,17 +1,17 @@
 // Troupe log sheet in Google Sheets
 
 import type { WithId } from "mongodb";
-import { TroupeSchema, EventSchema, MemberSchema, EventsAttendedBucketSchema, AttendeeSchema } from "../../types/core-types";
-import { TroupeLogService } from "../base";
+import { TroupeSchema, EventSchema, MemberSchema, EventsAttendedBucketSchema, AttendeeSchema } from "../../../types/core-types";
+import { LogSheetService } from "../../base";
 import { sheets_v4 } from "googleapis";
-import { getDrive, getSheets } from "../../cloud/gcp";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, SHEETS_REGEX } from "../../util/constants";
-import { getDataSourceId } from "../../util/helper";
+import { getDrive, getSheets } from "../../../cloud/gcp";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, SHEETS_REGEX } from "../../../util/constants";
+import { getDataSourceId } from "../../../util/helper";
 import { A1Notation } from "@shogo82148/a1notation";
-import { LOG_SHEET_DRIVE_ID } from "../../util/env";
+import { LOG_SHEET_DRIVE_ID } from "../../../util/env";
 import { GaxiosResponse } from "gaxios";
 import assert from "assert";
-import { DateParser } from "../../util/server/date-parser";
+import { DateParser } from "../../../util/server/date-parser";
 
 namespace Colors {
     const error = 0.01;
@@ -38,7 +38,7 @@ namespace Colors {
     export const black = rgb("000000");
 }
 
-export class GoogleSheetsLogService extends TroupeLogService {
+export class GoogleSheetsLogService extends LogSheetService {
     constructor() { super() }
 
     /** Uris of all the logs created by this troupe log service */

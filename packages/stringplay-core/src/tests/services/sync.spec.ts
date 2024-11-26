@@ -3,13 +3,14 @@ import { defaultConfig, noMembersConfig, onlyEventTypesConfig } from "../../util
 
 import { describe } from "@jest/globals";
 import { arrayToObject, deleteFromArray, objectToArray, shuffleArray } from "../../util/helper";
-import { GoogleSheetsLogService } from "../../services/logs/gsheets-log";
+import { GoogleSheetsLogService } from "../../services/sync/logs/gsheets-log";
 import { ObjectId, WithId } from "mongodb";
 import { AttendeeSchema, EventSchema, EventsAttendedBucketSchema } from "../../types/core-types";
 import { TroupeSyncService } from "../../services/sync";
-import { StringplayApiService } from "../../services/api";
+import { ApiService } from "../../services/api";
 import { PublicEvent, UpdateEventRequest } from "../../types/api-types";
-import { TroupeCoreService } from "../../services/core";
+import { CoreService } from "../../services/core";
+import { DEFAULT_MATCHERS } from "../../util/constants";
 
 const { dbSetup } = init();
 
@@ -20,7 +21,11 @@ describe("troupe sync service", () => {
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
 
         const syncService = await TroupeSyncService.create();
-        const apiService = await StringplayApiService.create();
+        const apiService = await ApiService.create();
+
+        // Remove default field matchers
+        await apiService.updateTroupe(troupeId, { removeFieldMatchers: DEFAULT_MATCHERS.map((_, i) => i) });
+        console.log(await apiService.getTroupe(troupeId));
 
         // Sync the troupe and ensure no errors are thrown
         await expect(syncService.sync(troupeId, true)).resolves.not.toThrow();
@@ -29,7 +34,7 @@ describe("troupe sync service", () => {
         const events = await apiService.getEvents(troupeId);
         expect(events.length).toBeGreaterThan(0);
         events.forEach(e => expect(Object.keys(e.fieldToPropertyMap).length).toBeGreaterThan(0));
-        console.log(events);
+        // console.log(events);
 
         const memberProperties = Object.keys(memberPropertyTypes);
         const numRequiredProperties = memberProperties.filter(p => memberPropertyTypes[p].endsWith("!")).length;
@@ -59,10 +64,10 @@ describe("troupe sync service", () => {
             const updateProperties: UpdateEventRequest["updateProperties"] = {};
             for(const fieldId of eventFields) {
                 if(!memberIdSet) {
-                    updateProperties[fieldId] = "Member ID";
+                    updateProperties[fieldId] = { property: "Member ID" };
                     memberIdSet = true;
                 } else {
-                    updateProperties[fieldId] = shuffledMemberProperties.pop()!;
+                    updateProperties[fieldId] = { property: shuffledMemberProperties.pop()! };
                 }
             }
             updateEvents.push(apiService.updateEvent(troupeId, event.id, { updateProperties }));
@@ -96,11 +101,14 @@ describe("troupe sync service", () => {
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
 
         const syncService = await TroupeSyncService.create();
-        const apiService = await StringplayApiService.create();
-        const coreService = await TroupeCoreService.create();
+        const apiService = await ApiService.create();
+        const coreService = await CoreService.create();
 
         // Create a new log for the updated troupe
         const currentLog = await coreService.newTroupeLog(troupeId);
+
+        // Remove default field matchers
+        await apiService.updateTroupe(troupeId, { removeFieldMatchers: DEFAULT_MATCHERS.map((_, i) => i) });
 
         // Sync the troupe and ensure no errors are thrown
         await expect(syncService.sync(troupeId)).resolves.not.toThrow();
@@ -138,10 +146,10 @@ describe("troupe sync service", () => {
             const updateProperties: UpdateEventRequest["updateProperties"] = {};
             for(const fieldId of eventFields) {
                 if(!memberIdSet) {
-                    updateProperties[fieldId] = "Member ID";
+                    updateProperties[fieldId] = { property: "Member ID" };
                     memberIdSet = true;
                 } else {
-                    updateProperties[fieldId] = shuffledMemberProperties.pop()!;
+                    updateProperties[fieldId] = { property: shuffledMemberProperties.pop()! };
                 }
             }
             updateEvents.push(apiService.updateEvent(troupeId, event.id, { updateProperties }));

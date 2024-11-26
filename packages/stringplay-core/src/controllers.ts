@@ -1,6 +1,6 @@
 import EventEmitter from "events";
-import { StringplayApiService } from "./services/api";
-import { TroupeCoreService } from "./services/core";
+import { ApiService } from "./services/api";
+import { CoreService } from "./services/core";
 import { TroupeSyncService } from "./services/sync";
 import { AuthenticationError, ClientError } from "./util/error";
 import { ApiController, ApiMiddleware, newController, newControllerWithMiddleware, newUtilController } from "./util/server/rest";
@@ -15,8 +15,8 @@ import { PathParsers } from "./routes";
 import { BodySchema } from "./body";
 
 const initAuthService = AuthService.create();
-const initApiService = StringplayApiService.create();
-const initCoreService = TroupeCoreService.create();
+const initApiService = ApiService.create();
+const initCoreService = CoreService.create();
 const initSyncService = TroupeSyncService.create();
 
 /** All paths in the API with a prefix of `/t/:troupeId` will be handled by this controller to simplify authentication. */ 
@@ -354,8 +354,8 @@ const authMiddleware: ApiMiddleware = async (path, method, headers: Authorizatio
     const registerPath = PathParsers.Register.test(path);
     if(registerPath) {
         if(method == "POST") {
-            const {username, email, password, troupeName} = BodySchema.RegisterRequest.parse(body);
-            await authService.register(username, email, password, troupeName);
+            const { username, email, password, troupeName, inviteCode } = BodySchema.RegisterRequest.parse(body);
+            await authService.register(username, email, password, troupeName, inviteCode);
             return {
                 status: 204,
                 headers: {},

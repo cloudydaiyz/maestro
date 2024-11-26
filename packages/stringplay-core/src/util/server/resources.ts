@@ -63,7 +63,7 @@ export async function cleanDbConnections() {
 
 export async function cleanLogs() {
     console.log("Cleaning logs");
-    const { GoogleSheetsLogService } = await import("../../services/logs/gsheets-log");
+    const { GoogleSheetsLogService } = await import("../../services/sync/logs/gsheets-log");
     const gsheets = new GoogleSheetsLogService();
 
     const deletes: Promise<any>[] = [];

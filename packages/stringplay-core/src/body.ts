@@ -6,19 +6,20 @@ import type { MemberPropertyType} from "./types/core-types";
 import type { CreateEventTypeRequest, UpdateEventTypeRequest, CreateEventRequest, UpdateEventRequest, UpdateTroupeRequest, CreateMemberRequest, UpdateMemberRequest, ApiType, RegisterRequest, LoginRequest, RefreshCredentialsRequest, DeleteUserRequest, BulkUpdateEventRequest, BulkUpdateEventTypeRequest, BulkUpdateMemberRequest } from "./types/api-types";
 import type { CreateTroupeRequest, SyncRequest, ScheduledTaskRequest } from "./types/service-types";
 
+const MemberPropertyType: z.ZodType<MemberPropertyType> = z.union([
+    z.literal("string?"), 
+    z.literal("string!"), 
+    z.literal("number?"),
+    z.literal("number!"), 
+    z.literal("boolean?"),
+    z.literal("boolean!"),
+    z.literal("date?"),
+    z.literal("date!"),
+]);
+
 /** Request body parsers for API are exported from this namespace */
 export namespace BodySchema {
-    const MemberPropertyType: z.ZodType<MemberPropertyType> = z.union([
-        z.literal("string?"), 
-        z.literal("string!"), 
-        z.literal("number?"),
-        z.literal("number!"), 
-        z.literal("boolean?"),
-        z.literal("boolean!"),
-        z.literal("date?"),
-        z.literal("date!"),
-    ]);
-
+    
     // ========== FOR API CONTROLLERS ========== //
 
     export const RegisterRequest: z.ZodType<RegisterRequest> = z.object({
@@ -26,6 +27,7 @@ export namespace BodySchema {
         email: z.string(),
         password: z.string(),
         troupeName: z.string(),
+        inviteCode: z.string().optional(),
     });
 
     export const LoginRequest: z.ZodType<LoginRequest> = z.object({
@@ -56,6 +58,14 @@ export namespace BodySchema {
             endDate: z.string(),
         })).nullable().optional(),
         removePointTypes: z.string().array().nullable().optional(),
+        updateFieldMatchers: z.object({
+            matchCondition: z.union([z.literal("contains"), z.literal("exact")]),
+            fieldExpression: z.string(),
+            memberProperty: z.string(),
+            filters: z.literal("nocase").array(),
+            priority: z.number(),
+        }).nullable().array().nullable().optional(),
+        removeFieldMatchers: z.number().array().nullable().optional(),
     });
 
     export const CreateEventRequest: z.ZodType<CreateEventRequest> = z.object({
@@ -74,7 +84,13 @@ export namespace BodySchema {
         sourceUri: z.string().nullable().optional(),
         eventTypeId: z.string().nullable().optional(),
         value: z.number().nullable().optional(),
-        updateProperties: z.record(z.string(), z.string()).nullable().optional(),
+        updateProperties: z.record(
+            z.string(), 
+            z.object({ 
+                property: z.string().optional(), 
+                override: z.boolean().optional(),
+            })
+        ).nullable().optional(),
         removeProperties: z.string().array().nullable().optional(),
     });
 

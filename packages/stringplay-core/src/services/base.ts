@@ -1,20 +1,13 @@
 // Initialization for all services
 
 import { Collection, MongoClient, ObjectId, WithId } from "mongodb";
-import { AttendeeSchema, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
-import { MONGODB_PASS, MONGODB_USER } from "../util/env";
-import { DB_NAME, SHEETS_REGEX } from "../util/constants";
+import { AttendeeSchema, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, FieldMatcher, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
+import { DB_NAME } from "../util/constants";
 import { EventDataMap, AttendeeDataMap } from "../types/service-types";
 import { ClientError } from "../util/error";
 import assert from "assert";
 import { newDbConnection, removeDbConnection } from "../util/server/resources";
-
-/** Allows multiple database services to share the same MongoDB connection */
-export class SharedMongoClient {
-    // FUTURE: Implement a pseudo connection pool
-    static connections: number = 0;
-    static client: MongoClient | null = null;
-}
+import { getMatcherRegex } from "../util/helper";
 
 /** Base service for all services that interact with the database */
 export class BaseDbService {
@@ -23,7 +16,7 @@ export class BaseDbService {
      * to define unique criteria that dictates the completion of class initialization.
      */
     ready: Promise<void>;
-    readonly client: MongoClient;
+    client: MongoClient;
     readonly troupeColl: Collection<TroupeSchema>;
     readonly dashboardColl: Collection<TroupeDashboardSchema>;
     readonly eventColl: Collection<EventSchema>;
@@ -48,6 +41,8 @@ export class BaseDbService {
         await service.ready;
         return service;
     }
+
+    async close() { return removeDbConnection(this.client) }
 
     async getTroupeSchema(troupeId: string, clientError?: true): Promise<WithId<TroupeSchema>> {
         const schema = await this.troupeColl.findOne({ _id: new ObjectId(troupeId) });
@@ -114,8 +109,6 @@ export class BaseDbService {
         assert(dashboard, clientError ? new ClientError("Unable to find dashboard") : "Unable to find dashboard");
         return dashboard;
     }
-
-    async close() { return removeDbConnection(this.client) }
 }
 
 /** Handles event/member data retrieval and synchronization from a data source */
@@ -132,6 +125,20 @@ export abstract class EventDataService {
         this.ready = this.init();
     }
 
+    /** 
+     * Returns the property associated with the field for the event based on the troupe's field
+     * matchers, if any.
+     */
+    getMatcherIndex(field: string): number | null {
+        for(let i = 0; i < this.troupe.fieldMatchers.length; i++) {
+            const matcher = this.troupe.fieldMatchers[i];
+            const regex = getMatcherRegex(matcher);
+            const test = regex.test(field);
+            if(test) return i;
+        }
+        return null;
+    }
+
     abstract init(): Promise<void>;
     abstract discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void>;
 }
@@ -142,7 +149,7 @@ export abstract class EventDataService {
  * - `events.sort((a, b) => a.startDate.getTime() - b.startDate.getTime());`
  * - `audience.sort((a, b) => a.points["Total"] - b.points["Total"]);`
  */
-export abstract class TroupeLogService {
+export abstract class LogSheetService {
 
     /** Creates a log for the provided troupe, events, and audience (if provided) and returns the URI */
     abstract createLog(troupe: WithId<TroupeSchema>, events?: WithId<EventSchema>[], audience?: WithId<AttendeeSchema>[]): Promise<string>;

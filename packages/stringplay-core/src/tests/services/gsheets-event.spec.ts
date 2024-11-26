@@ -4,7 +4,7 @@ import { noMembersConfig } from "../../util/server/test-config";
 import { describe } from "@jest/globals";
 import { EventDataMap, AttendeeDataMap } from "../../types/service-types";
 import { objectMap, objectToArray, verifyMemberPropertyType } from "../../util/helper";
-import { GoogleSheetsEventDataService } from "../../services/events/gsheets-event";
+import { GoogleSheetsEventDataService } from "../../services/sync/events/gsheets-event";
 
 const { dbSetup } = init();
 
@@ -16,7 +16,7 @@ describe("google sheets event service", () => {
         const observedEvent = config.events!["second"].event!;
         const eventMap: EventDataMap = objectMap(
             config.events!,
-            (eventId, event) => [
+            (_, event) => [
                 event.event!.sourceUri,
                 {
                     event: event.event!,
@@ -40,7 +40,9 @@ describe("google sheets event service", () => {
 
         const fieldIds = Object.keys(observedEvent.fieldToPropertyMap);
         expect(fieldIds.length).toBeGreaterThan(0);
-        expect(fieldIds.every(id => observedEvent.fieldToPropertyMap[id].property == null)).toBeTruthy();
+
+        // Removed since properties can be assigned by field matchers
+        // expect(fieldIds.every(id => observedEvent.fieldToPropertyMap[id].property == null)).toBeTruthy();
 
         // Update property mappings
         const indicies = fieldIds.map((id, i) => i);

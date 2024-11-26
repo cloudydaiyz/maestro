@@ -1,6 +1,6 @@
 import type { WithId } from "mongodb";
 import type { Troupe } from "./api-types";
-import type { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema } from "./core-types";
+import type { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, GlobalLimit, MemberSchema, TroupeLimit } from "./core-types";
 
 // Additional API request types
 
@@ -72,3 +72,6 @@ export interface AttendeeDataMap {
         fromColl: boolean
     }
 }
+
+export type GlobalLimitSpecifier = Partial<Record<keyof GlobalLimit, number>>;
+export type TroupeLimitSpecifier = Partial<Record<keyof TroupeLimit, number>>;
