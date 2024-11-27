@@ -10,10 +10,12 @@ import { UpdateOperator } from "../types/util-types";
 import { GlobalLimitSpecifier, TroupeLimitSpecifier } from "../types/service-types";
 
 export class LimitService extends BaseDbService {
+    private ignoreTroupeLimits: { [troupeId: string]: boolean };
     readonly limitsColl: Collection<LimitCollectionSchema>;
     
     constructor() { 
         super();
+        this.ignoreTroupeLimits = {};
         this.limitsColl = this.client.db(DB_NAME).collection("limits");
     }
 
@@ -99,13 +101,18 @@ export class LimitService extends BaseDbService {
         assert(modification.modifiedCount == 1, `Update limit operation failed for troupe ID ${troupeId}`);
     }
 
-    async incrementTroupeLimits(troupeId: string, limits: TroupeLimitSpecifier): Promise<boolean> {
+    async incrementTroupeLimits(troupeId: string, limitsToInc: TroupeLimitSpecifier): Promise<boolean> {
+        if(this.ignoreTroupeLimits) {
+            console.log("Ignoring limits increment for troupe" + troupeId);
+            return true;
+        }
+
         const limitsColl = this.limitsColl as Collection<LimitSchema>;
         const filters: Filter<LimitSchema> = { troupeId };
         const $inc: UpdateOperator<LimitSchema, "$inc"> = {};
-        for(const limit in limits) {
-            const lim = limit as keyof typeof limits;
-            const increment = limits[lim];
+        for(const limit in limitsToInc) {
+            const lim = limit as keyof typeof limitsToInc;
+            const increment = limitsToInc[lim];
 
             $inc[limit] = increment;
             if(increment && increment < 0) {
@@ -128,8 +135,38 @@ export class LimitService extends BaseDbService {
         assert(deletion.acknowledged, `Delete limit operation failed for troupe ID ${troupeId}`)
     }
 
-    async checkTroupeLimits(troupeId: string): Promise<WithId<LimitSchema> | null> {
+    async getTroupeLimits(troupeId: string): Promise<WithId<LimitSchema> | null> {
         const limitsColl = this.limitsColl as Collection<LimitSchema>;
         return limitsColl.findOne({ docType: "troupeLimit", troupeId });
+    }
+
+    async withinTroupeLimits(troupeId: string, limitsToInc: TroupeLimitSpecifier): Promise<boolean> {
+        if(this.ignoreTroupeLimits) {
+            console.log("Ignoring limits check for troupe" + troupeId);
+            return true;
+        }
+
+        const troupeLimits = await this.getTroupeLimits(troupeId);
+        if(!troupeLimits) return false;
+
+        for(const limit in limitsToInc) {
+            const lim = limit as keyof typeof limitsToInc;
+            if(troupeLimits[lim] + limitsToInc[lim]! == 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 
+     * Allows for limits for a troupe to be ignored temporarily; helpful when using 
+     * multiple methods that can modify the limit, but you only want one of them to 
+     * actually perform the modification.
+     * 
+     * Troupe IDs set to true will have their limit and all limit modifying operations 
+     * ignored during the limit-modifying method. Could lead to bugs if you're not careful.
+     */
+    toggleIgnoreTroupeLimits(troupeId: string, ignore: boolean) {
+        this.ignoreTroupeLimits[troupeId] = ignore;
     }
 }

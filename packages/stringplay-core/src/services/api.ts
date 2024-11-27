@@ -30,6 +30,14 @@ export class ApiService extends BaseDbService implements SpringplayApi {
     }
 
     async getConsoleData(troupeId: string): Promise<ConsoleData> {
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { getOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
         const [
             dashboard,
             limits,
@@ -45,8 +53,13 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             this.getEventTypes(troupeId),
             this.getAttendees(troupeId),
         ]);
-        const withinLimits = await this.limitService.incrementTroupeLimits(troupeId, { getOperationsLeft: -1 });
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { getOperationsLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
 
         return {
             dashboard,
@@ -59,18 +72,40 @@ export class ApiService extends BaseDbService implements SpringplayApi {
     }
 
     async getDashboard(troupeId: string): Promise<TroupeDashboard> {
-        const dashboardObj = await this.getDashboardSchema(troupeId);
-        const withinLimits = await this.limitService.incrementTroupeLimits(troupeId, { getOperationsLeft: -1 });
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { getOperationsLeft: -1 }
+        );
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
+        const dashboardObj = await this.getDashboardSchema(troupeId);
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { getOperationsLeft: -1 }
+        );
+        assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+
         return toTroupeDashboard(dashboardObj, dashboardObj._id.toHexString());
     }
 
     async getLimits(troupeId: string): Promise<TroupeLimit> {
-        const troupeLimits = await this.limitService.checkTroupeLimits(troupeId);
+        
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { getOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
+        const troupeLimits = await this.limitService.getTroupeLimits(troupeId);
         assert(troupeLimits, new ClientError(`Invalid troupe ID: ${troupeId}`));
 
-        const withinLimits = await this.limitService.incrementTroupeLimits(troupeId, { getOperationsLeft: -1 });
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { getOperationsLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
 
         const { 
             _id, docType, troupeId: _, hasInviteCode, 
@@ -80,11 +115,24 @@ export class ApiService extends BaseDbService implements SpringplayApi {
     }
 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            typeof troupe == "string" ? troupe : troupe._id.toHexString(), 
+            { getOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
         const troupeObj = typeof troupe == "string" 
             ? await this.getTroupeSchema(troupe, true)
             : troupe;
-        const withinLimits = await this.limitService.incrementTroupeLimits(troupeObj._id.toHexString(), { getOperationsLeft: -1 });
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+        
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeObj._id.toHexString(), { getOperationsLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
+
         return toTroupe(troupeObj, troupeObj._id.toHexString());
     }
 
@@ -97,9 +145,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             $set: {} as UpdateOperator<TroupeSchema, "$set">, 
             $unset: {} as UpdateOperator<TroupeSchema, "$unset">,
         }
-        const limitSpecifier: TroupeLimitSpecifier = { 
-            modifyOperationsLeft: -1,
-        }
+        const limitSpecifier: TroupeLimitSpecifier = { modifyOperationsLeft: -1 };
 
         // Set the name and the last updated
         troupeUpdate.$set.lastUpdated = new Date();
@@ -129,12 +175,12 @@ export class ApiService extends BaseDbService implements SpringplayApi {
                     if(!(key in troupe.memberPropertyTypes)) numMemberProperties++;
                 }
             }
+
             assert(
                 numMemberProperties <= MAX_MEMBER_PROPERTIES, 
                 new ClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`)
             );
-            
-            // Prepare to decrement the limit
+
             const newLimit = initialNumMemberProperties - numMemberProperties;
             if(newLimit !== 0) {
                 limitSpecifier.memberPropertyTypesLeft = newLimit;
@@ -144,7 +190,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         // Remove member properties & ensure no base member properties are requested for removal
         if(request.removeMemberProperties) {
             const initialNumMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
-            let numMemberProperties = initialNumMemberProperties;
+            let numMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
 
             for(const key of request.removeMemberProperties) {
                 assert(
@@ -157,10 +203,11 @@ export class ApiService extends BaseDbService implements SpringplayApi {
                 }
             }
 
-            // Prepare to increment the limit
             const newLimit = initialNumMemberProperties - numMemberProperties;
             if(newLimit !== 0) {
-                if(!limitSpecifier.memberPropertyTypesLeft) limitSpecifier.memberPropertyTypesLeft = 0;
+                if(!limitSpecifier.memberPropertyTypesLeft) {
+                    limitSpecifier.memberPropertyTypesLeft = 0;
+                }
                 limitSpecifier.memberPropertyTypesLeft += newLimit;
             }
         }
@@ -168,7 +215,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         // Update point types
         if(request.updatePointTypes) {
             const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
-            let numPointTypes = initialNumPointTypes;
+            let numPointTypes = Object.keys(troupe.pointTypes).length;
             // let newPointTypes = troupe.pointTypes;
 
             for(const key in request.updatePointTypes) {
@@ -194,7 +241,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             
             // *FUTURE: Update point calculations for members
 
-            // Prepare to decrement the limit
             const newLimit = initialNumPointTypes - numPointTypes;
             if(newLimit !== 0) {
                 limitSpecifier.pointTypesLeft = newLimit;
@@ -204,26 +250,27 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         // Remove point types
         if(request.removePointTypes) {
             const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
-            let numPointTypes = initialNumPointTypes;
+            let numPointTypes = Object.keys(troupe.pointTypes).length;
 
             for(const key of request.removePointTypes) {
                 assert(!(key in BASE_POINT_TYPES_OBJ), new ClientError("Cannot delete base point types"));
                 if(key in troupe.pointTypes) {
                     troupeUpdate.$unset[`pointTypes.${key}`] = "";
-                    numPointTypes--;
+                    numPointTypes++;
                 }
             }
 
-            // Prepare to increment the limit
             const newLimit = initialNumPointTypes - numPointTypes;
             if(newLimit !== 0) {
-                if(!limitSpecifier.pointTypesLeft) limitSpecifier.pointTypesLeft = 0;
-                limitSpecifier.pointTypesLeft = newLimit;
+                if(!limitSpecifier.pointTypesLeft) {
+                    limitSpecifier.pointTypesLeft = 0;
+                }
+                limitSpecifier.pointTypesLeft += newLimit;
             }
         }
 
         if(request.updateFieldMatchers) {
-            const initNumMatchers = troupe.fieldMatchers.length;
+            const initialNumMatchers = troupe.fieldMatchers.length;
             const updatedMatchers = structuredClone(troupe.fieldMatchers);
 
             for(let i = 0; i < request.updateFieldMatchers.length; i++) {
@@ -251,16 +298,15 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             updatedMatchers.sort((a, b) => a.priority - b.priority);
             troupeUpdate.$set.fieldMatchers = updatedMatchers;
 
-            // Prepare to decrement the limit
-            const newLimit = initNumMatchers - updatedMatchers.length;
-            if(newLimit !== 0) {
+            const newLimit = initialNumMatchers - updatedMatchers.length;
+            if(newLimit) {
                 limitSpecifier.fieldMatchersLeft = newLimit;
             }
         }
 
         if(request.removeFieldMatchers) {
             request.removeFieldMatchers.sort();
-            const initNumMatchers = troupe.fieldMatchers.length;
+            const initialNumMatchers = troupe.fieldMatchers.length;
             const updatedMatchers = structuredClone(troupe.fieldMatchers);
 
             // Validate the remove field matchers
@@ -280,12 +326,18 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             }
             troupeUpdate.$set.fieldMatchers = updatedMatchers;
 
-            // Prepare to increment the limit
-            const newLimit = initNumMatchers - updatedMatchers.length;
-            if(newLimit !== 0) {
-                limitSpecifier.fieldMatchersLeft = newLimit;
+            const newLimit = initialNumMatchers - updatedMatchers.length;
+            if(newLimit) {
+                if(!limitSpecifier.fieldMatchersLeft) {
+                    limitSpecifier.fieldMatchersLeft = 0;
+                }
+                limitSpecifier.fieldMatchersLeft += newLimit;
             }
         }
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(troupeId, limitSpecifier);
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         // Perform database update
         const newTroupe = await this.troupeColl.findOneAndUpdate(
@@ -297,14 +349,21 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         // *FUTURE: Update members with the new point types
 
         // Update limits
-        const withinLimits = await this.limitService.incrementTroupeLimits(troupeId, limitSpecifier);
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(troupeId, limitSpecifier);
+        assert(limitsUpdated, "Failure updating limits for operation");
         
         // Return public facing version of the new troupe
         return this.getTroupe(newTroupe);
     }
 
     async createEvent(troupeId: string, request: CreateEventRequest): Promise<PublicEvent> {
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot create event while sync is in progress"));
 
@@ -333,30 +392,86 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             synchronizedFieldToPropertyMap: {}
         }
         if(request.eventTypeId) event.eventTypeId = request.eventTypeId;
+        
+        // Perform database update
         const insertedEvent = await this.eventColl.insertOne(event);
         assert(insertedEvent.acknowledged, "Insert failed for event");
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventsLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
 
         return this.getEvent({...event, _id: insertedEvent.insertedId});
     }
 
     async createEvents(troupeId: string, requests: CreateEventRequest[]): Promise<PublicEvent[]> {
-        return Promise.all(requests.map(r => this.createEvent(troupeId, r)));
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventsLeft: requests.length * -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
+        const events = await Promise.all(requests.map(r => this.createEvent(troupeId, r)));
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventsLeft: requests.length * -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
+
+        return events
     }
 
     async getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent> {
         assert(typeof event != "string" || troupeId != null, 
             new ClientError("Must have a troupe ID to retrieve event."));
+        const tid = typeof event == "string" ? troupeId! : event.troupeId;
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            tid, { getOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
         
         const eventObj = typeof event == "string" 
             ? await this.getEventSchema(troupeId!, event, true)
             : event;
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            tid, { getOperationsLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
         
         return toPublicEvent(eventObj, eventObj._id.toHexString());
     }
 
     async getEvents(troupeId: string): Promise<PublicEvent[]> {
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { getOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
         const events = await this.eventColl.find({ troupeId }).toArray();
-        return Promise.all(events.map((e) => this.getEvent(e)));
+
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
+        const parsedEvents = await Promise.all(events.map((e) => this.getEvent(e)));
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { getOperationsLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
+
+        return parsedEvents;
     }
 
     async updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest): Promise<PublicEvent> {
@@ -366,6 +481,12 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         ]);
         assert(!troupe.syncLock, new ClientError("Cannot update event while sync is in progress"));
         assert(!request.value || !request.eventTypeId, new ClientError("Cannot define event type and value at same time for event"));
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         // Initialize fields
         let value = request.value || oldEvent.value;
@@ -468,7 +589,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
                 }
             }
         }
-        
+
         // Update the event
         const newEvent = await this.eventColl.findOneAndUpdate(
             { _id: new ObjectId(eventId), troupeId: troupeId },
@@ -502,18 +623,41 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             assert(updateEventsAttended.matchedCount == updateEventsAttended.modifiedCount, "Failed to update events attended");
         }
 
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
+
         // Return public facing version of the new event
         return this.getEvent(newEvent);
     }
 
     async updateEvents(troupeId: string, request: BulkUpdateEventRequest): Promise<BulkUpdateEventResponse> {
-        return asyncObjectMap<BulkUpdateEventRequest, BulkUpdateEventResponse>(
+
+        // Update limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
+        const response = asyncObjectMap<BulkUpdateEventRequest, BulkUpdateEventResponse>(
             request, 
             async (eventId, request) => [
                 eventId as string, 
                 await this.updateEvent(troupeId, eventId as string, request)
             ]
         );
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
+
+        return response;
     }
 
     async deleteEvent(troupeId: string, eventId: string): Promise<void> {
@@ -522,6 +666,12 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             this.getEventSchema(troupeId, eventId, true)
         ]);
         assert(!troupe.syncLock, new ClientError("Cannot delete event while sync is in progress"));
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventsLeft: 1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         // Update member points for types that the event is in data range for
         const $inc: UpdateOperator<MemberSchema, "$inc"> = {};
@@ -547,13 +697,40 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         // Delete the event
         const deletedEvent = await this.eventColl.findOneAndDelete({ _id: new ObjectId(eventId), troupeId });
         assert(deletedEvent, new ClientError("Failed to delete event"));
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventsLeft: 1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
     }
 
     async deleteEvents(troupeId: string, eventIds: string[]): Promise<void> {
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventsLeft: eventIds.length }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
         await Promise.all(eventIds.map(id => this.deleteEvent(troupeId, id)));
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventsLeft: eventIds.length }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
     }
 
     async createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<EventType> {
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventTypesLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         // Ensure given source folder URIs are valid Google Drive folders
         request.sourceFolderUris.forEach((uri) => assert(
@@ -577,16 +754,46 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         );
         assert(insertResult.matchedCount == 1, new ClientError("Invalid troupe or max event types reached"));
         assert(insertResult.modifiedCount == 1, "Unable to create event type");
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventTypesLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
+
         return this.getEventType(type);
     }
 
     async createEventTypes(troupeId: string, requests: CreateEventTypeRequest[]): Promise<EventType[]> {
-        return Promise.all(requests.map(r => this.createEventType(troupeId, r)));
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventTypesLeft: requests.length * -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
+        const eventTypes = Promise.all(requests.map(r => this.createEventType(troupeId, r)));
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventTypesLeft: requests.length * -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
+
+        return eventTypes;
     }
 
     async getEventType(eventType: string | WithId<EventTypeSchema>, troupeId?: string, troupe?: WithId<TroupeSchema>): Promise<EventType> {
         assert(typeof eventType != "string" || troupeId != null, 
-            new ClientError("Must have a troupe ID to retrieve event type."))
+            new ClientError("Must have a troupe ID to retrieve event type."));
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId || troupe?._id.toHexString() || "", { getOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
         
         const eventTypeObj = typeof eventType != "string" 
             ? eventType
@@ -594,12 +801,39 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             ? this.getEventTypeSchemaFromTroupe(troupe, eventType, true)
             : await this.getEventTypeSchema(troupeId!, eventType, true);
         
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId || troupe?._id.toHexString() || "", { getOperationsLeft: -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
+        
         return toEventType(eventTypeObj, eventTypeObj._id.toHexString());
     }
 
     async getEventTypes(troupeId: string): Promise<EventType[]> {
         const troupe = await this.getTroupeSchema(troupeId, true);
-        return Promise.all(troupe.eventTypes.map(et => this.getEventType(et._id.toHexString())))
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId || troupe?._id.toHexString() || "", 
+            { getOperationsLeft: troupe.eventTypes.length * -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
+        const eventTypes = await Promise.all(
+            troupe.eventTypes.map(et => this.getEventType(et._id.toHexString()))
+        );
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId || troupe?._id.toHexString() || "", 
+            { getOperationsLeft: troupe.eventTypes.length * -1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
+
+        return eventTypes;
     }
 
     async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<EventType> {
@@ -621,6 +855,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             $push: {} as UpdateOperator<TroupeSchema, "$push">,
             $pull: {} as UpdateOperator<TroupeSchema, "$pull">
         };
+        const limitSpecifier: TroupeLimitSpecifier = { modifyOperationsLeft: -1 };
 
         const eventUpdate = {
             $set: {} as UpdateOperator<EventSchema, "$set">,
@@ -716,9 +951,10 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         }
 
         // Update source uris, ignoring duplicates, existing source folder URIs, and URIs to be removed
+        const initialNumSourceFolderUris = eventType.sourceFolderUris.length;
         const newUris = request.addSourceFolderUris?.filter(
             (uri, index) => request.addSourceFolderUris!.indexOf(uri) == index 
-                && !eventType?.sourceFolderUris.includes(uri)
+                && !eventType.sourceFolderUris.includes(uri)
                 && !request.removeSourceFolderUris?.includes(uri)
         );
 
@@ -729,11 +965,25 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             : null;
         
         // Remove source uris
-        request.removeSourceFolderUris 
+        const urisToRemove = request.removeSourceFolderUris?.filter(
+            (uri, index) => request.removeSourceFolderUris?.indexOf(uri) == index
+                && eventType.sourceFolderUris.includes(uri)
+        );
+
+        urisToRemove
             ? (eventTypeUpdate.$pull["eventTypes.$[type].sourceFolderUris"] = { 
-                $in: request.removeSourceFolderUris 
+                $in: urisToRemove
             }) && (typeIdentifierUsed = true)
             : null;
+
+        // Check if this operation is within the troupe's limits
+        const sourceFolderUrisLeft = (urisToRemove?.length || 0) - (newUris?.length || 0)
+        if(sourceFolderUrisLeft > 0) {
+            limitSpecifier.sourceFolderUrisLeft = sourceFolderUrisLeft;
+        }
+
+        const withinLimits = await this.limitService.withinTroupeLimits(troupeId, limitSpecifier);
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         // Perform database update
         const newEventType = await this.troupeColl
@@ -752,24 +1002,44 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             ));
         assert(newEventType, "Failed to update event type");
 
-        if(updateEvents) await this.eventColl.updateMany({ troupeId, eventTypeId }, eventUpdate);
+        if(updateEvents) {
+            const modification = await this.eventColl.updateMany({ troupeId, eventTypeId }, eventUpdate);
+            assert(modification.acknowledged, "Event update failed");
+        }
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(troupeId, limitSpecifier);
+        assert(limitsUpdated, "Failure updating limits for operation");
 
         return this.getEventType(newEventType);
     }
 
     async updateEventTypes(troupeId: string, request: BulkUpdateEventTypeRequest): Promise<BulkUpdateEventTypeResponse> {
-        return asyncObjectMap<BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse>(
+
+        // How to add limits here...
+
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
+        const response = asyncObjectMap<BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse>(
             request, 
             async (eventTypeId, request) => [
                 eventTypeId as string, 
                 await this.updateEventType(troupeId, eventTypeId as string, request)
             ]
         );
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+
+        return response;
     }
 
     async deleteEventType(troupeId: string, eventTypeId: string): Promise<void> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot delete event type while sync is in progress"));
+
+        // Check if this operation is within the troupe's limits
+        const withinLimits = await this.limitService.withinTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventTypesLeft: 1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         // Update events
         const updateEventResult = await this.eventColl.updateMany(
@@ -808,6 +1078,12 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         );
         assert(deleteEventTypeResult.matchedCount, new ClientError("Event type not found in troupe"));
         assert(deleteEventTypeResult.modifiedCount, "Failed to delete event type");
+
+        // Update limits
+        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, eventTypesLeft: 1 }
+        );
+        assert(limitsUpdated, "Failure updating limits for operation");
     }
 
     async deleteEventTypes(troupeId: string, eventTypeIds: string[]): Promise<void> {
@@ -842,6 +1118,12 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const insertedMember = await this.audienceColl.insertOne(member);
         assert(insertedMember.acknowledged, "Failed to insert member");
 
+        // Update limits
+        const withinLimits = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, membersLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
         return this.getMember({ ...member, _id: insertedMember.insertedId });
     }
 
@@ -856,6 +1138,12 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const memberObj = typeof member == "string"
             ? await this.getMemberSchema(troupeId!, member, true)
             : member;
+
+        // Update limits
+        const withinLimits = await this.limitService.incrementTroupeLimits(
+            memberObj.troupeId, { getOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
         
         return toMember(memberObj, memberObj._id.toHexString());
     }
@@ -867,6 +1155,12 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const attendeeObj = typeof member == "string"
             ? await this.getAttendeeSchema(troupeId!, member, true)
             : member;
+
+        // Update limits
+        const withinLimits = await this.limitService.incrementTroupeLimits(
+            attendeeObj.troupeId, { getOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
         
         return toAttendee(attendeeObj, attendeeObj._id.toHexString());
     }
@@ -946,6 +1240,12 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         );
         assert(newMember, "Failed to update member");
 
+        // Update limits
+        const withinLimits = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+
         return this.getMember(newMember);
     }
 
@@ -965,6 +1265,12 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             this.eventsAttendedColl.deleteMany({ troupeId, memberId })
         ]);
         assert(res.every(r => r.acknowledged), "Failed to delete member data");
+
+        // Update limits
+        const withinLimits = await this.limitService.incrementTroupeLimits(
+            troupeId, { modifyOperationsLeft: -1, membersLeft: 1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
     }
 
     async deleteMembers(troupeId: string, memberIds: string[]): Promise<void> {
@@ -975,5 +1281,11 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Sync is already in progress"));
         await addToSyncQueue({ troupeId });
+
+        // Update limits
+        const withinLimits = await this.limitService.incrementTroupeLimits(
+            troupeId, { manualSyncsLeft: -1 }
+        );
+        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
     }
 }
