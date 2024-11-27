@@ -1,4 +1,4 @@
-import type { Attendee, BulkUpdateEventRequest, BulkUpdateEventResponse, BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse, BulkUpdateMemberRequest, BulkUpdateMemberResponse, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, Credentials, EventType, Member, PublicEvent, SpringplayAuthApi, SpringplayCoreApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "@cloudydaiyz/stringplay-core/types/api";
+import type { Attendee, BulkUpdateEventRequest, BulkUpdateEventResponse, BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse, BulkUpdateMemberRequest, BulkUpdateMemberResponse, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, Credentials, EventType, Member, PublicEvent, SpringplayAuthApi, SpringplayApi, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "@cloudydaiyz/stringplay-core/types/api";
 import axios, { AxiosRequestConfig, AxiosResponse } from "axios";
 
 /** Assertion function defined outside of Node.js */
@@ -23,7 +23,7 @@ export class StringplayApiClientError extends Error {
 }
 
 /** Provides method definitions for interacting with the API. */
-export class StringplayApiClient implements SpringplayCoreApi, SpringplayAuthApi {
+export class StringplayApiClient implements SpringplayApi, SpringplayAuthApi {
     readonly uri: string;
     credentials?: Credentials;
 
