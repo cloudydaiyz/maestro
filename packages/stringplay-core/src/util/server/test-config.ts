@@ -1,10 +1,10 @@
-import type { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, FieldToPropertyMap, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
+import type { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, FieldToPropertyMap, LimitSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
 import type { Attendee, ConsoleData, EventType, PublicEvent } from "../../types/api-types";
 import type { Id } from "../../types/util-types";
 
 import { randomElement, verifyMemberPropertyType, getDefaultMemberPropertyValue, generatePseudoObjectId } from "../helper";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, DEFAULT_MATCHERS, MAX_PAGE_SIZE, MEMBER_PROPERTY_TYPES } from "../constants";
-import { toAttendee, toEventType, toPublicEvent, toTroupe, toTroupeDashboard } from "../api-transform";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, DEFAULT_MATCHERS, INVITED_TROUPE_LIMIT, MAX_PAGE_SIZE, MEMBER_PROPERTY_TYPES } from "../constants";
+import { toAttendee, toEventType, toPublicEvent, toTroupe, toTroupeDashboard, toTroupeLimits } from "../api-transform";
 
 import { assert } from "../helper";
 import { WithId, ObjectId } from "mongodb";
@@ -19,11 +19,14 @@ export interface SystemSetupConfig {
                 memberPropertyTypes: Partial<BaseMemberPropertyTypes> & VariableMemberPropertyTypes,
                 pointTypes: Partial<BasePointTypes> & VariablePointTypes, 
                 
-                /** Populated once after setup is complete */
+                /** Populated once setup is complete */
                 troupe: WithId<TroupeSchema>,
 
-                /** Populated once after setup is complete */
+                /** Populated once setup is complete */
                 dashboard: WithId<TroupeDashboardSchema>,
+
+                /** Populated once setup is complete */
+                limits: WithId<LimitSchema>,
             }
         >
     };
@@ -34,7 +37,7 @@ export interface SystemSetupConfig {
             & { 
                 customTroupeId: string,
 
-                /** Populated once after setup is complete */
+                /** Populated once setup is complete */
                 eventType: WithId<EventTypeSchema>,
             }
         > 
@@ -47,7 +50,7 @@ export interface SystemSetupConfig {
                 customTroupeId: string,
                 customEventTypeId: string,
 
-                /** Populated once after setup is complete */
+                /** Populated once setup is complete */
                 event: WithId<EventSchema>,
             }
         >
@@ -65,7 +68,7 @@ export interface SystemSetupConfig {
                 /** Uses custom event IDs as keys */
                 eventsAttended: WithId<EventsAttendedBucketSchema>["events"],
 
-                /** Populated once after setup is complete */
+                /** Populated once setup is complete */
                 member: WithId<MemberSchema>,
             }
         >
@@ -100,6 +103,7 @@ export function populateConfig(config: SystemSetupConfig, populateFieldToPropert
     // Create the troupe
     const testTroupes: WithId<TroupeSchema>[] = [];
     const testDashboards: WithId<TroupeDashboardSchema>[] = [];
+    const testLimits: WithId<LimitSchema>[] = [];
     for(const customTroupeId in config.troupes) {
         const request = config.troupes[customTroupeId];
         request._id = new ObjectId();
@@ -140,10 +144,19 @@ export function populateConfig(config: SystemSetupConfig, populateFieldToPropert
             totalEventsByEventType: {},
         }
 
+        const newLimits: WithId<LimitSchema> = {
+            _id: new ObjectId(),
+            troupeId: request.id,
+            hasInviteCode: true,
+            ...INVITED_TROUPE_LIMIT,
+        }
+
         request.troupe = newTroupe;
         request.dashboard = newDashboard;
+        request.limits = newLimits;
         testTroupes.push(newTroupe);
         testDashboards.push(newDashboard);
+        testLimits.push(newLimits);
     }
     
     for(const customEventTypeId in config.eventTypes) {
@@ -329,7 +342,7 @@ export function populateConfig(config: SystemSetupConfig, populateFieldToPropert
         if(pageSize > 0) testEventsAttended.push(newEventsAttended);
     }
 
-    return { testTroupes, testEvents, testAudience, testEventsAttended, testDashboards };
+    return { testTroupes, testEvents, testAudience, testEventsAttended, testDashboards, testLimits };
 }
 
 /** Returns a console for the specified custom troupe ID from the config */
@@ -337,7 +350,8 @@ export function populateConfigAsOneConsole(config: SystemSetupConfig, customTrou
     if(!configPopulated) populateConfig(config, populateFieldToPropertyMap);
 
     const troupe = toTroupe(config.troupes![customTroupeId].troupe!, config.troupes![customTroupeId].id!);
-    const dashboard = toTroupeDashboard(config.troupes![customTroupeId].dashboard!, config.troupes![customTroupeId].id!);
+    const dashboard = toTroupeDashboard(config.troupes![customTroupeId].dashboard!, config.troupes![customTroupeId].dashboard!._id.toHexString());
+    const limits = toTroupeLimits(config.troupes![customTroupeId].limits!, config.troupes![customTroupeId].limits!._id.toHexString());
 
     const eventTypes: EventType[] = [];
     for(const customEventTypeId in config.eventTypes) {
@@ -369,7 +383,8 @@ export function populateConfigAsOneConsole(config: SystemSetupConfig, customTrou
         dashboard,
         eventTypes,
         events,
-        attendees
+        attendees,
+        limits,
     };
 }
 

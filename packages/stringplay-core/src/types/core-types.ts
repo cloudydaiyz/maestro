@@ -279,8 +279,6 @@ export interface LimitSchema {
     sourceFolderUrisLeft: number,
 
     eventsLeft: number,
-    fieldIdsLeft: number,
-
     membersLeft: number,
 }
 

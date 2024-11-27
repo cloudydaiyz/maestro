@@ -28,7 +28,15 @@ describe("google sheets event service", () => {
         const memberMap: AttendeeDataMap = {};
 
         // Populates the field to property map of the observed event
-        const service = new GoogleSheetsEventDataService(troupe, eventMap, memberMap);
+        const service = new GoogleSheetsEventDataService(
+            troupe, eventMap, memberMap, 
+            config.troupes!["A"].limits!, 
+            {
+                eventsLeft: 0,
+                sourceFolderUrisLeft: 0,
+                membersLeft: 0,
+            }
+        );
         await service.init();
 
         // Discover audience from the event for the first time

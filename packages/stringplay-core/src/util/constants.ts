@@ -107,8 +107,6 @@ export const INVITED_TROUPE_LIMIT : Omit<LimitSchema, "troupeId" | "hasInviteCod
     sourceFolderUrisLeft: 20,
 
     eventsLeft: 100,
-    fieldIdsLeft: 1000,
-
     membersLeft: 200,
 }
 
@@ -126,7 +124,5 @@ export const UNINVITED_TROUPE_LIMIT: Omit<LimitSchema, "troupeId" | "hasInviteCo
     sourceFolderUrisLeft: 2,
 
     eventsLeft: 20,
-    fieldIdsLeft: 200,
-    
     membersLeft: 200,
 }

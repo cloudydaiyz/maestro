@@ -108,7 +108,7 @@ export class CoreService extends BaseDbService {
                 limitService.removeTroupeLimits(troupeId),
             ]).then((res) => {
                 assert(
-                    res.every((r) => { if(r && "acknowledged" in r) r.acknowledged }), 
+                    res.every(r => r && "acknowledged" in r ? r.acknowledged : true ), 
                     "Failed to fully delete troupe"
                 );
             });

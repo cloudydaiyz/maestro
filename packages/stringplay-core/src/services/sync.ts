@@ -1,6 +1,6 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "../cloud/gcp";
-import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberProperties } from "../types/core-types";
+import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeLimit, TroupeSchema, VariableMemberProperties } from "../types/core-types";
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, EVENT_DATA_SOURCE_MIME_QUERIES, SHEETS_URL_TEMPL } from "../util/constants";
 import { AggregationCursor, AnyBulkWriteOperation, BulkWriteResult, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getDataSourceId, getDataSourceUrl, getDefaultMemberPropertyValue } from "../util/helper";
@@ -12,6 +12,7 @@ import { GoogleSheetsEventDataService } from "./sync/events/gsheets-event";
 import { BaseDbService, EventDataService } from "./base";
 import assert from "assert";
 import { GoogleSheetsLogService } from "./sync/logs/gsheets-log";
+import { LimitService } from "./limits";
 
 /**
  * Synchronizes the troupe with its source uris for events and event types, then updates the
@@ -23,24 +24,34 @@ import { GoogleSheetsLogService } from "./sync/logs/gsheets-log";
  */
 export class TroupeSyncService extends BaseDbService {
     drive!: drive_v3.Drive;
+    limitService!: LimitService;
+    currentLimits!: TroupeLimit;
 
     // Output variables
     troupe: WithId<TroupeSchema> | null;
     dashboard: WithId<TroupeDashboardSchema> | null;
     eventMap: EventDataMap;
     attendeeMap: AttendeeDataMap;
+    incrementLimits: Partial<TroupeLimit>;
 
     constructor() {
         super();
+        this.ready = this.init();
+
         this.troupe = null;
         this.dashboard = null;
         this.eventMap = {};
         this.attendeeMap = {};
-        this.ready = this.init();
+        this.incrementLimits = {
+            eventsLeft: 0,
+            sourceFolderUrisLeft: 0,
+            membersLeft: 0,
+        };
     }
 
-    async init() {
+    private async init() {
         this.drive = await getDrive();
+        this.limitService = await LimitService.create();
     }
 
     /**
@@ -66,11 +77,15 @@ export class TroupeSyncService extends BaseDbService {
         this.dashboard = await this.dashboardColl.findOne({ troupeId });
         assert(this.dashboard, "Failed to get dashboard for sync");
 
+        const limits = await this.limitService.getTroupeLimits(troupeId);
+        assert(limits, "No limits document found for troupe");
+        this.currentLimits = limits;
+
         // Perform sync
-        await this.discoverEvents()
-            .then(() => this.discoverAndRefreshAudience())
-            .then(() => this.persistSync())
-            .then(() => { if(!skipLogPublish) return this.refreshLogSheet() });
+        await this.discoverEvents();
+        await this.discoverAndRefreshAudience();
+        await this.persistSync();
+        if(!skipLogPublish) await this.refreshLogSheet();
         
         // Unlock the troupe
         const unlockResult = await this.troupeColl.updateOne(
@@ -85,13 +100,15 @@ export class TroupeSyncService extends BaseDbService {
         assert(this.troupe);
         const troupeId = this.troupe._id.toHexString();
 
-        // Initialize events
+        // Initialize existing events
         for await(const event of this.eventColl.find({ troupeId })) {
             event.synchronizedSource = event.source;
             event.synchronizedSourceUri = event.sourceUri;
             event.synchronizedFieldToPropertyMap = event.fieldToPropertyMap;
             this.eventMap[event.sourceUri] = { event, delete: false, fromColl: true };
         }
+
+        // == BEGIN EVENT DISCOVERY == //
 
         // To help with tie breaking, keep track of the folders that have been discovered
         const folderToEventTypeMap: FolderToEventTypeMap = {};
@@ -137,7 +154,7 @@ export class TroupeSyncService extends BaseDbService {
                     { q, fields: "files(id, name, mimeType)", }
                 );
             } catch(e) {
-                console.log("Error getting data for folder " + folderId);
+                console.log("Error getting data for folder " + folderId + ". Skipping...");
 
                 // Remove the folder from the map and the list of folders to explore
                 folderToEventTypeMap[folderId].sourceFolderUris = 
@@ -184,7 +201,7 @@ export class TroupeSyncService extends BaseDbService {
                 // Convert the winning event type back to a regular event type
                 const { totalFiles, ...currentEventType } = currentDiscoveryEventType;
 
-                // Add the event to the collection of events if it's not already added
+                
                 if(sourceUri in this.eventMap) {
                     const eventData = this.eventMap[sourceUri];
                     if(!eventData.event.eventTypeId) {
@@ -193,6 +210,13 @@ export class TroupeSyncService extends BaseDbService {
                         eventData.event.value = currentEventType.value;
                     }
                 } else {
+
+                    // Add the event to the collection of events if it's not already added
+                    // and it doesn't surpass the limits for the troupe
+                    if(this.currentLimits.eventsLeft! + this.incrementLimits.eventsLeft! == 0) {
+                        continue;
+                    }
+
                     const event: WithId<EventSchema> = {
                         _id: new ObjectId(),
                         troupeId,
@@ -210,6 +234,7 @@ export class TroupeSyncService extends BaseDbService {
                         synchronizedFieldToPropertyMap: {},
                     };
                     this.eventMap[sourceUri] = { event, delete: false, fromColl: false };
+                    this.incrementLimits.eventsLeft! -= 1;
                 }
             }
         }
@@ -309,9 +334,13 @@ export class TroupeSyncService extends BaseDbService {
         // Select a data service to collect event data from, and discover audience using the service
         let dataService: EventDataService;
         if(event.source === "Google Forms") {
-            dataService = new GoogleFormsEventDataService(this.troupe, this.eventMap, this.attendeeMap);
+            dataService = new GoogleFormsEventDataService(
+                this.troupe, this.eventMap, this.attendeeMap, this.currentLimits, this.incrementLimits,
+            );
         } else if(event.source == "Google Sheets") {
-            dataService = new GoogleSheetsEventDataService(this.troupe, this.eventMap, this.attendeeMap);
+            dataService = new GoogleSheetsEventDataService(
+                this.troupe, this.eventMap, this.attendeeMap, this.currentLimits, this.incrementLimits,
+            );
         } else {
             // Invalid event, no audience to discover
             return;

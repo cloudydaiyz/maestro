@@ -2,13 +2,18 @@ import { BaseDbService } from "../../services/base";
 import { ApiService } from "../../services/api";
 import { SystemSetupConfig, defaultConfig, populateConfig } from "../../util/server/test-config";
 import { cleanDbConnections, cleanLogs, startDb, stopDb } from "../../util/server/resources";
+import { DB_NAME } from "../../util/constants";
+import { CoreService } from "../../services/core";
 
 /**
  * Setup the database with the given configuration, opting out of interaction with
  * external services (Google Sheets, Google Forms, etc.)
  */
 async function dbSetup(config: SystemSetupConfig) {
-    const { testTroupes, testEvents, testAudience, testEventsAttended, testDashboards } = populateConfig(config);
+    const { testTroupes, testEvents, testAudience, testEventsAttended, testDashboards, testLimits } = populateConfig(config);
+
+    const core = await CoreService.create();
+    await core.initSystem();
 
     const db = await BaseDbService.create();
     const operations: Promise<any>[] = [];
@@ -17,6 +22,7 @@ async function dbSetup(config: SystemSetupConfig) {
     if(testAudience.length > 0) operations.push(db.audienceColl.insertMany(testAudience));
     if(testEventsAttended.length > 0) operations.push(db.eventsAttendedColl.insertMany(testEventsAttended));
     if(testDashboards.length > 0) operations.push(db.dashboardColl.insertMany(testDashboards));
+    if(testLimits.length > 0) operations.push(db.client.db(DB_NAME).collection("limits").insertMany(testLimits));
 
     await Promise.all(operations).then(() => db.close());
     return config;

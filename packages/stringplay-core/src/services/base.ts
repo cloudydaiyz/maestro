@@ -1,7 +1,7 @@
 // Initialization for all services
 
 import { Collection, MongoClient, ObjectId, WithId } from "mongodb";
-import { AttendeeSchema, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, FieldMatcher, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
+import { AttendeeSchema, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, FieldMatcher, MemberSchema, TroupeDashboardSchema, TroupeLimit, TroupeSchema } from "../types/core-types";
 import { DB_NAME } from "../util/constants";
 import { EventDataMap, AttendeeDataMap } from "../types/service-types";
 import { ClientError } from "../util/error";
@@ -117,12 +117,18 @@ export abstract class EventDataService {
     troupe: WithId<TroupeSchema>;
     eventMap: EventDataMap;
     attendeeMap: AttendeeDataMap;
+    currentLimits: TroupeLimit;
+    incrementLimits: Partial<TroupeLimit>;
 
-    constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap) {
+
+    constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap,
+        currentLimits: TroupeLimit, incrementLimits: Partial<TroupeLimit>) {
+        this.ready = this.init();
         this.troupe = troupe;
         this.eventMap = events;
         this.attendeeMap = members;
-        this.ready = this.init();
+        this.currentLimits = currentLimits;
+        this.incrementLimits = incrementLimits;
     }
 
     /** 

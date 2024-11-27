@@ -8,7 +8,7 @@ import { Mutable, SetOperator, UnsetOperator, UpdateOperator } from "../types/ut
 import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
 import { asyncObjectMap, objectMap, verifyApiMemberPropertyType } from "../util/helper";
-import { toAttendee, toEventType, toMember, toPublicEvent, toTroupe, toTroupeDashboard } from "../util/api-transform";
+import { toAttendee, toEventType, toMember, toPublicEvent, toTroupe, toTroupeDashboard, toTroupeLimits } from "../util/api-transform";
 import { addToSyncQueue } from "../cloud/gcp";
 import assert from "assert";
 import { LimitService } from "./limits";
@@ -24,9 +24,11 @@ export class ApiService extends BaseDbService implements SpringplayApi {
 
     constructor() { 
         super();
-        this.ready = (async () => {
-            this.limitService = await LimitService.create();
-        })();
+        this.ready = this.init();
+    }
+
+    private async init() {
+        this.limitService = await LimitService.create();
     }
 
     async getConsoleData(troupeId: string): Promise<ConsoleData> {
@@ -107,11 +109,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         );
         assert(limitsUpdated, "Failure updating limits for operation");
 
-        const { 
-            _id, docType, troupeId: _, hasInviteCode, 
-            ...publicTroupeLimits 
-        } = troupeLimits;
-        return publicTroupeLimits;
+        return toTroupeLimits(troupeLimits, troupeLimits._id.toHexString());
     }
 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {

@@ -1,7 +1,7 @@
 // Google Sheets event data source
 
 import { ObjectId, WithId } from "mongodb";
-import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "../../../types/core-types";
+import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeLimit, TroupeSchema, VariableMemberProperties } from "../../../types/core-types";
 import { EventDataMap, GoogleSheetsQuestionToTypeMap, AttendeeDataMap } from "../../../types/service-types";
 import { SHEETS_REGEX } from "../../../util/constants";
 
@@ -17,9 +17,10 @@ export class GoogleSheetsEventDataService extends EventDataService {
     columnToTypeMap?: GoogleSheetsQuestionToTypeMap;
     containsMemberId?: boolean;
     
-    constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap) {
-        super(troupe, events, members);
-    }
+    constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap,
+        currentLimits: TroupeLimit, incrementLimits: Partial<TroupeLimit>) { 
+        super(troupe, events, members, currentLimits, incrementLimits);
+    };
 
     init(): Promise<void> {
         return Promise.resolve();
@@ -149,6 +150,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
             }];
             let eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[] = [];
             let fromColl = false;
+            let isNewMember = true;
 
             // Iterate through the values and assign them to the appropriate property
             values.forEach((rawValue, i) => {
@@ -174,6 +176,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
                         eventsAttended = existingMember.eventsAttended.concat(eventsAttended);
                         eventsAttendedDocs = existingMember.eventsAttendedDocs;
                         fromColl = existingMember.fromColl;
+                        isNewMember = false;
                     }
                 }
 
@@ -189,10 +192,15 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 }
             }
 
+            if(isNewMember && this.currentLimits.membersLeft + this.incrementLimits.membersLeft! == 0) {
+                return;
+            }
+
             // Add the member to the list of members.
             this.attendeeMap[member.properties["Member ID"].value] = { 
                 member, eventsAttended, eventsAttendedDocs, fromColl, delete: false 
             };
+            this.incrementLimits.membersLeft! -= 1;
         });
     }
 }

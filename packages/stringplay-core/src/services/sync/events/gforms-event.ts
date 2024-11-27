@@ -2,7 +2,7 @@
 
 import { ObjectId, WithId } from "mongodb";
 import { EventDataMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "../../../types/service-types";
-import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeSchema, VariableMemberProperties } from "../../../types/core-types";
+import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeLimit, TroupeSchema, VariableMemberProperties } from "../../../types/core-types";
 import { FORMS_REGEX } from "../../../util/constants";
 import { forms_v1 } from "googleapis";
 import { getForms } from "../../../cloud/gcp";
@@ -19,8 +19,9 @@ export class GoogleFormsEventDataService extends EventDataService {
     responseData?: GaxiosResponse<forms_v1.Schema$ListFormResponsesResponse>;
     containsMemberId?: true;
 
-    constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap) { 
-        super(troupe, events, members);
+    constructor(troupe: WithId<TroupeSchema>, events: EventDataMap, members: AttendeeDataMap,
+        currentLimits: TroupeLimit, incrementLimits: Partial<TroupeLimit>) { 
+        super(troupe, events, members, currentLimits, incrementLimits);
     };
 
     async init(): Promise<void> {
@@ -231,6 +232,7 @@ export class GoogleFormsEventDataService extends EventDataService {
             }];
             let eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[] = [];
             let fromColl = false;
+            let isNewMember = true;
 
             for(const questionId in response.answers) {
                 const answer = response.answers[questionId];
@@ -275,6 +277,7 @@ export class GoogleFormsEventDataService extends EventDataService {
                             eventsAttended = existingMember.eventsAttended.concat(eventsAttended);
                             eventsAttendedDocs = existingMember.eventsAttendedDocs;
                             fromColl = existingMember.fromColl;
+                            isNewMember = false;
                         }
                     }
 
@@ -291,11 +294,16 @@ export class GoogleFormsEventDataService extends EventDataService {
                 }
             }
 
+            if(isNewMember && this.currentLimits.membersLeft + this.incrementLimits.membersLeft! == 0) {
+                continue;
+            }
+
             // Add the member to the list of members. Member ID already proven
             // to exist in event from discoverAndRefreshAudience method
             this.attendeeMap[member.properties["Member ID"].value] = { 
                 member, eventsAttended, eventsAttendedDocs, fromColl, delete: false 
             };
+            this.incrementLimits.membersLeft! -= 1;
         }
     }
 }

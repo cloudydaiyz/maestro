@@ -1,8 +1,8 @@
 // Transforms data
 
 import type { ApiType, Attendee, EventType, Member, PublicEvent, Troupe, TroupeDashboard } from "../types/api-types";
-import type { AttendeeSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema } from "../types/core-types";
-import type { Replace } from "../types/util-types";
+import type { AttendeeSchema, EventSchema, EventTypeSchema, LimitSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeLimit, TroupeSchema } from "../types/core-types";
+import type { Id, Replace } from "../types/util-types";
 import { removeId } from "./helper";
 
 /** Converts troupe dashboard schema to its public, api-facing counterpart */
@@ -25,6 +25,14 @@ export function toTroupeDashboard(schema: TroupeDashboardSchema, id: string): Tr
         },
         lastUpdated: schema.lastUpdated.toISOString(),
     }
+}
+
+export function toTroupeLimits(schema: LimitSchema, id: string): TroupeLimit & Id {
+    const { 
+        docType, troupeId: _, hasInviteCode, 
+        ...publicTroupeLimits 
+    } = schema;
+    return { id, ...publicTroupeLimits };
 }
 
 /** Converts troupe schema to its public, api-facing counterpart */
