@@ -8,10 +8,9 @@ let controllers: ControllerModule;
 
 /** Sends the API response in a HTTP response */
 function sendResponse(httpRes: functions.Response, apiRes: ApiResponse) {
-    console.log(JSON.stringify(apiRes, null, 4));
     httpRes.status(apiRes.status).set(apiRes.headers);
-
     if(apiRes.body) httpRes.json(apiRes.body);
+
     httpRes.end();
 }
 

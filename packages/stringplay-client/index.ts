@@ -68,10 +68,10 @@ export class StringplayApiClient implements SpringplayApi, SpringplayAuthApi {
         this.credentials = undefined;
     }
 
-    register(username: string, email: string, password: string, troupeName: string): Promise<AxiosResponse<void>> {
+    register(username: string, email: string, password: string, troupeName: string, inviteCode?: string): Promise<AxiosResponse<void>> {
         return axios.post(
             getUrl(this.uri, '/auth/register'),
-            { username, email, password, troupeName },
+            { username, email, password, troupeName, inviteCode },
         );
     }
 

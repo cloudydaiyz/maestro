@@ -21,14 +21,9 @@ export type ApiResponse = {
 
 export type ApiController = (path: string, method: keyof typeof Methods, headers: Object, body: Object) => Promise<ApiResponse>;
 
-// const headers = {
+const defaultHeaders = {
 //     "Access-Control-Allow-Origin": event.headers.origin == "http://localhost:5173" ?
 //         "http://localhost:5173" : "https://qa-pup.pages.dev",
-//     "Access-Control-Allow-Headers": "*",
-//     "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-// };
-
-const defaultHeaders = {
     "Access-Control-Allow-Origin": "http://localhost:5173",
     "Access-Control-Allow-Headers": "*",
     "Access-Control-Allow-Methods": Object.keys(Methods).join(','),
@@ -47,9 +42,13 @@ export function newController(handler: ApiController): ApiController {
 
             const res = await handler(path, method, headers, body);
             res.headers = { ...res.headers, ...defaultHeaders };
+
+            console.log('API action successful.');
+            console.log(res);
             return res;
         } catch(e) {
             const err = e as Error;
+            console.error('Error during API action.');
             console.error(err);
 
             if(err instanceof ZodError) {
@@ -118,11 +117,13 @@ export function newUtilController<T extends Object>(handler: (body: Object) => P
     return async (body: Object) => {
         try {
             const resBody = await handler(body);
+            console.log('Utility action successful.');
             console.log(resBody ? "Response: " + resBody.toString() : "No response body");
     
             return resBody ? { status: 200, headers: {}, body: resBody } : { status: 204, headers: {} };
         } catch(e) {
             const err = e as Error;
+            console.error('Error caught during utility action.');
             console.error(err);
 
             return {

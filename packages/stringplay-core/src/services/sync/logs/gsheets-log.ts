@@ -2,7 +2,6 @@
 
 import type { WithId } from "mongodb";
 import { TroupeSchema, EventSchema, MemberSchema, EventsAttendedBucketSchema, AttendeeSchema } from "../../../types/core-types";
-import { LogSheetService } from "../../base";
 import { sheets_v4 } from "googleapis";
 import { getDrive, getSheets } from "../../../cloud/gcp";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, SHEETS_REGEX } from "../../../util/constants";
@@ -12,6 +11,7 @@ import { LOG_SHEET_DRIVE_ID } from "../../../util/env";
 import { GaxiosResponse } from "gaxios";
 import assert from "assert";
 import { DateParser } from "../../../util/server/date-parser";
+import { LogSheetService } from "../base";
 
 namespace Colors {
     const error = 0.01;

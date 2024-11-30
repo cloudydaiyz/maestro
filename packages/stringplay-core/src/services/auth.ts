@@ -74,7 +74,12 @@ export class AuthService extends BaseDbService implements SpringplayAuthApi {
         const core = await CoreService.create();
         assert(!(await core.getTroupeByName(troupeName)), new ClientError("Troupe already exists"));
 
-        if(!inviteCode) {
+        if(inviteCode) {
+            const hasInviteCode = await this.inviteCodeColl.findOne(
+                { inviteCodes: inviteCode }, 
+            );
+            assert(hasInviteCode, new ClientError("Invalid invite code"));
+        } else {
             const usersLeftSuccess = await limits.incrementGlobalLimit({ uninvitedUsersLeft: -1 });
             assert(usersLeftSuccess, new ClientError("We have reached the maximum capacity for "
                 + "uninvited user creation today. Please try again tomorrow."));
@@ -102,7 +107,6 @@ export class AuthService extends BaseDbService implements SpringplayAuthApi {
                     $set: { [troupeId]: inviteCode },
                 }
             );
-            assert(updateInviteCodes.matchedCount == 1, new ClientError("Invalid invite code"));
             assert(updateInviteCodes.modifiedCount == 1, "Unsuccessful invite code update");
         }
     }

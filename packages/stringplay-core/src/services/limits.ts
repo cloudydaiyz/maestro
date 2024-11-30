@@ -10,7 +10,7 @@ import { UpdateOperator } from "../types/util-types";
 import { GlobalLimitSpecifier, TroupeLimitSpecifier } from "../types/service-types";
 
 export class LimitService extends BaseDbService {
-    private ignoreTroupeLimits: { [troupeId: string]: boolean };
+    ignoreTroupeLimits: { [troupeId: string]: number };
     readonly limitsColl: Collection<LimitCollectionSchema>;
     
     constructor() { 
@@ -102,7 +102,7 @@ export class LimitService extends BaseDbService {
     }
 
     async incrementTroupeLimits(troupeId: string, limitsToInc: TroupeLimitSpecifier): Promise<boolean> {
-        if(this.ignoreTroupeLimits) {
+        if(this.ignoreTroupeLimits[troupeId] < 0) {
             // console.warn("Ignoring limits increment for troupe " + troupeId);
             return true;
         }
@@ -141,7 +141,7 @@ export class LimitService extends BaseDbService {
     }
 
     async withinTroupeLimits(troupeId: string, limitsToInc: TroupeLimitSpecifier): Promise<boolean> {
-        if(this.ignoreTroupeLimits) {
+        if(this.ignoreTroupeLimits[troupeId] < 0) {
             // console.warn("Ignoring limits check for troupe " + troupeId);
             return true;
         }
@@ -167,6 +167,14 @@ export class LimitService extends BaseDbService {
      * ignored during the limit-modifying method. Could lead to bugs if you're not careful.
      */
     toggleIgnoreTroupeLimits(troupeId: string, ignore: boolean) {
-        this.ignoreTroupeLimits[troupeId] = ignore;
+        if(!this.ignoreTroupeLimits[troupeId]) {
+            this.ignoreTroupeLimits[troupeId] = 0;
+        }
+        this.ignoreTroupeLimits[troupeId] += ignore ? -1 : 1;
+    }
+
+    withIgnoreTroupeLimits(troupeId: string, callback: () => Promise<void>): void {
+        this.toggleIgnoreTroupeLimits(troupeId, true);
+        callback().finally(() => this.toggleIgnoreTroupeLimits(troupeId, false));
     }
 }

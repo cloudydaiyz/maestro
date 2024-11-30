@@ -13,6 +13,8 @@ import { addToSyncQueue } from "../cloud/gcp";
 import assert from "assert";
 import { LimitService } from "./limits";
 import { TroupeLimitSpecifier } from "../types/service-types";
+import { UpdateTroupeRequestBuilder } from "./api/requests/update/update-troupe";
+import { ApiRequestBuilder } from "./api/base";
 
 /**
  * Provides method definitions for the API. The structure of all given parameters will
@@ -32,323 +34,298 @@ export class ApiService extends BaseDbService implements SpringplayApi {
     }
 
     async getConsoleData(troupeId: string): Promise<ConsoleData> {
+        let console: Partial<ConsoleData> = {};
 
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(
+        // Get console data
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
+        try {
+            const res = await Promise.all([
+                this.getDashboard(troupeId),
+                this.getLimits(troupeId),
+                this.getTroupe(troupeId),
+                this.getEvents(troupeId),
+                this.getEventTypes(troupeId),
+                this.getAttendees(troupeId),
+            ] as const);
+            
+            console.dashboard = res[0];
+            console.limits = res[1];
+            console.troupe = res[2];
+            console.events = res[3];
+            console.eventTypes = res[4];
+            console.attendees = res[5];
+        } finally {
+            this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+        }
+
+        // Update limits
+        const withinLimits = await this.limitService.incrementTroupeLimits(
             troupeId, { getOperationsLeft: -1 }
         );
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
-        const [
-            dashboard,
-            limits,
-            troupe,
-            events,
-            eventTypes,
-            attendees
-        ] = await Promise.all([
-            this.getDashboard(troupeId),
-            this.getLimits(troupeId),
-            this.getTroupe(troupeId),
-            this.getEvents(troupeId),
-            this.getEventTypes(troupeId),
-            this.getAttendees(troupeId),
-        ]);
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
-
-        // Update limits
-        const limitsUpdated = await this.limitService.incrementTroupeLimits(
-            troupeId, { getOperationsLeft: -1 }
-        );
-        assert(limitsUpdated, "Failure updating limits for operation");
-
-        return {
-            dashboard,
-            limits,
-            troupe,
-            events,
-            eventTypes,
-            attendees
-        };
+        return console as ConsoleData;
     }
 
     async getDashboard(troupeId: string): Promise<TroupeDashboard> {
+        const dashboard = await this.getDashboardSchema(troupeId);
 
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(
+        // Update limits
+        const withinLimits = await this.limitService.incrementTroupeLimits(
             troupeId, { getOperationsLeft: -1 }
         );
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
-        const dashboardObj = await this.getDashboardSchema(troupeId);
-
-        // Update limits
-        const limitsUpdated = await this.limitService.incrementTroupeLimits(
-            troupeId, { getOperationsLeft: -1 }
-        );
-        assert(limitsUpdated, "Failure updating limits for operation");
-
-        return toTroupeDashboard(dashboardObj, dashboardObj._id.toHexString());
+        return toTroupeDashboard(dashboard, dashboard._id.toHexString());
     }
 
     async getLimits(troupeId: string): Promise<TroupeLimit> {
-        
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(
-            troupeId, { getOperationsLeft: -1 }
-        );
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
-
-        const troupeLimits = await this.limitService.getTroupeLimits(troupeId);
-        assert(troupeLimits, new ClientError(`Invalid troupe ID: ${troupeId}`));
+        const idTroupeLimits = await this.limitService.getTroupeLimits(troupeId);
+        assert(idTroupeLimits, new ClientError(`Invalid troupe ID: ${troupeId}`));
 
         // Update limits
-        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+        const withinUpdated = await this.limitService.incrementTroupeLimits(
             troupeId, { getOperationsLeft: -1 }
         );
-        assert(limitsUpdated, "Failure updating limits for operation");
+        assert(withinUpdated, "Failure updating limits for operation");
 
-        return toTroupeLimits(troupeLimits, troupeLimits._id.toHexString());
+        const { _id, ...troupeLimits } = idTroupeLimits;
+        return toTroupeLimits(troupeLimits, idTroupeLimits._id.toHexString());
     }
 
     async getTroupe(troupe: string | WithId<TroupeSchema>): Promise<Troupe> {
-
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(
-            typeof troupe == "string" ? troupe : troupe._id.toHexString(), 
-            { getOperationsLeft: -1 }
-        );
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
-
         const troupeObj = typeof troupe == "string" 
             ? await this.getTroupeSchema(troupe, true)
             : troupe;
         
         // Update limits
-        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+        const withinUpdated = await this.limitService.incrementTroupeLimits(
             troupeObj._id.toHexString(), { getOperationsLeft: -1 }
         );
-        assert(limitsUpdated, "Failure updating limits for operation");
+        assert(withinUpdated, "Failure updating limits for operation");
 
         return toTroupe(troupeObj, troupeObj._id.toHexString());
     }
 
     async updateTroupe(troupeId: string, request: UpdateTroupeRequest): Promise<Troupe> {
-        const troupe = await this.getTroupeSchema(troupeId, true);
-        assert(!troupe.syncLock, new ClientError("Cannot update troupe while sync is in progress"));
+        // const troupe = await this.getTroupeSchema(troupeId, true);
+        // assert(!troupe.syncLock, new ClientError("Cannot update troupe while sync is in progress"));
 
-        // Prepare for the database update
-        const troupeUpdate = { 
-            $set: {} as UpdateOperator<TroupeSchema, "$set">, 
-            $unset: {} as UpdateOperator<TroupeSchema, "$unset">,
-        }
-        const limitSpecifier: TroupeLimitSpecifier = { modifyOperationsLeft: -1 };
+        // // Prepare for the database update
+        // const troupeUpdate = { 
+        //     $set: {} as UpdateOperator<TroupeSchema, "$set">, 
+        //     $unset: {} as UpdateOperator<TroupeSchema, "$unset">,
+        // }
+        // const limitSpecifier: TroupeLimitSpecifier = { modifyOperationsLeft: -1 };
 
-        // Set the name and the last updated
-        troupeUpdate.$set.lastUpdated = new Date();
-        request.name ? troupeUpdate.$set.name = request.name : null;
+        // // Set the name and the last updated
+        // troupeUpdate.$set.lastUpdated = new Date();
+        // request.name ? troupeUpdate.$set.name = request.name : null;
 
-        // Ensure the origin event is valid before setting it
-        if(request.originEventId) {
-            const event = await this.eventColl.findOne({ _id: new ObjectId(request.originEventId) });
-            assert(event, new ClientError("Unable to find specified origin event"));
-            troupeUpdate.$set.originEventId = request.originEventId;
-        }
+        // // Ensure the origin event is valid before setting it
+        // if(request.originEventId) {
+        //     const event = await this.eventColl.findOne({ _id: new ObjectId(request.originEventId) });
+        //     assert(event, new ClientError("Unable to find specified origin event"));
+        //     troupeUpdate.$set.originEventId = request.originEventId;
+        // }
 
-        // Update member properties; must wait until next sync to synchronize member properties.
-        if(request.updateMemberProperties) {
-            const initialNumMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
-            let numMemberProperties = initialNumMemberProperties;
+        // // Update member properties; must wait until next sync to synchronize member properties.
+        // if(request.updateMemberProperties) {
+        //     const initialNumMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
+        //     let numMemberProperties = initialNumMemberProperties;
 
-            // Ignore member properties to be removed and ensure no base member properties get updated
-            for(const key in request.updateMemberProperties) {
-                assert(
-                    !(key in BASE_MEMBER_PROPERTY_TYPES), 
-                    new ClientError("Cannot modify base member properties")
-                );
+        //     // Ignore member properties to be removed and ensure no base member properties get updated
+        //     for(const key in request.updateMemberProperties) {
+        //         assert(
+        //             !(key in BASE_MEMBER_PROPERTY_TYPES), 
+        //             new ClientError("Cannot modify base member properties")
+        //         );
                 
-                if(!(request.removeMemberProperties?.includes(key))) {
-                    troupeUpdate.$set[`memberPropertyTypes.${key}`] = request.updateMemberProperties[key];
-                    if(!(key in troupe.memberPropertyTypes)) numMemberProperties++;
-                }
-            }
+        //         if(!(request.removeMemberProperties?.includes(key))) {
+        //             troupeUpdate.$set[`memberPropertyTypes.${key}`] = request.updateMemberProperties[key];
+        //             if(!(key in troupe.memberPropertyTypes)) numMemberProperties++;
+        //         }
+        //     }
 
-            assert(
-                numMemberProperties <= MAX_MEMBER_PROPERTIES, 
-                new ClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`)
-            );
+        //     assert(
+        //         numMemberProperties <= MAX_MEMBER_PROPERTIES, 
+        //         new ClientError(`Cannot have more than ${MAX_POINT_TYPES} member properties`)
+        //     );
 
-            const newLimit = initialNumMemberProperties - numMemberProperties;
-            if(newLimit !== 0) {
-                limitSpecifier.memberPropertyTypesLeft = newLimit;
-            }
-        }
+        //     const newLimit = initialNumMemberProperties - numMemberProperties;
+        //     if(newLimit !== 0) {
+        //         limitSpecifier.memberPropertyTypesLeft = newLimit;
+        //     }
+        // }
 
-        // Remove member properties & ensure no base member properties are requested for removal
-        if(request.removeMemberProperties) {
-            const initialNumMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
-            let numMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
+        // // Remove member properties & ensure no base member properties are requested for removal
+        // if(request.removeMemberProperties) {
+        //     const initialNumMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
+        //     let numMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
 
-            for(const key of request.removeMemberProperties) {
-                assert(
-                    !(key in BASE_MEMBER_PROPERTY_TYPES), 
-                    new ClientError("Cannot delete base member properties")
-                );
-                if(key in troupe.memberPropertyTypes) {
-                    troupeUpdate.$unset[`memberPropertyTypes.${key}`] = "";
-                    numMemberProperties--;
-                }
-            }
+        //     for(const key of request.removeMemberProperties) {
+        //         assert(
+        //             !(key in BASE_MEMBER_PROPERTY_TYPES), 
+        //             new ClientError("Cannot delete base member properties")
+        //         );
+        //         if(key in troupe.memberPropertyTypes) {
+        //             troupeUpdate.$unset[`memberPropertyTypes.${key}`] = "";
+        //             numMemberProperties--;
+        //         }
+        //     }
 
-            const newLimit = initialNumMemberProperties - numMemberProperties;
-            if(newLimit !== 0) {
-                if(!limitSpecifier.memberPropertyTypesLeft) {
-                    limitSpecifier.memberPropertyTypesLeft = 0;
-                }
-                limitSpecifier.memberPropertyTypesLeft += newLimit;
-            }
-        }
+        //     const newLimit = initialNumMemberProperties - numMemberProperties;
+        //     if(newLimit !== 0) {
+        //         if(!limitSpecifier.memberPropertyTypesLeft) {
+        //             limitSpecifier.memberPropertyTypesLeft = 0;
+        //         }
+        //         limitSpecifier.memberPropertyTypesLeft += newLimit;
+        //     }
+        // }
 
-        // Update point types
-        if(request.updatePointTypes) {
-            const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
-            let numPointTypes = Object.keys(troupe.pointTypes).length;
-            // let newPointTypes = troupe.pointTypes;
+        // // Update point types
+        // if(request.updatePointTypes) {
+        //     const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
+        //     let numPointTypes = Object.keys(troupe.pointTypes).length;
+        //     // let newPointTypes = troupe.pointTypes;
 
-            for(const key in request.updatePointTypes) {
-                const pointType = {
-                    startDate: new Date(request.updatePointTypes[key].startDate),
-                    endDate: new Date(request.updatePointTypes[key].endDate),
-                }
-                assert(pointType.startDate.toString() != "Invalid Date" && pointType.endDate.toString() != "Invalid Date", 
-                    new ClientError("Invalid date syntax"))
-                assert(!(key in BASE_POINT_TYPES_OBJ), new ClientError("Cannot modify base point types"));
-                assert(pointType.startDate < pointType.endDate, new ClientError("Invalid point type date range"));
+        //     for(const key in request.updatePointTypes) {
+        //         const pointType = {
+        //             startDate: new Date(request.updatePointTypes[key].startDate),
+        //             endDate: new Date(request.updatePointTypes[key].endDate),
+        //         }
+        //         assert(pointType.startDate.toString() != "Invalid Date" && pointType.endDate.toString() != "Invalid Date", 
+        //             new ClientError("Invalid date syntax"))
+        //         assert(!(key in BASE_POINT_TYPES_OBJ), new ClientError("Cannot modify base point types"));
+        //         assert(pointType.startDate < pointType.endDate, new ClientError("Invalid point type date range"));
 
-                if(!(request.removePointTypes?.includes(key))) {
-                    troupeUpdate.$set[`pointTypes.${key}`] = pointType;
-                    if(!(key in troupe.pointTypes)) numPointTypes++;
-                }
-                // newPointTypes[key] = pointType;
-            }
-            assert(
-                numPointTypes <= MAX_POINT_TYPES, 
-                new ClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`)
-            );
+        //         if(!(request.removePointTypes?.includes(key))) {
+        //             troupeUpdate.$set[`pointTypes.${key}`] = pointType;
+        //             if(!(key in troupe.pointTypes)) numPointTypes++;
+        //         }
+        //         // newPointTypes[key] = pointType;
+        //     }
+        //     assert(
+        //         numPointTypes <= MAX_POINT_TYPES, 
+        //         new ClientError(`Cannot have more than ${MAX_POINT_TYPES} point types`)
+        //     );
             
-            // *FUTURE: Update point calculations for members
+        //     // *FUTURE: Update point calculations for members
 
-            const newLimit = initialNumPointTypes - numPointTypes;
-            if(newLimit !== 0) {
-                limitSpecifier.pointTypesLeft = newLimit;
-            }
-        }
+        //     const newLimit = initialNumPointTypes - numPointTypes;
+        //     if(newLimit !== 0) {
+        //         limitSpecifier.pointTypesLeft = newLimit;
+        //     }
+        // }
 
-        // Remove point types
-        if(request.removePointTypes) {
-            const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
-            let numPointTypes = Object.keys(troupe.pointTypes).length;
+        // // Remove point types
+        // if(request.removePointTypes) {
+        //     const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
+        //     let numPointTypes = Object.keys(troupe.pointTypes).length;
 
-            for(const key of request.removePointTypes) {
-                assert(!(key in BASE_POINT_TYPES_OBJ), new ClientError("Cannot delete base point types"));
-                if(key in troupe.pointTypes) {
-                    troupeUpdate.$unset[`pointTypes.${key}`] = "";
-                    numPointTypes++;
-                }
-            }
+        //     for(const key of request.removePointTypes) {
+        //         assert(!(key in BASE_POINT_TYPES_OBJ), new ClientError("Cannot delete base point types"));
+        //         if(key in troupe.pointTypes) {
+        //             troupeUpdate.$unset[`pointTypes.${key}`] = "";
+        //             numPointTypes++;
+        //         }
+        //     }
 
-            const newLimit = initialNumPointTypes - numPointTypes;
-            if(newLimit !== 0) {
-                if(!limitSpecifier.pointTypesLeft) {
-                    limitSpecifier.pointTypesLeft = 0;
-                }
-                limitSpecifier.pointTypesLeft += newLimit;
-            }
-        }
+        //     const newLimit = initialNumPointTypes - numPointTypes;
+        //     if(newLimit !== 0) {
+        //         if(!limitSpecifier.pointTypesLeft) {
+        //             limitSpecifier.pointTypesLeft = 0;
+        //         }
+        //         limitSpecifier.pointTypesLeft += newLimit;
+        //     }
+        // }
 
-        if(request.updateFieldMatchers) {
-            const initialNumMatchers = troupe.fieldMatchers.length;
-            const updatedMatchers = structuredClone(troupe.fieldMatchers);
+        // if(request.updateFieldMatchers) {
+        //     const initialNumMatchers = troupe.fieldMatchers.length;
+        //     const updatedMatchers = structuredClone(troupe.fieldMatchers);
 
-            for(let i = 0; i < request.updateFieldMatchers.length; i++) {
-                const matcher = request.updateFieldMatchers[i];
-                let unique = true;
+        //     for(let i = 0; i < request.updateFieldMatchers.length; i++) {
+        //         const matcher = request.updateFieldMatchers[i];
+        //         let unique = true;
+        //         let validProperty = false;
 
-                // Ensure uniqueness of regex and priority
-                if(matcher) {
-                    for(let j = 0; unique && j < request.updateFieldMatchers.length; j++) {
-                        if(j == i) continue;
+        //         // Ensure uniqueness of regex and priority
+        //         if(matcher) {
+        //             for(let j = 0; unique && j < request.updateFieldMatchers.length; j++) {
+        //                 if(j == i) continue;
                         
-                        // Check if this matcher is different from the other matcher
-                        const otherMatcher: FieldMatcher | undefined = request.updateFieldMatchers[j] || troupe.fieldMatchers[j];
-                        const diffFromOtherMatcher = matcher.fieldExpression != otherMatcher.fieldExpression
-                            && matcher.priority != otherMatcher.priority;
-                        unique = unique && (!otherMatcher || diffFromOtherMatcher);
-                    }
-                }
+        //                 // Check if this matcher is different from the other matcher
+        //                 const otherMatcher: FieldMatcher | undefined = request.updateFieldMatchers[j] || troupe.fieldMatchers[j];
+        //                 const diffFromOtherMatcher = matcher.fieldExpression != otherMatcher.fieldExpression
+        //                     && matcher.priority != otherMatcher.priority;
+        //                 unique = unique && (!otherMatcher || diffFromOtherMatcher);
+        //             }
+        //             validProperty = matcher.memberProperty in troupe.memberPropertyTypes;
+        //         }
 
-                // Add the matcher if it's unique
-                if(matcher && unique) updatedMatchers.push(matcher);
-            }
+        //         // Add the matcher if it's unique and valid
+        //         if(matcher && unique && validProperty) updatedMatchers.push(matcher);
+        //     }
 
-            // Ensure the field matchers have the correct ordering before storing
-            updatedMatchers.sort((a, b) => a.priority - b.priority);
-            troupeUpdate.$set.fieldMatchers = updatedMatchers;
+        //     // Ensure the field matchers have the correct ordering before storing
+        //     updatedMatchers.sort((a, b) => a.priority - b.priority);
+        //     troupeUpdate.$set.fieldMatchers = updatedMatchers;
 
-            const newLimit = initialNumMatchers - updatedMatchers.length;
-            if(newLimit) {
-                limitSpecifier.fieldMatchersLeft = newLimit;
-            }
-        }
+        //     const newLimit = initialNumMatchers - updatedMatchers.length;
+        //     if(newLimit) {
+        //         limitSpecifier.fieldMatchersLeft = newLimit;
+        //     }
+        // }
 
-        if(request.removeFieldMatchers) {
-            request.removeFieldMatchers.sort();
-            const initialNumMatchers = troupe.fieldMatchers.length;
-            const updatedMatchers = structuredClone(troupe.fieldMatchers);
+        // if(request.removeFieldMatchers) {
+        //     request.removeFieldMatchers.sort();
+        //     const initialNumMatchers = troupe.fieldMatchers.length;
+        //     const updatedMatchers = structuredClone(troupe.fieldMatchers);
 
-            // Validate the remove field matchers
-            for(let i = request.removeFieldMatchers.length - 1; i >= 0; i--) {
-                const index = request.removeFieldMatchers[i];
-                const indexOutOfRange = !(0 <= index && index < updatedMatchers.length);
-                const indexNotUnique = index < request.removeFieldMatchers.length - 1 && index == index + 1;
-                if(indexOutOfRange || indexNotUnique) {
-                    request.removeFieldMatchers.slice(i, 1);
-                }
-            }
+        //     // Validate the remove field matchers
+        //     for(let i = request.removeFieldMatchers.length - 1; i >= 0; i--) {
+        //         const index = request.removeFieldMatchers[i];
+        //         const indexOutOfRange = !(0 <= index && index < updatedMatchers.length);
+        //         const indexNotUnique = index < request.removeFieldMatchers.length - 1 && index == index + 1;
+        //         if(indexOutOfRange || indexNotUnique) {
+        //             request.removeFieldMatchers.slice(i, 1);
+        //         }
+        //     }
 
-            // Remove the validated field matchers from the troupe
-            for(let i = request.removeFieldMatchers.length - 1; i >= 0; i--) {
-                const index = request.removeFieldMatchers[i];
-                updatedMatchers.splice(index, 1);
-            }
-            troupeUpdate.$set.fieldMatchers = updatedMatchers;
+        //     // Remove the validated field matchers from the troupe
+        //     for(let i = request.removeFieldMatchers.length - 1; i >= 0; i--) {
+        //         const index = request.removeFieldMatchers[i];
+        //         updatedMatchers.splice(index, 1);
+        //     }
+        //     troupeUpdate.$set.fieldMatchers = updatedMatchers;
 
-            const newLimit = initialNumMatchers - updatedMatchers.length;
-            if(newLimit) {
-                if(!limitSpecifier.fieldMatchersLeft) {
-                    limitSpecifier.fieldMatchersLeft = 0;
-                }
-                limitSpecifier.fieldMatchersLeft += newLimit;
-            }
-        }
+        //     const newLimit = initialNumMatchers - updatedMatchers.length;
+        //     if(newLimit) {
+        //         if(!limitSpecifier.fieldMatchersLeft) {
+        //             limitSpecifier.fieldMatchersLeft = 0;
+        //         }
+        //         limitSpecifier.fieldMatchersLeft += newLimit;
+        //     }
+        // }
 
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(troupeId, limitSpecifier);
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+        // // Check if this operation is within the troupe's limits
+        // const withinLimits = await this.limitService.withinTroupeLimits(troupeId, limitSpecifier);
+        // assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
-        // Perform database update
-        const newTroupe = await this.troupeColl.findOneAndUpdate(
-            { _id: new ObjectId(troupeId) }, 
-            troupeUpdate,
-            { returnDocument: "after" }
-        );
-        assert(newTroupe, "Failed to update troupe");
-        // *FUTURE: Update members with the new point types
+        // // Perform database update
+        // const newTroupe = await this.troupeColl.findOneAndUpdate(
+        //     { _id: new ObjectId(troupeId) }, 
+        //     troupeUpdate,
+        //     { returnDocument: "after" }
+        // );
+        // assert(newTroupe, "Failed to update troupe");
+        // // *FUTURE: Update members with the new point types
 
-        // Update limits
-        const limitsUpdated = await this.limitService.incrementTroupeLimits(troupeId, limitSpecifier);
-        assert(limitsUpdated, "Failure updating limits for operation");
+        // // Update limits
+        // const limitsUpdated = await this.limitService.incrementTroupeLimits(troupeId, limitSpecifier);
+        // assert(limitsUpdated, "Failure updating limits for operation");
+
+        const [ newTroupe ] = await UpdateTroupeRequestBuilder.execute(troupeId, request);
         
         // Return public facing version of the new troupe
         return this.getTroupe(newTroupe);
@@ -641,7 +618,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
-        const response = asyncObjectMap<BulkUpdateEventRequest, BulkUpdateEventResponse>(
+        const response = await asyncObjectMap<BulkUpdateEventRequest, BulkUpdateEventResponse>(
             request, 
             async (eventId, request) => [
                 eventId as string, 
@@ -773,7 +750,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
-        const eventTypes = Promise.all(requests.map(r => this.createEventType(troupeId, r)));
+        const eventTypes = await Promise.all(requests.map(r => this.createEventType(troupeId, r)));
         this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
 
         // Update limits
@@ -821,7 +798,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
 
         this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
         const eventTypes = await Promise.all(
-            troupe.eventTypes.map(et => this.getEventType(et._id.toHexString()))
+            troupe.eventTypes.map(et => this.getEventType(et))
         );
         this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
 
@@ -1018,7 +995,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         // event type update has to update the source folder uris as well, which
         // isn't known until update time. Need a better way to handle this in the
         // future.
-        const response = asyncObjectMap<BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse>(
+        const response = await asyncObjectMap<BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse>(
             request, 
             async (eventTypeId, request) => [
                 eventTypeId as string, 
@@ -1157,7 +1134,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
-        const members = Promise.all(requests.map(r => this.createMember(troupeId, r)));
+        const members = await Promise.all(requests.map(r => this.createMember(troupeId, r)));
         this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
 
         // Update limits
@@ -1354,7 +1331,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         );
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
         
-        const response = asyncObjectMap<BulkUpdateMemberRequest, BulkUpdateMemberResponse>(
+        const response = await asyncObjectMap<BulkUpdateMemberRequest, BulkUpdateMemberResponse>(
             request, 
             async (memberId, request) => [
                 memberId as string, 

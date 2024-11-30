@@ -4,12 +4,13 @@ import assert from "assert";
 import { CreateTroupeRequest, SyncRequest } from "../types/service-types";
 import { Collection, ObjectId, WithId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, DB_NAME, DEFAULT_MATCHERS } from "../util/constants";
-import { BaseDbService, LogSheetService } from "./base";
+import { BaseDbService } from "./base";
 import { GoogleSheetsLogService } from "./sync/logs/gsheets-log";
 import { bulkAddToSyncQueue } from "../cloud/gcp";
 import { InviteCodeSchema, TroupeSchema } from "../types/core-types";
 import { INVITE_CODES } from "../util/env";
 import { LimitService } from "./limits";
+import { LogSheetService } from "./sync/base";
 
 export class CoreService extends BaseDbService {
     readonly inviteCodeColl: Collection<InviteCodeSchema>;
@@ -94,25 +95,27 @@ export class CoreService extends BaseDbService {
 
     /** Deletes a troupe and its associated data (log, audience, events, dashboard) */
     async deleteTroupe(troupeId: string): Promise<void> {
-        return this.client.startSession().withTransaction(async () => {
+        let logSheetUri: string;
+
+        await this.client.startSession().withTransaction(async () => {
             const troupe = await this.getTroupeSchema(troupeId, true);
             const limitService = await LimitService.create();
-            const logService: LogSheetService = new GoogleSheetsLogService();
-            await logService.deleteLog(troupe.logSheetUri);
+            logSheetUri = troupe.logSheetUri;
+            
+            await this.troupeColl.deleteOne({ _id: new ObjectId(troupeId) });
+            await this.dashboardColl.deleteOne({ troupeId });
+            await this.audienceColl.deleteMany({ troupeId });
+            await this.eventColl.deleteMany({ troupeId });
+            await limitService.removeTroupeLimits(troupeId);
 
-            return Promise.all([
-                this.troupeColl.deleteOne({ _id: new ObjectId(troupeId) }),
-                this.dashboardColl.deleteOne({ troupeId }),
-                this.audienceColl.deleteMany({ troupeId }),
-                this.eventColl.deleteMany({ troupeId }),
-                limitService.removeTroupeLimits(troupeId),
-            ]).then((res) => {
-                assert(
-                    res.every(r => r && "acknowledged" in r ? r.acknowledged : true ), 
-                    "Failed to fully delete troupe"
-                );
-            });
+            // assert(
+            //     res.every(r => r && "acknowledged" in r ? r.acknowledged : true ), 
+            //     "Failed to fully delete troupe"
+            // );
         });
+
+        const logService: LogSheetService = new GoogleSheetsLogService();
+        await logService.deleteLog(logSheetUri!);
     }
 
     /** Retrieves a troupe schema with the given name */

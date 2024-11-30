@@ -7,6 +7,7 @@ import { DEV_MODE } from "./util/env";
 import { cleanDbConnections, cleanLogs, startDb } from "./util/server/resources";
 import { Methods } from "./util/server/rest";
 import { Server } from "http";
+import { CoreService } from "./services/core";
 
 type ControllerModule = typeof import("./controllers");
 let server: Server;
@@ -16,6 +17,8 @@ export async function init(): Promise<ControllerModule> {
     if(DEV_MODE) {
         await startDb();
     }
+
+    await CoreService.create().then(c => c.initSystem());
 
     // To cover the case of testing locally, delay the controller imports so that the in-memory MongoDB server can be used
     const controllers = await import("./controllers");

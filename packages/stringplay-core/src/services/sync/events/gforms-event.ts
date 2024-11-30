@@ -7,10 +7,10 @@ import { FORMS_REGEX } from "../../../util/constants";
 import { forms_v1 } from "googleapis";
 import { getForms } from "../../../cloud/gcp";
 import { GaxiosResponse } from "gaxios";
-import { EventDataService } from "../../base";
 import assert from "assert";
 import { getDataSourceId } from "../../../util/helper";
 import { DateParser } from "../../../util/server/date-parser";
+import { EventDataService } from "../base";
 
 export class GoogleFormsEventDataService extends EventDataService {
     forms!: forms_v1.Forms;

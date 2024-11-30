@@ -9,10 +9,11 @@ import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "../types/util-types";
 import { GoogleFormsEventDataService } from "./sync/events/gforms-event";
 import { GoogleSheetsEventDataService } from "./sync/events/gsheets-event";
-import { BaseDbService, EventDataService } from "./base";
+import { BaseDbService } from "./base";
 import assert from "assert";
 import { GoogleSheetsLogService } from "./sync/logs/gsheets-log";
 import { LimitService } from "./limits";
+import { EventDataService } from "./sync/base";
 
 /**
  * Synchronizes the troupe with its source uris for events and event types, then updates the
@@ -74,18 +75,23 @@ export class TroupeSyncService extends BaseDbService {
         );
         assert(this.troupe, "Failed to lock troupe for sync");
 
-        this.dashboard = await this.dashboardColl.findOne({ troupeId });
-        assert(this.dashboard, "Failed to get dashboard for sync");
-
-        const limits = await this.limitService.getTroupeLimits(troupeId);
-        assert(limits, "No limits document found for troupe");
-        this.currentLimits = limits;
-
-        // Perform sync
-        await this.discoverEvents();
-        await this.discoverAndRefreshAudience();
-        await this.persistSync();
-        if(!skipLogPublish) await this.refreshLogSheet();
+        try {
+            this.dashboard = await this.dashboardColl.findOne({ troupeId });
+            assert(this.dashboard, "Failed to get dashboard for sync");
+    
+            const limits = await this.limitService.getTroupeLimits(troupeId);
+            assert(limits, "No limits document found for troupe");
+            this.currentLimits = limits;
+    
+            // Perform sync
+            await this.discoverEvents();
+            await this.discoverAndRefreshAudience();
+            await this.persistSync();
+            if(!skipLogPublish) await this.refreshLogSheet();
+        } catch(e) {
+            console.error('Unable to complete troupe sync.');
+            console.error('Reason:', e);
+        }
         
         // Unlock the troupe
         const unlockResult = await this.troupeColl.updateOne(
@@ -546,8 +552,18 @@ export class TroupeSyncService extends BaseDbService {
         persistResults.push(this.eventsAttendedColl.deleteMany({ _id: { $in: eventsAttendedToDelete } }));
 
         persistResults.push(this.dashboardColl.updateOne({ troupeId }, { $set: dashboardUpdate }, { upsert: true }));
+
+        try {
+            const updateLimits = await this.limitService.incrementTroupeLimits(troupeId, this.incrementLimits);
+            assert(updateLimits, "Invalid state -- limits exceeded for sync operation. This is unintended behavior.");
+            await Promise.all(persistResults);
+        } catch(e) {
+            // Something wrong with the limit update / the way we calculated limits.
+            // Log and continue for now.
+            console.error("Unable to update troupe limits. Skipping...");
+            console.error("Problem:", e);
+        }
         
-        await Promise.all(persistResults);
     }
 
     /** Update the log sheet with the new information from this sync */

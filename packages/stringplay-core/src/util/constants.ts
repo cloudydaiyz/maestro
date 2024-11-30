@@ -1,6 +1,11 @@
 import { FieldMatcher, LimitSchema } from "../types/core-types";
 
 export const DB_NAME = "maestro";
+export const TROUPE_COLL = "troupes";
+export const DASHBOARD_COLL = "dashboards";
+export const AUDIENCE_COLL = "audience";
+export const EVENT_COLL = "events";
+export const EVENTS_ATTENDED_COLL = "eventsAttended";
 
 export const FULL_DAY = 1000 * 60 * 60 * 24;
 

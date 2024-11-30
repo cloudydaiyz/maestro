@@ -8,9 +8,9 @@ import { SHEETS_REGEX } from "../../../util/constants";
 import { parse } from "csv-parse";
 import { Readable } from "stream";
 import assert from "assert";
-import { EventDataService } from "../../base";
 import { getDataSourceId } from "../../../util/helper";
 import { DateParser } from "../../../util/server/date-parser";
+import { EventDataService } from "../base";
 
 export class GoogleSheetsEventDataService extends EventDataService {
     results?: string[][];
