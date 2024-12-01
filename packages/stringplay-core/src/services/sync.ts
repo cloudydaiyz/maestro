@@ -560,8 +560,8 @@ export class TroupeSyncService extends BaseDbService {
         } catch(e) {
             // Something wrong with the limit update / the way we calculated limits.
             // Log and continue for now.
-            console.error("Unable to update troupe limits. Skipping...");
-            console.error("Problem:", e);
+            console.warn(`Unable to update troupe limits for troupe ${troupeId}. Skipping...`);
+            // console.warn("Problem:", e);
         }
         
     }

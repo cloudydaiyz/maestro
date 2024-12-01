@@ -1,12 +1,12 @@
 import { Document, ObjectId, UpdateOneModel, WithId } from "mongodb";
-import { Troupe, UpdateTroupeRequest } from "../../../../types/api-types";
-import { TroupeLimitSpecifier } from "../../../../types/service-types";
-import { ApiRequestBuilder, DbWriteRequest } from "../../base";
+import { Troupe, UpdateTroupeRequest } from "../../../types/api-types";
+import { TroupeLimitSpecifier } from "../../../types/service-types";
+import { ApiRequestBuilder, DbWriteRequest } from "../base";
 import assert from "assert";
-import { ClientError } from "../../../../util/error";
-import { EventSchema, FieldMatcher, TroupeSchema } from "../../../../types/core-types";
-import { UpdateOperator } from "../../../../types/util-types";
-import { BASE_MEMBER_PROPERTY_TYPES, MAX_MEMBER_PROPERTIES, MAX_POINT_TYPES, BASE_POINT_TYPES_OBJ, TROUPE_COLL } from "../../../../util/constants";
+import { ClientError } from "../../../util/error";
+import { EventSchema, FieldMatcher, TroupeSchema } from "../../../types/core-types";
+import { UpdateOperator } from "../../../types/util-types";
+import { BASE_MEMBER_PROPERTY_TYPES, MAX_MEMBER_PROPERTIES, MAX_POINT_TYPES, BASE_POINT_TYPES_OBJ, TROUPE_COLL } from "../../../util/constants";
 
 type TroupeDbUpdate = { 
     $set: UpdateOperator<TroupeSchema, "$set">, 
@@ -18,8 +18,8 @@ export class UpdateTroupeRequestBuilder extends ApiRequestBuilder<UpdateTroupeRe
     originEvents?: WithId<EventSchema>[];
 
     async readData(): Promise<void> {
-        assert(this.troupeId, "Invalid state; no troupe ID specified");
-        const troupe = await this.getTroupeSchema(this.troupeId, true);
+        assert(this.troupeId, new ClientError("Invalid state; no troupe ID specified"));
+        this.troupe = await this.getTroupeSchema(this.troupeId, true);
 
         // Ensures specified origin events exists before setting it
         this.originEvents = [];
@@ -31,7 +31,7 @@ export class UpdateTroupeRequestBuilder extends ApiRequestBuilder<UpdateTroupeRe
             }
         });
 
-        assert(!troupe.syncLock, new ClientError("Cannot update troupe while sync is in progress"));
+        assert(!this.troupe.syncLock, new ClientError("Cannot update troupe while sync is in progress"));
     }
 
     processRequests(): [TroupeLimitSpecifier, DbWriteRequest<TroupeSchema>[]] {
@@ -80,7 +80,7 @@ export class UpdateTroupeRequestBuilder extends ApiRequestBuilder<UpdateTroupeRe
             writeRequests.push({
                 collection: TROUPE_COLL,
                 request: {
-                    filter: { _id: new ObjectId(this.troupeId!), troupeId: this.troupeId! },
+                    filter: { _id: new ObjectId(this.troupeId!) },
                     update: troupeUpdate,
                 },
             });
@@ -95,6 +95,7 @@ export class UpdateTroupeRequestBuilder extends ApiRequestBuilder<UpdateTroupeRe
         const res = await this.troupeColl.bulkWrite(writeRequests.map(r => (
             { updateOne: r.request as UpdateOneModel<TroupeSchema> }
         )));
+        
         assert(
             res.isOk(), 
             "Unable to perform bulk write request. Errors: " + 
@@ -103,7 +104,6 @@ export class UpdateTroupeRequestBuilder extends ApiRequestBuilder<UpdateTroupeRe
 
         // NOTE: Add functionality for bulk update in the future when necessary
         const newTroupe = await this.getTroupeSchema(this.troupeId, true);
-
         return [ newTroupe ];
     }
 }

@@ -100,7 +100,6 @@ export const DEFAULT_MATCHERS: FieldMatcher[] = [
 
 export const INVITED_TROUPE_LIMIT : Omit<LimitSchema, "troupeId" | "hasInviteCode"> = {
     docType: "troupeLimit" as const,
-    getOperationsLeft: 30,
     modifyOperationsLeft: 30,
     manualSyncsLeft: 5,
 
@@ -108,7 +107,7 @@ export const INVITED_TROUPE_LIMIT : Omit<LimitSchema, "troupeId" | "hasInviteCod
     pointTypesLeft: 5,
     fieldMatchersLeft: 15,
 
-    eventTypesLeft: 10,
+    eventTypesLeft: 20,
     sourceFolderUrisLeft: 20,
 
     eventsLeft: 100,
@@ -117,16 +116,15 @@ export const INVITED_TROUPE_LIMIT : Omit<LimitSchema, "troupeId" | "hasInviteCod
 
 export const UNINVITED_TROUPE_LIMIT: Omit<LimitSchema, "troupeId" | "hasInviteCode"> = {
     docType: "troupeLimit" as const,
-    getOperationsLeft: 10,
     modifyOperationsLeft: 10,
     manualSyncsLeft: 2,
 
-    memberPropertyTypesLeft: 7,
-    pointTypesLeft: 2,
+    memberPropertyTypesLeft: 5,
+    pointTypesLeft: 3,
     fieldMatchersLeft: 10,
 
-    eventTypesLeft: 2,
-    sourceFolderUrisLeft: 2,
+    eventTypesLeft: 5,
+    sourceFolderUrisLeft: 5,
 
     eventsLeft: 20,
     membersLeft: 200,

@@ -267,7 +267,6 @@ export interface LimitSchema {
     troupeId: string,
     hasInviteCode: boolean,
 
-    getOperationsLeft: number,
     modifyOperationsLeft: number,
     manualSyncsLeft: number,
 

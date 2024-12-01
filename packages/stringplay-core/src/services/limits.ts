@@ -85,13 +85,11 @@ export class LimitService extends BaseDbService {
         const refreshDoc: UpdateFilter<LimitSchema> = {};
         if(hasInviteCode) {
             refreshDoc.$set = {
-                getOperationsLeft: INVITED_TROUPE_LIMIT.getOperationsLeft,
                 modifyOperationsLeft: INVITED_TROUPE_LIMIT.modifyOperationsLeft,
                 manualSyncsLeft: INVITED_TROUPE_LIMIT.manualSyncsLeft,
             }
         } else {
             refreshDoc.$set = {
-                getOperationsLeft: UNINVITED_TROUPE_LIMIT.getOperationsLeft,
                 modifyOperationsLeft: UNINVITED_TROUPE_LIMIT.modifyOperationsLeft,
                 manualSyncsLeft: UNINVITED_TROUPE_LIMIT.manualSyncsLeft,
             }
@@ -141,6 +139,7 @@ export class LimitService extends BaseDbService {
     }
 
     async withinTroupeLimits(troupeId: string, limitsToInc: TroupeLimitSpecifier): Promise<boolean> {
+
         if(this.ignoreTroupeLimits[troupeId] < 0) {
             // console.warn("Ignoring limits check for troupe " + troupeId);
             return true;
@@ -151,7 +150,7 @@ export class LimitService extends BaseDbService {
 
         for(const limit in limitsToInc) {
             const lim = limit as keyof typeof limitsToInc;
-            if(troupeLimits[lim] + limitsToInc[lim]! == 0) {
+            if(troupeLimits[lim] == 0) {
                 return false;
             }
         }

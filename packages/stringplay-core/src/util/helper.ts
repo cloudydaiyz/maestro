@@ -139,6 +139,25 @@ export function arrayToObject<T, U>(
     return obj;
 }
 
+/** Converts an array to an object */
+export async function asyncArrayToObject<T, U>(
+    arr: T[], 
+    fn: (value: T, index: number) => Promise<[keyof U, U[keyof U]]>
+): Promise<U> {
+    const obj: U = {} as U;
+    const ops = [];
+    for(let i = 0; i < arr.length; i++) {
+        ops.push(
+            fn(arr[i], i).then(res => {
+                const [key, value] = res;
+                obj[key] = value;
+            })
+        );
+    }
+    await Promise.all(ops);
+    return obj;
+}
+
 /** 
  * Returns a pseudo version of MongoDB's ObjectID. 
  * Useful for decoupling from MongoDB dependencies. 

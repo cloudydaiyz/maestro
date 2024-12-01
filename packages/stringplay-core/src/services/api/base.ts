@@ -4,6 +4,7 @@ import { LimitService } from "../limits";
 import { LimitSchema } from "../../types/core-types";
 import { DeleteManyModel, DeleteOneModel, Document, InsertOneModel, UpdateManyModel, UpdateOneModel } from "mongodb";
 import { TroupeLimitSpecifier } from "../../types/service-types";
+import { ClientError } from "../../util/error";
 
 export type DbWriteRequest<T extends Document> = {
     collection: string;
@@ -57,6 +58,7 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
      */
     async beginExecute(): Promise<[TroupeLimitSpecifier, DbWriteRequest<any>[]]> {
         assert(this.troupeId, "Invalid state; no troupe ID specified");
+        assert(this.requests.length > 0, "Invalid state; must have more than one request defined.");
 
         await this.readData();
         return this.processRequests();
@@ -64,19 +66,22 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
 
     /** Executes the request */
     async execute(): Promise<ApiResponseType[]> {
+        await this.ready;
         const [updateLimits, writeRequests] = await this.beginExecute();
 
         let responses: ApiResponseType[];
         if(this.atomic) {
-            this.client.startSession().withTransaction(async () => {
+            await this.client.startSession().withTransaction(async () => {
                 if(this.limits) {
-                    await this.limitService.incrementTroupeLimits(this.troupeId!, updateLimits);
+                    const limitsUpdated = await this.limitService.incrementTroupeLimits(this.troupeId!, updateLimits);
+                    assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
                 }
                 responses = await this.writeProcessedRequests(writeRequests);
             });
         } else {
             if(this.limits) {
-                await this.limitService.incrementTroupeLimits(this.troupeId!, updateLimits);
+                const limitsUpdated = await this.limitService.incrementTroupeLimits(this.troupeId!, updateLimits);
+                assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
             }
             responses = await this.writeProcessedRequests(writeRequests);
         }
@@ -95,6 +100,22 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
         const builder = new this();
         builder.addTroupeId(troupeId);
         builder.addRequest(request);
+        if(limits !== undefined) builder.setLimits(limits);
+        if(atomic !== undefined) builder.setAtomic(atomic);
+
+        return builder.execute();
+    }
+
+    static bulkExecute<Request, Response>(
+        this: new() => ApiRequestBuilder<Request, Response>, 
+        troupeId: string, 
+        requests: Request[], 
+        limits?: boolean,
+        atomic?: boolean,
+    ): Promise<Response[]> {
+        const builder = new this();
+        builder.addTroupeId(troupeId);
+        requests.forEach(request => builder.addRequest(request));
         if(limits !== undefined) builder.setLimits(limits);
         if(atomic !== undefined) builder.setAtomic(atomic);
 
