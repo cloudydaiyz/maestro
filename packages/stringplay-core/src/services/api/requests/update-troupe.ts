@@ -149,7 +149,7 @@ function removeMemberProperties(
     troupe: WithId<TroupeSchema>,
     troupeUpdate: TroupeDbUpdate,
     limitSpecifier: TroupeLimitSpecifier,
-): void {
+) : void {
     const initialNumMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
     let numMemberProperties = Object.keys(troupe.memberPropertyTypes).length;
 
@@ -178,7 +178,7 @@ function updatePointTypes(
     troupe: WithId<TroupeSchema>,
     troupeUpdate: TroupeDbUpdate,
     limitSpecifier: TroupeLimitSpecifier,
-) {
+) : void {
     const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
     let numPointTypes = Object.keys(troupe.pointTypes).length;
     // let newPointTypes = troupe.pointTypes;
@@ -217,7 +217,7 @@ function removePointTypes(
     troupe: WithId<TroupeSchema>,
     troupeUpdate: TroupeDbUpdate,
     limitSpecifier: TroupeLimitSpecifier,
-) {
+) : void {
     const initialNumPointTypes = Object.keys(troupe.pointTypes).length;
     let numPointTypes = Object.keys(troupe.pointTypes).length;
 
@@ -243,7 +243,7 @@ function updateFieldMatchers(
     troupe: WithId<TroupeSchema>,
     troupeUpdate: TroupeDbUpdate,
     limitSpecifier: TroupeLimitSpecifier,
-) {
+) : void {
     const initialNumMatchers = troupe.fieldMatchers.length;
     const updatedMatchers = structuredClone(troupe.fieldMatchers);
 
@@ -285,7 +285,7 @@ function removeFieldMatchers(
     troupe: WithId<TroupeSchema>,
     troupeUpdate: TroupeDbUpdate,
     limitSpecifier: TroupeLimitSpecifier,
-) {
+) : void {
     request.removeFieldMatchers!.sort();
     const initialNumMatchers = troupe.fieldMatchers.length;
     const updatedMatchers = structuredClone(troupe.fieldMatchers);

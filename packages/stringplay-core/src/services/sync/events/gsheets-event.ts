@@ -3,7 +3,6 @@
 import { ObjectId, WithId } from "mongodb";
 import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeLimit, TroupeSchema, VariableMemberProperties } from "../../../types/core-types";
 import { EventDataMap, GoogleSheetsQuestionToTypeMap, AttendeeDataMap } from "../../../types/service-types";
-import { SHEETS_REGEX } from "../../../util/constants";
 
 import { parse } from "csv-parse";
 import { Readable } from "stream";
@@ -50,6 +49,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 .on('error', reject);
             });
         } catch(e) {
+            console.log("Error getting response data for Google Sheet (ID: " + spreadsheetId + "). Skipping...");
             this.eventMap[event.sourceUri].delete = true;
         }
     };

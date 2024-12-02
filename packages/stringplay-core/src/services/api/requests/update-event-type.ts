@@ -242,7 +242,7 @@ function updateValue(
     members: WithId<MemberSchema>[],
     eventsAttended: WithId<EventsAttendedBucketSchema>[],
     writeRequests: DbWriteRequest<EventTypeRequestDbTypes>[],
-) {
+) : void {
     const eventTypeId = eventType._id.toHexString();
     
     // Update member points for attendees of events with the corresponding type

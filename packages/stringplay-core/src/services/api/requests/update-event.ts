@@ -163,17 +163,32 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
                 }
             });
 
-            if(updateEventsAttended) {
+            if(updateEventsAttended || updateMemberPoints) {
                 writeRequests.push({
                     collection: EVENTS_ATTENDED_COLL,
                     request: {
-                        filter: { eventId },
+                        filter: { 
+                            troupeId: this.troupeId!, 
+                            [`events.${eventId}`]: { $exists: true }  
+                        },
                         update: eventsAttendedUpdate,
                     }
                 });
             }
 
             if(updateMemberPoints) {
+
+                // Update member points for each point type whose time period the event is within
+                const filteredPointTypes = Object.keys(troupe.pointTypes)
+                    .filter(pt => (
+                        troupe.pointTypes[pt].startDate <= startDate && 
+                        startDate <= troupe.pointTypes[pt].endDate
+                    ));
+
+                for(const pt of filteredPointTypes) {
+                    audienceUpdate.$inc[`points.${pt}`] = value - oldEvent.value;
+                }
+
                 writeRequests.push({
                     collection: AUDIENCE_COLL,
                     request: {
@@ -254,7 +269,7 @@ function updateProperties(
     request: UpdateEventRequest & { eventId: string },
     oldEvent: WithId<EventSchema>,
     eventUpdate: EventDbUpdate,
-) {
+) : void {
     for(const key in request.updateProperties) {
         assert(key in oldEvent.fieldToPropertyMap, new ClientError(`Invalid field ID ${key}`));
 

@@ -3,7 +3,6 @@
 import { ObjectId, WithId } from "mongodb";
 import { EventDataMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap } from "../../../types/service-types";
 import { BaseMemberProperties, EventsAttendedBucketSchema, EventSchema, MemberPropertyValue, MemberSchema, TroupeLimit, TroupeSchema, VariableMemberProperties } from "../../../types/core-types";
-import { FORMS_REGEX } from "../../../util/constants";
 import { forms_v1 } from "googleapis";
 import { getForms } from "../../../cloud/gcp";
 import { GaxiosResponse } from "gaxios";
@@ -54,8 +53,8 @@ export class GoogleFormsEventDataService extends EventDataService {
                     this.responseData = await this.forms.forms.responses.list({ formId });
                     assert(this.responseData.data.responses, "No responses found in form");
                 } catch(e) {
-                    console.log("Error getting response data for " + formId);
-                    console.log(e);
+                    console.log("Error getting response data for Google Form (ID: " + formId + "). Skipping...");
+                    console.log("Problem:", e);
                     return;
                 }
                 await this.synchronizeAudience(event, lastUpdated, this.responseData.data.responses, questionToTypeMap);

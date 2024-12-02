@@ -85,8 +85,8 @@ export class UpdateMemberRequestBuilder  extends ApiRequestBuilder<UpdateMemberR
 
         const memberIds = this.requests.map(r => r.memberId);
         const newMembers: WithId<MemberSchema>[] = [];
-        for(const memberId in memberIds) {
-            const member = await this.audienceColl.findOne({ _id: new ObjectId(memberId )});
+        for(const memberId of memberIds) {
+            const member = await this.audienceColl.findOne({ _id: new ObjectId(memberId)});
             if(member) newMembers.push(member);
         }
         return newMembers;
@@ -97,7 +97,7 @@ function updateProperties(
     request: UpdateMemberRequest & { memberId: string },
     memberUpdate: MemberDbUpdate,
     troupe: WithId<TroupeSchema>,
-) {
+) : void {
     for(const key in request.updateProperties) {
         const newValue = request.updateProperties[key];
         assert(newValue, new ClientError("Invalid property ID"));

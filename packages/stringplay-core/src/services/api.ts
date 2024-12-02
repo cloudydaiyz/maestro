@@ -53,7 +53,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         console.events = res[3];
         console.eventTypes = res[4];
         console.attendees = res[5];
-
         return console as ConsoleData;
     }
 
@@ -74,7 +73,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const troupeObj = typeof troupe == "string" 
             ? await this.getTroupeSchema(troupe, true)
             : troupe;
-
         return toTroupe(troupeObj, troupeObj._id.toHexString());
     }
 
@@ -94,8 +92,14 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const eventDataSource = EVENT_DATA_SOURCE_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
         assert(eventDataSource > -1, new ClientError("Invalid source URI"));
         assert(startDate.toString() != "Invalid Date", new ClientError("Invalid date"));
-        assert(request.eventTypeId == undefined || request.value == undefined, new ClientError("Unable to define event type and value at same time for event."));
-        assert(request.eventTypeId != undefined || request.value != undefined, new ClientError("One of event type and value must be defined for event."));
+        assert(
+            request.eventTypeId == undefined || request.value == undefined, 
+            new ClientError("Unable to define event type and value at same time for event.")
+        );
+        assert(
+            request.eventTypeId != undefined || request.value != undefined, 
+            new ClientError("One of event type and value must be defined for event.")
+        );
         assert(request.eventTypeId == undefined || eventType, new ClientError("Invalid event type ID"));
         
         // Populate new event
@@ -133,7 +137,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         } else {
             await dbUpdate();
         }
-
         return this.getEvent(event);
     }
 
@@ -152,9 +155,9 @@ export class ApiService extends BaseDbService implements SpringplayApi {
                 troupeId, { modifyOperationsLeft: -1, eventsLeft: requests.length * -1 }
             );
             assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+        }).finally(() => {
+            this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
         });
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
-
         return events;
     }
 
@@ -165,7 +168,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const eventObj = typeof event == "string" 
             ? await this.getEventSchema(troupeId!, event, true)
             : event;
-        
         return toPublicEvent(eventObj, eventObj._id.toHexString());
     }
 
@@ -261,8 +263,9 @@ export class ApiService extends BaseDbService implements SpringplayApi {
                 troupeId, { modifyOperationsLeft: -1, eventsLeft: eventIds.length }
             );
             assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+        }).finally(() => {
+            this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
         });
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
     }
 
     async createEventType(troupeId: string, request: CreateEventTypeRequest, atomic = true): Promise<EventType> {
@@ -306,7 +309,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         } else {
             await dbUpdate();
         }
-
         return this.getEventType(type);
     }
 
@@ -323,9 +325,9 @@ export class ApiService extends BaseDbService implements SpringplayApi {
                 troupeId, { modifyOperationsLeft: -1, eventTypesLeft: requests.length * -1 }
             );
             assert(limitsUpdated, "Failure updating limits for operation");
+        }).finally(() => {
+            this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
         });
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
-
         return eventTypes;
     }
 
@@ -338,7 +340,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             : troupe
             ? this.getEventTypeSchemaFromTroupe(troupe, eventType, true)
             : await this.getEventTypeSchema(troupeId!, eventType, true);
-        
         return toEventType(eventTypeObj, eventTypeObj._id.toHexString());
     }
 
@@ -348,7 +349,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const eventTypes = await Promise.all(
             troupe.eventTypes.map(et => this.getEventType(et))
         );
-
         return eventTypes;
     }
 
@@ -447,8 +447,9 @@ export class ApiService extends BaseDbService implements SpringplayApi {
                 troupeId, { modifyOperationsLeft: -1, eventTypesLeft: eventTypeIds.length }
             );
             assert(limitsUpdated, "Failure updating limits for operation");
+        }).finally(() => {
+            this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
         });
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
     }
 
     async createMember(troupeId: string, request: CreateMemberRequest, atomic = true): Promise<Member> {
@@ -494,7 +495,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         } else {
             await dbUpdate();
         }
-
         return this.getMember({ ...member, _id: member._id });
     }
 
@@ -518,9 +518,9 @@ export class ApiService extends BaseDbService implements SpringplayApi {
                 troupeId, { modifyOperationsLeft: -1, membersLeft: requests.length * -1 }
             );
             assert(limitsUpdated, "Failure updating limits for operation");
+        }).finally(() => {
+            this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
         });
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
-
         return audience;
     }
 
@@ -531,7 +531,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const memberObj = typeof member == "string"
             ? await this.getMemberSchema(troupeId!, member, true)
             : member;
-
         return toMember(memberObj, memberObj._id.toHexString());
     }
 
@@ -542,7 +541,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         const attendeeObj = typeof member == "string"
             ? await this.getAttendeeSchema(troupeId!, member, true)
             : member;
-
         return toAttendee(attendeeObj, attendeeObj._id.toHexString());
     }
 

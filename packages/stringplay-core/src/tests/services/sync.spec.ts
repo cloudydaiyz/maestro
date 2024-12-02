@@ -25,7 +25,7 @@ describe("troupe sync service", () => {
 
         // Remove default field matchers
         await apiService.updateTroupe(troupeId, { removeFieldMatchers: DEFAULT_MATCHERS.map((_, i) => i) });
-        console.log(await apiService.getTroupe(troupeId));
+        // console.log(await apiService.getTroupe(troupeId));
 
         // Sync the troupe and ensure no errors are thrown
         await expect(syncService.sync(troupeId, true)).resolves.not.toThrow();
@@ -77,7 +77,7 @@ describe("troupe sync service", () => {
         // sync the troupe again to collect members from the events
         expect(validMemberEventExists).toBe(true);
         const eventUpdates = await Promise.all(updateEvents);
-        eventUpdates.forEach(e => console.log(e));
+        // eventUpdates.forEach(e => console.log(e));
         await expect(syncService.sync(troupeId, true)).resolves.not.toThrow();
 
         // Ensure at least one member's information is collected
@@ -159,7 +159,7 @@ describe("troupe sync service", () => {
         // sync the troupe again to collect members from the events
         expect(validMemberEventExists).toBe(true);
         const eventUpdates = await Promise.all(updateEvents);
-        eventUpdates.forEach(e => console.log(e));
+        // eventUpdates.forEach(e => console.log(e));
         await expect(syncService.sync(troupeId)).resolves.not.toThrow();
 
         // Ensure at least one member's information is collected
