@@ -23,9 +23,9 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
     oldEventAttendees?: { [eventId: string]: ObjectId[] };
     
     async readData(): Promise<void> {
-        assert(this.troupeId, new ClientError("Invalid state; no troupe ID specified"));
+        assert(this.troupeId, "Invalid state; no troupe ID specified");
 
-        // Check if this operation is within the troupe's limits
+        // Optimization: Check if this operation is within the troupe's limits
         const withinLimits = await this.limitService.withinTroupeLimits(
             this.troupeId, { modifyOperationsLeft: -1 }
         );
@@ -192,7 +192,7 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
         const eventsAttendedUpdates: AnyBulkWriteOperation<EventsAttendedBucketSchema>[] = [];
         const audienceUpdates: AnyBulkWriteOperation<MemberSchema>[] = [];
 
-        writeRequests.forEach(req => {
+        for(const req of writeRequests) {
             if(req.collection == EVENT_COLL) {
                 eventUpdates.push({ updateOne: req.request as UpdateOneModel<EventSchema> });
             } else if(req.collection == EVENTS_ATTENDED_COLL) {
@@ -200,7 +200,7 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
             } else if(req.collection == AUDIENCE_COLL) {
                 audienceUpdates.push({ updateMany: req.request as UpdateManyModel<MemberSchema> });
             }
-        });
+        };
 
         const res1 = await this.eventColl.bulkWrite(eventUpdates);
         assert(

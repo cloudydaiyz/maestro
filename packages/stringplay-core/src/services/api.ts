@@ -16,6 +16,7 @@ import { TroupeLimitSpecifier } from "../types/service-types";
 import { UpdateTroupeRequestBuilder } from "./api/requests/update-troupe";
 import { ApiRequestBuilder } from "./api/base";
 import { UpdateEventRequestBuilder } from "./api/requests/update-event";
+import { UpdateEventTypeRequestBuilder } from "./api/requests/update-event-type";
 
 /**
  * Provides method definitions for the API. The structure of all given parameters will
@@ -83,8 +84,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         return this.getTroupe(newTroupe);
     }
 
-    async createEvent(troupeId: string, request: CreateEventRequest): Promise<PublicEvent> {
-
+    async createEvent(troupeId: string, request: CreateEventRequest, atomic = true): Promise<PublicEvent> {
         const troupe = await this.getTroupeSchema(troupeId, true);
         assert(!troupe.syncLock, new ClientError("Cannot create event while sync is in progress"));
 
@@ -97,8 +97,9 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         assert(request.eventTypeId != undefined || request.value != undefined, new ClientError("One of event type and value must be defined for event."));
         assert(request.eventTypeId == undefined || eventType, new ClientError("Invalid event type ID"));
         
-        // Find event type and populate value
-        const event: EventSchema = {
+        // Populate new event
+        const event: WithId<EventSchema> = {
+            _id: new ObjectId(),
             troupeId,
             lastUpdated: new Date(),
             title: request.title,
@@ -107,24 +108,32 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             sourceUri: request.sourceUri,
             synchronizedSourceUri: "",
             startDate,
+            eventTypeId: request.eventTypeId || undefined,
             eventTypeTitle: eventType?.title,
             value: request.value || eventType?.value as number,
             fieldToPropertyMap: {},
-            synchronizedFieldToPropertyMap: {}
-        }
-        if(request.eventTypeId) event.eventTypeId = request.eventTypeId;
+            synchronizedFieldToPropertyMap: {},
+        };
         
         // Perform database update
-        const insertedEvent = await this.eventColl.insertOne(event);
-        assert(insertedEvent.acknowledged, "Insert failed for event");
+        const dbUpdate = async () => {
+            const insertedEvent = await this.eventColl.insertOne(event);
+            assert(insertedEvent.acknowledged, "Insert failed for event");
+    
+            // Update limits
+            const limitsUpdated = await this.limitService.incrementTroupeLimits(
+                troupeId, { modifyOperationsLeft: -1, eventsLeft: -1 }
+            );
+            assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+        }
 
-        // Update limits
-        const limitsUpdated = await this.limitService.incrementTroupeLimits(
-            troupeId, { modifyOperationsLeft: -1, eventsLeft: -1 }
-        );
-        assert(limitsUpdated, "Failure updating limits for operation");
+        if(atomic) {
+            await this.client.startSession().withTransaction(() => dbUpdate());
+        } else {
+            await dbUpdate();
+        }
 
-        return this.getEvent({...event, _id: insertedEvent.insertedId});
+        return this.getEvent(event);
     }
 
     async createEvents(troupeId: string, requests: CreateEventRequest[]): Promise<PublicEvent[]> {
@@ -132,18 +141,20 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         // Create each event, ignoring the individual limit updates
         this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
         const events: PublicEvent[] = [];
-        for(const request of requests) {
-            events.push(await this.createEvent(troupeId, request));
-        }
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+        await this.client.startSession().withTransaction(async () => {
+            for(const request of requests) {
+                events.push(await this.createEvent(troupeId, request, false));
+            }
+        });
 
         // Update the aggregated limits
         const limitsUpdated = await this.limitService.incrementTroupeLimits(
             troupeId, { modifyOperationsLeft: -1, eventsLeft: requests.length * -1 }
         );
         assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
 
-        return events
+        return events;
     }
 
     async getEvent(event: string | WithId<EventSchema>, troupeId?: string): Promise<PublicEvent> {
@@ -165,8 +176,6 @@ export class ApiService extends BaseDbService implements SpringplayApi {
 
     async updateEvent(troupeId: string, eventId: string, request: UpdateEventRequest): Promise<PublicEvent> {
         const [ newEvent ] = await UpdateEventRequestBuilder.execute(troupeId, { eventId, ...request });
-
-        // Return public facing version of the new event
         return this.getEvent(newEvent);
     }
 
@@ -187,14 +196,7 @@ export class ApiService extends BaseDbService implements SpringplayApi {
         return bulkResponse;
     }
 
-    async deleteEvent(troupeId: string, eventId: string): Promise<void> {
-
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(
-            troupeId, { modifyOperationsLeft: -1, eventsLeft: 1 }
-        );
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
-
+    async deleteEvent(troupeId: string, eventId: string, atomic = true): Promise<void> {
         const [troupe, event] = await Promise.all([
             this.getTroupeSchema(troupeId, true), 
             this.getEventSchema(troupeId, eventId, true)
@@ -212,53 +214,57 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             .find({ troupeId, [`events.${eventId}`]: { $exists: true } }).toArray()
             .then(ea => ea.map(e => new ObjectId(e.memberId)));
 
-        const updatePoints = await this.audienceColl.updateMany({ troupeId, _id: { $in: membersToUpdate }}, { $inc });
-        assert(updatePoints.matchedCount == updatePoints.modifiedCount, "Failed to update member points");
+        // Perform the database update
+        const dbUpdate = async () => {
 
-        // Remove event from events attended
-        const updateEventsAttended = await this.eventsAttendedColl.updateMany(
-            { troupeId },
-            { $unset: { [`events.${eventId}`]: "" } },
-        );
-        assert(updateEventsAttended.acknowledged, "Failed to update events attended");
+            // Update audience membership points
+            const updatePoints = await this.audienceColl.updateMany({ troupeId, _id: { $in: membersToUpdate }}, { $inc });
+            assert(updatePoints.matchedCount == updatePoints.modifiedCount, "Failed to update member points");
+    
+            // Remove event from events attended
+            const updateEventsAttended = await this.eventsAttendedColl.updateMany(
+                { troupeId },
+                { $unset: { [`events.${eventId}`]: "" } },
+            );
+            assert(updateEventsAttended.acknowledged, "Failed to update events attended");
+    
+            // Delete the event
+            const deletedEvent = await this.eventColl.findOneAndDelete({ _id: new ObjectId(eventId), troupeId });
+            assert(deletedEvent, new ClientError("Failed to delete event"));
+    
+            // Update limits
+            const limitsUpdated = await this.limitService.incrementTroupeLimits(
+                troupeId, { modifyOperationsLeft: -1, eventsLeft: 1 }
+            );
+            assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+        }
 
-        // Delete the event
-        const deletedEvent = await this.eventColl.findOneAndDelete({ _id: new ObjectId(eventId), troupeId });
-        assert(deletedEvent, new ClientError("Failed to delete event"));
-
-        // Update limits
-        const limitsUpdated = await this.limitService.incrementTroupeLimits(
-            troupeId, { modifyOperationsLeft: -1, eventsLeft: 1 }
-        );
-        assert(limitsUpdated, "Failure updating limits for operation");
+        if(atomic) {
+            await this.client.startSession().withTransaction(() => dbUpdate());
+        } else {
+            await dbUpdate();
+        }
     }
 
     async deleteEvents(troupeId: string, eventIds: string[]): Promise<void> {
 
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(
-            troupeId, { modifyOperationsLeft: -1, eventsLeft: eventIds.length }
-        );
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
-
+        // Delete the events
         this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
-        await Promise.all(eventIds.map(id => this.deleteEvent(troupeId, id)));
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+        await this.client.startSession().withTransaction(async () => {
+            for(const eventId of eventIds) {
+                await this.deleteEvent(troupeId, eventId, false);
+            }
+        });
 
         // Update limits
         const limitsUpdated = await this.limitService.incrementTroupeLimits(
             troupeId, { modifyOperationsLeft: -1, eventsLeft: eventIds.length }
         );
-        assert(limitsUpdated, "Failure updating limits for operation");
+        assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
     }
 
-    async createEventType(troupeId: string, request: CreateEventTypeRequest): Promise<EventType> {
-
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(
-            troupeId, { modifyOperationsLeft: -1, eventTypesLeft: -1 }
-        );
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
+    async createEventType(troupeId: string, request: CreateEventTypeRequest, atomic = true): Promise<EventType> {
 
         // Ensure given source folder URIs are valid Google Drive folders
         request.sourceFolderUris.forEach((uri) => assert(
@@ -266,49 +272,58 @@ export class ApiService extends BaseDbService implements SpringplayApi {
             new ClientError("Invalid source URI in request")
         ));
 
+        // Populate new event type
         const type: WithId<EventTypeSchema> = {
             _id: new ObjectId(),
             lastUpdated: new Date(),
             title: request.title,
             value: request.value,
             sourceFolderUris: request.sourceFolderUris,
-            synchronizedSourceFolderUris: []
+            synchronizedSourceFolderUris: [],
         };
 
-        // Insert into the troupe only if the max number of event types haven't been reached
-        const insertResult = await this.troupeColl.updateOne(
-            { _id: new ObjectId(troupeId), [`eventTypes.${MAX_EVENT_TYPES}`]: { $exists: false } },
-            { $push: { eventTypes: type } }
-        );
-        assert(insertResult.matchedCount == 1, new ClientError("Invalid troupe or max event types reached"));
-        assert(insertResult.modifiedCount == 1, "Unable to create event type");
+        // Perform database update
+        const dbUpdate = async () => {
 
-        // Update limits
-        const limitsUpdated = await this.limitService.incrementTroupeLimits(
-            troupeId, { modifyOperationsLeft: -1, eventTypesLeft: -1 }
-        );
-        assert(limitsUpdated, "Failure updating limits for operation");
+            // Insert into the troupe only if the max number of event types haven't been reached
+            const insertResult = await this.troupeColl.updateOne(
+                { _id: new ObjectId(troupeId), [`eventTypes.${MAX_EVENT_TYPES}`]: { $exists: false } },
+                { $push: { eventTypes: type } }
+            );
+            assert(insertResult.matchedCount == 1, new ClientError("Invalid troupe or max event types reached"));
+            assert(insertResult.modifiedCount == 1, "Unable to create event type");
+    
+            // Update limits
+            const limitsUpdated = await this.limitService.incrementTroupeLimits(
+                troupeId, { modifyOperationsLeft: -1, eventTypesLeft: -1 }
+            );
+            assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+        }
+
+        if(atomic) {
+            await this.client.startSession().withTransaction(() => dbUpdate());
+        } else {
+            await dbUpdate();
+        }
 
         return this.getEventType(type);
     }
 
     async createEventTypes(troupeId: string, requests: CreateEventTypeRequest[]): Promise<EventType[]> {
 
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(
-            troupeId, { modifyOperationsLeft: -1, eventTypesLeft: requests.length * -1 }
-        );
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
-
         this.limitService.toggleIgnoreTroupeLimits(troupeId, true);
-        const eventTypes = await Promise.all(requests.map(r => this.createEventType(troupeId, r)));
-        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
+        const eventTypes: EventType[] = [];
+        await this.client.startSession().withTransaction(async () => {
+            for(const request of requests) {
+                eventTypes.push(await this.createEventType(troupeId, request, false));
+            }
+        });
 
-        // Update limits
         const limitsUpdated = await this.limitService.incrementTroupeLimits(
             troupeId, { modifyOperationsLeft: -1, eventTypesLeft: requests.length * -1 }
         );
         assert(limitsUpdated, "Failure updating limits for operation");
+        this.limitService.toggleIgnoreTroupeLimits(troupeId, false);
 
         return eventTypes;
     }
@@ -337,198 +352,22 @@ export class ApiService extends BaseDbService implements SpringplayApi {
     }
 
     async updateEventType(troupeId: string, eventTypeId: string, request: UpdateEventTypeRequest): Promise<EventType> {
-
-        // Ensure given source folder URIs are valid Google Drive folders
-        request.addSourceFolderUris?.forEach((uri) => assert(
-            DRIVE_FOLDER_REGEX.test(uri), 
-            new ClientError("Invalid source URI in request")
-        ));
-
-        const troupe = await this.getTroupeSchema(troupeId, true);
-        const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == eventTypeId);
-        assert(!troupe.syncLock, new ClientError("Cannot update event type while sync is in progress"));
-        assert(eventType, new ClientError("Unable to find event type"));
-
-        const eventTypeUpdate = { 
-            $set: {} as UpdateOperator<TroupeSchema, "$set">, 
-            $unset: {} as UpdateOperator<TroupeSchema, "$unset">,
-            $push: {} as UpdateOperator<TroupeSchema, "$push">,
-            $pull: {} as UpdateOperator<TroupeSchema, "$pull">
-        };
-        const limitSpecifier: TroupeLimitSpecifier = { modifyOperationsLeft: -1 };
-
-        const eventUpdate = {
-            $set: {} as UpdateOperator<EventSchema, "$set">,
-        };
-        let updateEvents = false;
-        let typeIdentifierUsed = false;
-
-        eventTypeUpdate.$set.lastUpdated = new Date();
-
-        if(request.title) {
-            eventTypeUpdate.$set["eventTypes.$[type].title"] = request.title;
-            eventUpdate.$set.eventTypeTitle = request.title;
-            updateEvents = true;
-            typeIdentifierUsed = true;
-        }
-
-        if(request.value) {
-            eventTypeUpdate.$set["eventTypes.$[type].value"] = request.value;
-
-            // Update member points for attendees of events with the corresponding type
-            // Aggregate in the future: https://www.mongodb.com/docs/manual/reference/operator/aggregation/lookup/#use--lookup-with--mergeobjects
-            const events = await this.eventColl.find({ troupeId, eventTypeId }).toArray();
-            const members = await this.audienceColl.find({ troupeId }).toArray();
-            const eventsAttended = await this.eventsAttendedColl.find({ troupeId }).toArray();
-
-            const eventToPointTypesMap: { [eventId: string]: string[] } = {};
-            const eventIds: string[] = [];
-            
-            // Build the event to point types map
-            events.forEach(event => {
-                eventIds.push(event._id.toHexString());
-                Object.keys(troupe.pointTypes)
-                    .filter(pt => troupe.pointTypes[pt].startDate <= event.startDate && event.startDate <= troupe.pointTypes[pt].endDate)
-                    .forEach(pt => { 
-                        const eventId = event._id.toHexString();
-                        eventToPointTypesMap[eventId] 
-                            ? eventToPointTypesMap[eventId].push(pt) 
-                            : eventToPointTypesMap[eventId] = [pt];
-                    });
-            });
-
-            // Update members based on events attended
-            const bulkEventsAttendedUpdate: AnyBulkWriteOperation<EventsAttendedBucketSchema>[] = [];
-            eventsAttended.forEach(bucket => {
-                const member = members.find(m => m._id.toHexString() == bucket.memberId);
-                if(!member) return;
-
-                const bucketUpdate: UpdateOperator<EventsAttendedBucketSchema, "$set"> = {};
-
-                // Only iterate through event IDs in the map
-                for(const eventId in eventToPointTypesMap) {
-                    const event = bucket.events[eventId];
-                    if(event && event.typeId == eventTypeId) {
-                        bucketUpdate[`events.${eventId}.value`] = request.value!;
-
-                        // Update the member's points for each point type
-                        for(const pt of eventToPointTypesMap[eventId]) {
-                            const prev = member.points[pt];
-                            member.points[pt] += request.value! - eventType.value;
-                        }
-                    }
-                }
-
-                bulkEventsAttendedUpdate.push({
-                    updateOne: {
-                        filter: { _id: bucket._id },
-                        update: { $set: bucketUpdate }
-                    }
-                });
-            });
-
-            // Perform database update
-            if(bulkEventsAttendedUpdate.length > 0) {
-                const eventsAttendedUpdate = await this.eventsAttendedColl.bulkWrite(bulkEventsAttendedUpdate);
-                assert(eventsAttendedUpdate.isOk(), "Failed to update events attended");
-            }
-
-            const bulkAudienceUpdate = members.map(member => ({
-                updateOne: {
-                    filter: { _id: member._id },
-                    update: { $set: member },
-                }
-            } as AnyBulkWriteOperation<MemberSchema>));
-
-            if(bulkAudienceUpdate.length > 0) {
-                const audienceUpdate = await this.audienceColl.bulkWrite(bulkAudienceUpdate);
-                assert(audienceUpdate.isOk(), "Failed to update member points");
-            }
-
-            eventUpdate.$set.value = request.value;
-            updateEvents = true;
-            typeIdentifierUsed = true;
-        }
-
-        // Update source uris, ignoring duplicates, existing source folder URIs, and URIs to be removed
-        const newUris = request.addSourceFolderUris?.filter(
-            (uri, index) => request.addSourceFolderUris!.indexOf(uri) == index 
-                && !eventType.sourceFolderUris.includes(uri)
-                && !request.removeSourceFolderUris?.includes(uri)
-        );
-
-        newUris && newUris.length > 0 
-            ? (eventTypeUpdate.$push["eventTypes.$[type].sourceFolderUris"] = { 
-                $each: newUris 
-            }) && (typeIdentifierUsed = true)
-            : null;
-        
-        // Remove source uris
-        const urisToRemove = request.removeSourceFolderUris?.filter(
-            (uri, index) => request.removeSourceFolderUris?.indexOf(uri) == index
-                && eventType.sourceFolderUris.includes(uri)
-        );
-
-        urisToRemove
-            ? (eventTypeUpdate.$pull["eventTypes.$[type].sourceFolderUris"] = { 
-                $in: urisToRemove
-            }) && (typeIdentifierUsed = true)
-            : null;
-
-        // Check if this operation is within the troupe's limits
-        const sourceFolderUrisLeft = (urisToRemove?.length || 0) - (newUris?.length || 0)
-        if(sourceFolderUrisLeft > 0) {
-            limitSpecifier.sourceFolderUrisLeft = sourceFolderUrisLeft;
-        }
-
-        // Check if this operation is within the troupe's limits
-        const withinLimits = await this.limitService.withinTroupeLimits(troupeId, limitSpecifier);
-        assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
-
-        // Perform database update
-        const newEventType = await this.troupeColl
-            .findOneAndUpdate(
-                { _id: new ObjectId(troupeId) },
-                eventTypeUpdate,
-                typeIdentifierUsed 
-                    ? { 
-                        arrayFilters: [{ "type._id": new ObjectId(eventTypeId) }], 
-                        returnDocument: "after"
-                    } 
-                    : { returnDocument: "after" }
-            )
-            .then(troupe => troupe?.eventTypes.find(
-                (et) => et._id.toHexString() == eventTypeId
-            ));
-        assert(newEventType, "Failed to update event type");
-
-        if(updateEvents) {
-            const modification = await this.eventColl.updateMany({ troupeId, eventTypeId }, eventUpdate);
-            assert(modification.acknowledged, "Event update failed");
-        }
-
-        // Update limits
-        const limitsUpdated = await this.limitService.incrementTroupeLimits(troupeId, limitSpecifier);
-        assert(limitsUpdated, "Failure updating limits for operation");
-
+        const [ newEventType ] = await UpdateEventTypeRequestBuilder.execute(troupeId, { eventTypeId, ...request });
         return this.getEventType(newEventType);
     }
 
     async updateEventTypes(troupeId: string, request: BulkUpdateEventTypeRequest): Promise<BulkUpdateEventTypeResponse> {
-
-        // Let the individual updates handle limits; it's more DB calls but each
-        // event type update has to update the source folder uris as well, which
-        // isn't known until update time. Need a better way to handle this in the
-        // future.
-        const response = await asyncObjectMap<BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse>(
+        const modifiedEventTypes = objectToArray<BulkUpdateEventTypeRequest, UpdateEventTypeRequest & { eventTypeId: string }>(
             request, 
-            async (eventTypeId, request) => [
-                eventTypeId as string, 
-                await this.updateEventType(troupeId, eventTypeId as string, request)
-            ]
+            (eventTypeId, request) => ({ eventTypeId: eventTypeId as string, ...request })
         );
+        const responses = await UpdateEventTypeRequestBuilder.bulkExecute(troupeId, modifiedEventTypes);
 
-        return response;
+        const bulkResponse = await asyncArrayToObject<WithId<EventTypeSchema>, BulkUpdateEventTypeResponse>(
+            responses,
+            async (newEventType) => [newEventType._id.toHexString(), await this.getEventType(newEventType, troupeId)]
+        );
+        return bulkResponse;
     }
 
     async deleteEventType(troupeId: string, eventTypeId: string): Promise<void> {
