@@ -246,7 +246,6 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
             newEventsSortIndicies[eventId] = value;
         };
         newEvents.sort((eventA, eventB) => newEventsSortIndicies[eventA._id.toHexString()] - newEventsSortIndicies[eventB._id.toHexString()]);
-
         return newEvents;
     }
 }

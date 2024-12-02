@@ -168,7 +168,6 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
                 }
             });
         }
-
         return [limitSpecifier, writeRequests];
     }
 
