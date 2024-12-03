@@ -71,13 +71,15 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
 
         let responses: ApiResponseType[];
         if(this.atomic) {
-            await this.client.startSession().withTransaction(async () => {
-                if(this.limits) {
-                    const limitsUpdated = await this.limitService.incrementTroupeLimits(this.troupeId!, updateLimits);
-                    assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+            await this.client.withSession(s => s.withTransaction(
+                async () => {
+                    if(this.limits) {
+                        const limitsUpdated = await this.limitService.incrementTroupeLimits(this.troupeId!, updateLimits);
+                        assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+                    }
+                    responses = await this.writeProcessedRequests(writeRequests);
                 }
-                responses = await this.writeProcessedRequests(writeRequests);
-            });
+            ));
         } else {
             if(this.limits) {
                 const limitsUpdated = await this.limitService.incrementTroupeLimits(this.troupeId!, updateLimits);

@@ -6,7 +6,7 @@ import { arrayToObject, deleteFromArray, objectToArray, shuffleArray } from "../
 import { GoogleSheetsLogService } from "../../services/sync/logs/gsheets-log";
 import { ObjectId, WithId } from "mongodb";
 import { AttendeeSchema, EventSchema, EventsAttendedBucketSchema } from "../../types/core-types";
-import { TroupeSyncService } from "../../services/sync";
+import { SyncService } from "../../services/sync";
 import { ApiService } from "../../services/api";
 import { PublicEvent, UpdateEventRequest } from "../../types/api-types";
 import { CoreService } from "../../services/core";
@@ -20,7 +20,7 @@ describe("troupe sync service", () => {
         const troupeId = config.troupes!["A"].id!;
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
 
-        const syncService = await TroupeSyncService.create();
+        const syncService = await SyncService.create();
         const apiService = await ApiService.create();
 
         // Remove default field matchers
@@ -100,7 +100,7 @@ describe("troupe sync service", () => {
         const troupeId = config.troupes!["A"].id!;
         const memberPropertyTypes = config.troupes!["A"].troupe!.memberPropertyTypes;
 
-        const syncService = await TroupeSyncService.create();
+        const syncService = await SyncService.create();
         const apiService = await ApiService.create();
         const coreService = await CoreService.create();
 

@@ -35,48 +35,50 @@ export class CoreService extends BaseDbService {
 
     /** Initializes a new troupe with a dashboard and log sheet */
     async createTroupe(request: CreateTroupeRequest, createLog?: true): Promise<string> {
-        return this.client.startSession().withTransaction(async () => {
-            const lastUpdated = new Date();
-            const insertTroupe = await this.troupeColl.insertOne({
-                ...request,
-                lastUpdated,
-                logSheetUri: "",
-                eventTypes: [],
-                memberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
-                synchronizedMemberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
-                pointTypes: BASE_POINT_TYPES_OBJ,
-                synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
-                syncLock: false,
-                fieldMatchers: DEFAULT_MATCHERS,
-            });
-            assert(insertTroupe.insertedId, "Failed to create troupe");
-    
-            const insertDashboard = await this.dashboardColl.insertOne({
-                troupeId: insertTroupe.insertedId.toHexString(),
-                lastUpdated,
-                upcomingBirthdays: {
-                    frequency: "monthly",
-                    desiredFrequency: "monthly",
-                    members: [],
-                },
-                totalMembers: 0,
-                totalEvents: 0,
-                totalAttendees: 0,
-                totalEventTypes: 0,
-                avgAttendeesPerEvent: 0,
-                avgAttendeesByEventType: {},
-                attendeePercentageByEventType: {},
-                eventPercentageByEventType: {},
-                totalAttendeesByEventType: {},
-                totalEventsByEventType: {},
-            });
-            assert(insertDashboard.insertedId, "Failed to create dashboard");
+        return this.client.withSession(s => s.withTransaction(
+            async () => {
+                const lastUpdated = new Date();
+                const insertTroupe = await this.troupeColl.insertOne({
+                    ...request,
+                    lastUpdated,
+                    logSheetUri: "",
+                    eventTypes: [],
+                    memberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
+                    synchronizedMemberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
+                    pointTypes: BASE_POINT_TYPES_OBJ,
+                    synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
+                    syncLock: false,
+                    fieldMatchers: DEFAULT_MATCHERS,
+                });
+                assert(insertTroupe.insertedId, "Failed to create troupe");
+        
+                const insertDashboard = await this.dashboardColl.insertOne({
+                    troupeId: insertTroupe.insertedId.toHexString(),
+                    lastUpdated,
+                    upcomingBirthdays: {
+                        frequency: "monthly",
+                        desiredFrequency: "monthly",
+                        members: [],
+                    },
+                    totalMembers: 0,
+                    totalEvents: 0,
+                    totalAttendees: 0,
+                    totalEventTypes: 0,
+                    avgAttendeesPerEvent: 0,
+                    avgAttendeesByEventType: {},
+                    attendeePercentageByEventType: {},
+                    eventPercentageByEventType: {},
+                    totalAttendeesByEventType: {},
+                    totalEventsByEventType: {},
+                });
+                assert(insertDashboard.insertedId, "Failed to create dashboard");
 
-            if(createLog) {
-                await this.newTroupeLog(insertTroupe.insertedId.toHexString());
+                if(createLog) {
+                    await this.newTroupeLog(insertTroupe.insertedId.toHexString());
+                }
+                return insertTroupe.insertedId.toHexString();
             }
-            return insertTroupe.insertedId.toHexString();
-        });
+        ));
     }
 
     /** Creates the log sheet for a troupe */
@@ -96,23 +98,19 @@ export class CoreService extends BaseDbService {
     /** Deletes a troupe and its associated data (log, audience, events, dashboard) */
     async deleteTroupe(troupeId: string): Promise<void> {
         let logSheetUri: string;
-
-        await this.client.startSession().withTransaction(async () => {
-            const troupe = await this.getTroupeSchema(troupeId, true);
-            const limitService = await LimitService.create();
-            logSheetUri = troupe.logSheetUri;
-            
-            await this.troupeColl.deleteOne({ _id: new ObjectId(troupeId) });
-            await this.dashboardColl.deleteOne({ troupeId });
-            await this.audienceColl.deleteMany({ troupeId });
-            await this.eventColl.deleteMany({ troupeId });
-            await limitService.removeTroupeLimits(troupeId);
-
-            // assert(
-            //     res.every(r => r && "acknowledged" in r ? r.acknowledged : true ), 
-            //     "Failed to fully delete troupe"
-            // );
-        });
+        await this.client.withSession(s => s.withTransaction(
+            async () => {
+                const troupe = await this.getTroupeSchema(troupeId, true);
+                const limitService = await LimitService.create();
+                logSheetUri = troupe.logSheetUri;
+                
+                await this.troupeColl.deleteOne({ _id: new ObjectId(troupeId) });
+                await this.dashboardColl.deleteOne({ troupeId });
+                await this.audienceColl.deleteMany({ troupeId });
+                await this.eventColl.deleteMany({ troupeId });
+                await limitService.removeTroupeLimits(troupeId);
+            }
+        ));
 
         const logService: LogSheetService = new GoogleSheetsLogService();
         await logService.deleteLog(logSheetUri!);

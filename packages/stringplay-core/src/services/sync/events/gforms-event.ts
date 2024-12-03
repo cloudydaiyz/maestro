@@ -38,27 +38,26 @@ export class GoogleFormsEventDataService extends EventDataService {
             this.questionData = await this.forms.forms.get({ formId });
             assert(this.questionData.data.items, "No questions found in form");
         } catch(e) {
-            console.log("Error getting form data for " + formId);
+            console.log("Error getting form data for Google Form " + formId + 
+                " (Event ID: " + eventData.event._id.toHexString() + "). Skipping...");
             console.log(e);
-            eventData.delete = true;
             return;
         }
 
         // Retrieve the event and responses responses if the event isn't flagged for deletion
-        if(!eventData.delete) {
-            await this.synchronizeEvent(event, this.questionData.data.items, questionToTypeMap);
+        await this.synchronizeEvent(event, this.questionData.data.items, questionToTypeMap);
 
-            if(this.containsMemberId) {
-                try {
-                    this.responseData = await this.forms.forms.responses.list({ formId });
-                    assert(this.responseData.data.responses, "No responses found in form");
-                } catch(e) {
-                    console.log("Error getting response data for Google Form (ID: " + formId + "). Skipping...");
-                    console.log("Problem:", e);
-                    return;
-                }
-                await this.synchronizeAudience(event, lastUpdated, this.responseData.data.responses, questionToTypeMap);
+        if(this.containsMemberId) {
+            try {
+                this.responseData = await this.forms.forms.responses.list({ formId });
+                assert(this.responseData.data.responses, "No responses found in form");
+            } catch(e) {
+                console.log("Error getting form data for Google Form " + formId + 
+                    " (Event ID: " + eventData.event._id.toHexString() + "). Skipping...");
+                console.log("Problem:", e);
+                return;
             }
+            await this.synchronizeAudience(event, lastUpdated, this.responseData.data.responses, questionToTypeMap);
         }
     }
 
@@ -84,7 +83,6 @@ export class GoogleFormsEventDataService extends EventDataService {
             // Init the updated field to property map
             let override = event.fieldToPropertyMap[fieldId]?.override;
             event.fieldToPropertyMap[fieldId] = { field, override, matcherId, property: null };
-
             includedFields.push(fieldId);
             if(!property) continue;
 
@@ -206,6 +204,7 @@ export class GoogleFormsEventDataService extends EventDataService {
     protected async synchronizeAudience(event: WithId<EventSchema>, lastUpdated: Date, 
         responses: forms_v1.Schema$FormResponse[], questionToTypeMap: GoogleFormsQuestionToTypeMap): Promise<void> {
         const troupeId = this.troupe._id.toHexString();
+        const eventId = event._id.toHexString();
 
         for(const response of responses) {
 
@@ -223,12 +222,7 @@ export class GoogleFormsEventDataService extends EventDataService {
                 properties,
                 points: { "Total": 0 },
             };
-            let eventsAttended: typeof this.attendeeMap[string]["eventsAttended"] = [{
-                eventId: event._id.toHexString(),
-                typeId: event.eventTypeId,
-                value: event.value,
-                startDate: event.startDate,
-            }];
+            let eventsAttended: typeof this.attendeeMap[string]["eventsAttended"] = [];
             let eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[] = [];
             let fromColl = false;
             let isNewMember = true;
@@ -261,48 +255,62 @@ export class GoogleFormsEventDataService extends EventDataService {
                         continue;
                     }
 
-                    // Invariant: At most one unique property per field
-                    if(property == "Member ID") {
-                        const existingMember = this.attendeeMap[value as string];
-
-                        // If the member already exists, use the existing member and copy over any new properties
-                        if(existingMember) {
-                            for(const prop in member.properties) {
-                                if(!existingMember.member.properties[prop]) {
-                                    existingMember.member.properties[prop] = member.properties[prop];
-                                }
+                    // If the member already exists, use the existing member and copy over any new properties
+                    const existingMember = this.attendeeMap[value as string];
+                    if(property == "Member ID" && existingMember) {
+                        for(const prop in member.properties) {
+                            if(!existingMember.member.properties[prop]?.override) {
+                                existingMember.member.properties[prop] = member.properties[prop];
                             }
-                            member = existingMember.member;
-                            eventsAttended = existingMember.eventsAttended.concat(eventsAttended);
-                            eventsAttendedDocs = existingMember.eventsAttendedDocs;
-                            fromColl = existingMember.fromColl;
-                            isNewMember = false;
                         }
-                    }
 
+                        member = existingMember.member;
+                        eventsAttended = existingMember.eventsAttended;
+                        eventsAttendedDocs = existingMember.eventsAttendedDocs;
+                        fromColl = existingMember.fromColl;
+                        isNewMember = false;
+                    }
                     member.properties[property] = { value, override: isOriginEvent };
                 }
             }
 
-            // Update the member's points
-            for(const pointType in this.troupe.pointTypes) {
-                const range = this.troupe.pointTypes[pointType];
-                if(!member.points[pointType]) member.points[pointType] = 0;
-                if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
-                    member.points[pointType] += event.value;
+            // Eliminate duplicate updates
+            if(!eventsAttended.find(e => e.eventId == eventId)) return;
+
+            // Only update points if the member hasn't attended this event BEFORE this sync
+            if(!eventsAttendedDocs.find(d => eventId in d.events)) {
+                for(const pointType in this.troupe.pointTypes) {
+                    const range = this.troupe.pointTypes[pointType];
+                    if(!member.points[pointType]) member.points[pointType] = 0;
+                    if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
+                        member.points[pointType] += event.value;
+                    }
                 }
             }
 
-            if(isNewMember && this.currentLimits.membersLeft + this.incrementLimits.membersLeft! == 0) {
-                continue;
+            eventsAttended.push({
+                eventId,
+                typeId: event.eventTypeId,
+                value: event.value,
+                startDate: event.startDate,
+            });
+            
+            if(isNewMember) {
+                if(this.currentLimits.membersLeft === this.incrementLimits.membersLeft) {
+                    continue;
+                }
+                this.incrementLimits.membersLeft! -= 1;
             }
 
             // Add the member to the list of members. Member ID already proven
             // to exist in event from discoverAndRefreshAudience method
             this.attendeeMap[member.properties["Member ID"].value] = { 
-                member, eventsAttended, eventsAttendedDocs, fromColl, delete: false 
+                member,
+                eventsAttended,
+                eventsAttendedDocs,
+                fromColl,
+                delete: false,
             };
-            this.incrementLimits.membersLeft! -= 1;
         }
     }
 }

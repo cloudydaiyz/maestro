@@ -49,8 +49,9 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 .on('error', reject);
             });
         } catch(e) {
-            console.log("Error getting response data for Google Sheet (ID: " + spreadsheetId + "). Skipping...");
-            this.eventMap[event.sourceUri].delete = true;
+            console.log("Error getting response data for Google Sheet " + spreadsheetId + 
+                " (Event ID: " + event._id.toHexString() + "). Skipping...");
+            console.log("Problem:", e);
         }
     };
 
@@ -113,6 +114,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
     protected synchronizeAudience(event: WithId<EventSchema>, lastUpdated: Date): void {
         assert(this.results);
         const troupeId = this.troupe._id.toHexString();
+        const eventId = event._id.toHexString();
         if(!this.containsMemberId) return;
 
         // Remove the fields that aren't set in the event anymore
@@ -142,20 +144,16 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 properties,
                 points: { "Total": 0 },
             };
-            let eventsAttended: typeof this.attendeeMap[string]["eventsAttended"] = [{
-                eventId: event._id.toHexString(),
-                typeId: event.eventTypeId,
-                value: event.value,
-                startDate: event.startDate,
-            }];
+            let eventsAttended: typeof this.attendeeMap[string]["eventsAttended"] = [];
             let eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[] = [];
             let fromColl = false;
             let isNewMember = true;
 
             // Iterate through the values and assign them to the appropriate property
+            const isOriginEvent = this.troupe.originEventId != event._id.toHexString();
             values.forEach((rawValue, i) => {
                 const property = event.fieldToPropertyMap[i]?.property;
-                if(!property) return;
+                if(!property || isOriginEvent && member.properties[property].override) return;
 
                 const propertyType = this.troupe.memberPropertyTypes[property].slice(0, -1);
                 let value = rawValue.trim() as MemberPropertyValue;
@@ -168,39 +166,57 @@ export class GoogleSheetsEventDataService extends EventDataService {
                     // If the member already exists, use the existing member and copy over any new properties
                     if(existingMember) {
                         for(const prop in member.properties) {
-                            if(!existingMember.member.properties[prop]) {
+                            if(!existingMember.member.properties[prop]?.override) {
                                 existingMember.member.properties[prop] = member.properties[prop];
                             }
                         }
+
                         member = existingMember.member;
-                        eventsAttended = existingMember.eventsAttended.concat(eventsAttended);
+                        eventsAttended = existingMember.eventsAttended;
                         eventsAttendedDocs = existingMember.eventsAttendedDocs;
                         fromColl = existingMember.fromColl;
                         isNewMember = false;
                     }
                 }
-
                 member.properties[property] = { value, override: false };
             });
 
-            // Update the member's points
-            for(const pointType in this.troupe.pointTypes) {
-                const range = this.troupe.pointTypes[pointType];
-                if(!member.points[pointType]) member.points[pointType] = 0;
-                if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
-                    member.points[pointType] += event.value;
+            // Eliminate duplicate updates
+            if(!eventsAttended.find(e => e.eventId == eventId)) return;
+
+            // Only update points if the member hasn't attended this event BEFORE this sync
+            if(!eventsAttendedDocs.find(d => eventId in d.events)) {
+                for(const pointType in this.troupe.pointTypes) {
+                    const range = this.troupe.pointTypes[pointType];
+                    if(!member.points[pointType]) member.points[pointType] = 0;
+                    if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
+                        member.points[pointType] += event.value;
+                    }
                 }
             }
 
-            if(isNewMember && this.currentLimits.membersLeft + this.incrementLimits.membersLeft! == 0) {
-                return;
+            eventsAttended.push({
+                eventId,
+                typeId: event.eventTypeId,
+                value: event.value,
+                startDate: event.startDate,
+            });
+
+            if(isNewMember) {
+                if(this.currentLimits.membersLeft === this.incrementLimits.membersLeft) {
+                    return;
+                }
+                this.incrementLimits.membersLeft! -= 1;
             }
 
             // Add the member to the list of members.
             this.attendeeMap[member.properties["Member ID"].value] = { 
-                member, eventsAttended, eventsAttendedDocs, fromColl, delete: false 
+                member,
+                eventsAttended,
+                eventsAttendedDocs,
+                fromColl,
+                delete: false,
             };
-            this.incrementLimits.membersLeft! -= 1;
         });
     }
 }

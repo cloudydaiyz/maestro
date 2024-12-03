@@ -1,7 +1,7 @@
 import EventEmitter from "events";
 import { ApiService } from "./services/api";
 import { CoreService } from "./services/core";
-import { TroupeSyncService } from "./services/sync";
+import { SyncService } from "./services/sync";
 import { AuthenticationError, ClientError } from "./util/error";
 import { ApiController, ApiMiddleware, newController, newControllerWithMiddleware, newUtilController } from "./util/server/rest";
 import { z } from "zod";
@@ -17,7 +17,7 @@ import { BodySchema } from "./body";
 const initAuthService = AuthService.create();
 const initApiService = ApiService.create();
 const initCoreService = CoreService.create();
-const initSyncService = TroupeSyncService.create();
+const initSyncService = SyncService.create();
 
 /** All paths in the API with a prefix of `/t/:troupeId` will be handled by this controller to simplify authentication. */ 
 const apiTroupePathsHandler: ApiController = async (path, method, headers, body) => {

@@ -44,12 +44,12 @@ export function newController(handler: ApiController): ApiController {
             res.headers = { ...res.headers, ...defaultHeaders };
 
             console.log('API action successful.');
-            console.log(res);
+            console.log(JSON.stringify(res, null, 4));
             return res;
         } catch(e) {
             const err = e as Error;
             console.error('Error during API action.');
-            console.error(err);
+            console.error(JSON.stringify(err, null, 4));
 
             if(err instanceof ZodError) {
                 return {
@@ -118,13 +118,13 @@ export function newUtilController<T extends Object>(handler: (body: Object) => P
         try {
             const resBody = await handler(body);
             console.log('Utility action successful.');
-            console.log(resBody ? "Response: " + resBody.toString() : "No response body");
+            console.log(resBody ? "Response: " + JSON.stringify(resBody, null, 4) : "No response body");
     
             return resBody ? { status: 200, headers: {}, body: resBody } : { status: 204, headers: {} };
         } catch(e) {
             const err = e as Error;
             console.error('Error caught during utility action.');
-            console.error(err);
+            console.error(JSON.stringify(err, null, 4));
 
             return {
                 status: 500,

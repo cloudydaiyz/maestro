@@ -58,7 +58,6 @@ export type GoogleSheetsQuestionToTypeMap = {
 export interface EventDataMap { 
     [sourceUri: string]: {
         event: WithId<EventSchema>,
-        delete: boolean,
         fromColl: boolean,
     },
 }
