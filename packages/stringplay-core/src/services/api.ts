@@ -1,7 +1,7 @@
 // Implementation for client-facing controller methods
 
 import { AnyBulkWriteOperation, ObjectId, UpdateFilter, WithId } from "mongodb";
-import { DRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES, DEFAULT_MATCHERS } from "../util/constants";
+import { GDRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES, DEFAULT_MATCHERS } from "../util/constants";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints, AttendeeSchema, FieldMatcher, TroupeLimit } from "../types/core-types";
 import { Attendee, BulkUpdateEventRequest, BulkUpdateEventResponse, BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse, BulkUpdateMemberRequest, BulkUpdateMemberResponse, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, ApiEndpoints, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
 import { Mutable, SetOperator, UnsetOperator, UpdateOperator } from "../types/util-types";
@@ -115,7 +115,7 @@ export class ApiService extends BaseDbService implements ApiEndpoints {
             lastUpdated: new Date(),
             title: request.title,
             source: EVENT_DATA_SOURCES[eventDataSource],
-            synchronizedSource: "",
+            synchronizedSource: EVENT_DATA_SOURCES[eventDataSource],
             sourceUri: request.sourceUri,
             synchronizedSourceUri: "",
             startDate,
@@ -290,7 +290,7 @@ export class ApiService extends BaseDbService implements ApiEndpoints {
 
         // Ensure given source folder URIs are valid Google Drive folders
         request.sourceFolderUris.forEach((uri) => assert(
-            DRIVE_FOLDER_REGEX.test(uri), 
+            GDRIVE_FOLDER_REGEX.test(uri), 
             new ClientError("Invalid source URI in request")
         ));
 

@@ -4,8 +4,8 @@ import type { WithId } from "mongodb";
 import { TroupeSchema, EventSchema, MemberSchema, EventsAttendedBucketSchema, AttendeeSchema } from "../../../types/core-types";
 import { sheets_v4 } from "googleapis";
 import { getDrive, getSheets } from "../../../cloud/gcp";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, SHEETS_REGEX } from "../../../util/constants";
-import { getDataSourceId } from "../../../util/helper";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, GSHEETS_REGEX } from "../../../util/constants";
+import { getEventDataSourceId } from "../../../util/helper";
 import { A1Notation } from "@shogo82148/a1notation";
 import { LOG_SHEET_DRIVE_ID } from "../../../util/env";
 import { GaxiosResponse } from "gaxios";
@@ -407,17 +407,17 @@ export class GoogleSheetsLogService extends LogSheetService {
 
     async deleteLog(uri: string): Promise<void> {
         const forDrive = getDrive();
-        const fileId = getDataSourceId("Google Sheets", uri);
+        const fileId = getEventDataSourceId("Google Sheets", uri);
         if(fileId) await forDrive.then(drive => drive.files.delete({ fileId }));
 
         // Delete the uri from the list of logs created by this service
-        const removeIndex = GoogleSheetsLogService.logsCreated.findIndex(u => getDataSourceId("Google Sheets", u) == fileId);
+        const removeIndex = GoogleSheetsLogService.logsCreated.findIndex(u => getEventDataSourceId("Google Sheets", u) == fileId);
         if(removeIndex > -1) GoogleSheetsLogService.logsCreated.splice(removeIndex, 1);
     }
 
     async updateLog(uri: string, troupe: WithId<TroupeSchema>, events: WithId<EventSchema>[], audience: WithId<AttendeeSchema>[]): Promise<void> {
         const sheets = await getSheets();
-        const spreadsheetId = getDataSourceId("Google Sheets", uri);
+        const spreadsheetId = getEventDataSourceId("Google Sheets", uri);
         assert(spreadsheetId, "Invalid log sheet URI");
 
         const currentData = await sheets.spreadsheets.values.batchGet({ 
@@ -741,7 +741,7 @@ export class GoogleSheetsLogService extends LogSheetService {
 
         // Get sheet data and ensure that the sheets exist
         const sheets = await getSheets();
-        const spreadsheetId = getDataSourceId("Google Sheets", uri);
+        const spreadsheetId = getEventDataSourceId("Google Sheets", uri);
         assert(spreadsheetId, "Invalid log sheet URI");
 
         let currentData: GaxiosResponse<sheets_v4.Schema$BatchGetValuesResponse>;
@@ -993,6 +993,6 @@ export class GoogleSheetsLogService extends LogSheetService {
     }
 
     validateLogUri(uri: string): boolean {
-        return getDataSourceId("Google Sheets", uri) != undefined;
+        return getEventDataSourceId("Google Sheets", uri) != undefined;
     }
 }

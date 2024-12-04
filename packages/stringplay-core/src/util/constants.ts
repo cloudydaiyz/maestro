@@ -1,5 +1,3 @@
-import { FieldMatcher, LimitSchema } from "../types/core-types";
-
 export const DB_NAME = "maestro";
 export const TROUPE_COLL = "troupes";
 export const DASHBOARD_COLL = "dashboards";
@@ -18,18 +16,46 @@ export const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+.[a-zA-Z]{2,}$/;
 
 export const TOKEN_HEADER_REGEX = /^Bearer\s+(?<token>.+)$/;
 
-// == Constants for event source URLs ==
-export const DRIVE_FOLDER_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/(?<id>[^\/&?#]+).*/;
-export const DRIVE_FOLDER_URL_TEMPL = "https://drive.google.com/drive/folders/<id>";
-export const DRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+// == Constants for event sources ==
 
-export const SHEETS_REGEX = /https:\/\/docs.google.com\/spreadsheets\/d\/(?<id>[^\/&?#]+).*/;
-export const SHEETS_URL_TEMPL = "https://docs.google.com/spreadsheets/d/<id>";
+export const GSHEETS_REGEX = /https:\/\/docs.google.com\/spreadsheets\/d\/(?<id>[^\/&?#]+).*/;
+export const GSHEETS_URL_TEMPL = "https://docs.google.com/spreadsheets/d/<id>";
 
-export const FORMS_REGEX = /https:\/\/docs.google.com\/forms\/d\/(?<id>[^\/&?#]+).*/;
-export const FORMS_URL_TEMPL = "https://docs.google.com/forms/d/<id>";
+export const GFORMS_REGEX = /https:\/\/docs.google.com\/forms\/d\/(?<id>[^\/&?#]+).*/;
+export const GFORMS_URL_TEMPL = "https://docs.google.com/forms/d/<id>";
+
+export const EVENT_DATA_SOURCE_REGEX = [GFORMS_REGEX, GSHEETS_REGEX] as const;
+export const EVENT_DATA_SOURCE_URLS = [GFORMS_URL_TEMPL, GSHEETS_URL_TEMPL] as const;
+export const EVENT_DATA_SOURCES = [
+    "Google Forms", 
+    "Google Sheets"
+] as const;
+export const EVENT_DATA_SOURCE_MIME_TYPES = [
+    "application/vnd.google-apps.form", 
+    "application/vnd.google-apps.spreadsheet", 
+] as const;
+export const EVENT_DATA_SOURCE_MIME_QUERIES = EVENT_DATA_SOURCE_MIME_TYPES.map(mimeType => `mimeType = '${mimeType}'`);
+
+// == Constants for event folder sources ==
+
+export const GDRIVE_FOLDER_REGEX = /https:\/\/drive\.google\.com\/drive\/folders\/(?<id>[^\/&?#]+).*/;
+export const GDRIVE_FOLDER_URL_TEMPL = "https://drive.google.com/drive/folders/<id>";
+export const GDRIVE_FOLDER_MIME = "application/vnd.google-apps.folder";
+
+export const EVENT_FOLDER_DATA_SOURCE_REGEX = [GDRIVE_FOLDER_REGEX] as const;
+export const EVENT_FOLDER_DATA_SOURCE_URLS = [GDRIVE_FOLDER_URL_TEMPL] as const;
+export const EVENT_FOLDER_DATA_SOURCES = [
+    "Google Drive Folder"
+] as const;
+export const EVENT_FOLDER_DATA_SOURCE_MIME_TYPES = [
+    "application/vnd.google-apps.folder"
+] as const;
+export const EVENT_FOLDER_DATA_SOURCE_MIME_QUERIES = EVENT_DATA_SOURCE_MIME_TYPES.map(mimeType => `mimeType = '${mimeType}'`);
 
 // == Constants for the core types ==
+
+export const BIRTHDAY_UPDATE_FREQUENCIES = ["weekly", "monthly"] as const;
+
 export const MEMBER_PROPERTY_TYPES = [
     "string?", "string!", 
     "number?", "number!", // entries must be convertible to a number
@@ -52,53 +78,45 @@ export const BASE_POINT_TYPES_OBJ = {
     },
 } as const;
 
-export const BIRTHDAY_UPDATE_FREQUENCIES = ["weekly", "monthly"] as const;
-
-export const EVENT_DATA_SOURCES = ["Google Forms", "Google Sheets", "Google Drive Folder", ""] as const;
-export const EVENT_DATA_SOURCE_REGEX = [FORMS_REGEX, SHEETS_REGEX, DRIVE_FOLDER_REGEX] as const;
-export const EVENT_DATA_SOURCE_URLS = [FORMS_URL_TEMPL, SHEETS_URL_TEMPL, DRIVE_FOLDER_URL_TEMPL] as const;
-export const EVENT_DATA_SOURCE_MIME_TYPES = ["application/vnd.google-apps.form", "application/vnd.google-apps.spreadsheet", "application/vnd.google-apps.folder"] as const;
-export const EVENT_DATA_SOURCE_MIME_QUERIES = EVENT_DATA_SOURCE_MIME_TYPES.map(mimeType => `mimeType = '${mimeType}'`);
-
-export const DEFAULT_MATCHERS: FieldMatcher[] = [
+export const DEFAULT_MATCHERS = [
     {
-        matchCondition: "contains",
-        fieldExpression: "ID",
+        matchCondition: "contains" as const,
+        fieldExpression: "ID" as const,
         memberProperty: "Member ID",
         filters: [],
         priority: 0
     },
     {
-        matchCondition: "contains",
-        fieldExpression: "First Name",
+        matchCondition: "contains" as const,
+        fieldExpression: "First Name" as const,
         memberProperty: "First Name",
         filters: [],
         priority: 1
     },
     {
-        matchCondition: "contains",
-        fieldExpression: "Last Name",
+        matchCondition: "contains" as const,
+        fieldExpression: "Last Name" as const,
         memberProperty: "Last Name",
         filters: [],
         priority: 2
     },
     {
-        matchCondition: "contains",
-        fieldExpression: "Email",
+        matchCondition: "contains" as const,
+        fieldExpression: "Email" as const,
         memberProperty: "Email",
         filters: [],
         priority: 3
     },
     {
-        matchCondition: "contains",
-        fieldExpression: "Birthday",
+        matchCondition: "contains" as const,
+        fieldExpression: "Birthday" as const,
         memberProperty: "Birthday",
         filters: [],
         priority: 4
     },
 ];
 
-export const INVITED_TROUPE_LIMIT : Omit<LimitSchema, "troupeId" | "hasInviteCode"> = {
+export const INVITED_TROUPE_LIMIT = {
     docType: "troupeLimit" as const,
     modifyOperationsLeft: 30,
     manualSyncsLeft: 5,
@@ -112,9 +130,10 @@ export const INVITED_TROUPE_LIMIT : Omit<LimitSchema, "troupeId" | "hasInviteCod
 
     eventsLeft: 100,
     membersLeft: 200,
-}
+} as const;
 
-export const UNINVITED_TROUPE_LIMIT: Omit<LimitSchema, "troupeId" | "hasInviteCode"> = {
+// : Omit<LimitSchema, "troupeId" | "hasInviteCode">
+export const UNINVITED_TROUPE_LIMIT = {
     docType: "troupeLimit" as const,
     modifyOperationsLeft: 10,
     manualSyncsLeft: 2,
@@ -128,4 +147,4 @@ export const UNINVITED_TROUPE_LIMIT: Omit<LimitSchema, "troupeId" | "hasInviteCo
 
     eventsLeft: 20,
     membersLeft: 200,
-}
+} as const;

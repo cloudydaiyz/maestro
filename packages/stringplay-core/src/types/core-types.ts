@@ -1,7 +1,7 @@
 // Data schema for the core data types, to be stored in the app's database
 
 import type { WithId } from "mongodb";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, BIRTHDAY_UPDATE_FREQUENCIES, EVENT_DATA_SOURCES, MEMBER_PROPERTY_TYPES } from "../util/constants";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, BIRTHDAY_UPDATE_FREQUENCIES, EVENT_DATA_SOURCES, EVENT_FOLDER_DATA_SOURCES, MEMBER_PROPERTY_TYPES } from "../util/constants";
 import type { Mutable } from "./util-types";
 
 // == TROUPE ==
@@ -110,6 +110,7 @@ export interface EventSchema {
 }
 
 export type EventDataSource = typeof EVENT_DATA_SOURCES[number];
+export type EventFolderDataSource = typeof EVENT_FOLDER_DATA_SOURCES[number];
 
 export interface FieldToPropertyMap {
     [fieldId: string | number]: {

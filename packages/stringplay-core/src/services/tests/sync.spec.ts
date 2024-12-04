@@ -1,5 +1,3 @@
-import { defaultConfig, noMembersConfig, onlyEventTypesConfig } from "../../util/server/test-config";
-
 import { describe } from "@jest/globals";
 import { arrayToObject, deleteFromArray, objectToArray, shuffleArray } from "../../util/helper";
 import { GoogleSheetsLogService } from "../sync/logs/gsheets-log";
@@ -11,6 +9,7 @@ import { PublicEvent, UpdateEventRequest } from "../../types/api-types";
 import { CoreService } from "../core";
 import { DEFAULT_MATCHERS } from "../../util/constants";
 import init from "../../util/server/tests/init-test";
+import { onlyEventTypesConfig } from "../../util/server/tests/config-test";
 
 const { dbSetup } = init();
 

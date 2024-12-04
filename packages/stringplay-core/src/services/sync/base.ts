@@ -22,20 +22,6 @@ export abstract class EventDataService {
         this.incrementLimits = incrementLimits;
     }
 
-    /** 
-     * Returns the property associated with the field for the event based on the troupe's field
-     * matchers, if any.
-     */
-    getMatcherIndex(field: string): number | null {
-        for(let i = 0; i < this.troupe.fieldMatchers.length; i++) {
-            const matcher = this.troupe.fieldMatchers[i];
-            const regex = getMatcherRegex(matcher);
-            const test = regex.test(field);
-            if(test) return i;
-        }
-        return null;
-    }
-
     abstract init(): Promise<void>;
     abstract discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void>;
 }

@@ -1,10 +1,9 @@
-import { noMembersConfig } from "../../../../util/server/test-config";
-
 import { describe } from "@jest/globals";
 import { EventDataMap, AttendeeDataMap } from "../../../../types/service-types";
 import { objectMap, objectToArray, verifyMemberPropertyType } from "../../../../util/helper";
 import { GoogleSheetsEventDataService } from "../gsheets-event";
 import init from "../../../../util/server/tests/init-test";
+import { noMembersConfig } from "../../../../util/server/tests/config-test";
 
 const { dbSetup } = init();
 

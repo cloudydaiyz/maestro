@@ -7,7 +7,7 @@ import { EventDataMap, GoogleSheetsQuestionToTypeMap, AttendeeDataMap } from "..
 import { parse } from "csv-parse";
 import { Readable } from "stream";
 import assert from "assert";
-import { getDataSourceId } from "../../../util/helper";
+import { getEventDataSourceId, getMatcherIndex } from "../../../util/helper";
 import { DateParser } from "../../../util/server/date-parser";
 import { EventDataService } from "../base";
 
@@ -26,7 +26,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
     }
 
     async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
-        const spreadsheetId = getDataSourceId("Google Sheets", event.sourceUri)!;
+        const spreadsheetId = getEventDataSourceId("Google Sheets", event.sourceUri)!;
         const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`;
         
         try {
@@ -66,7 +66,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 
                 // If there's no existing property, see if the troupe has a matcher that
                 // matches with the field for this event
-                const matcherId = this.getMatcherIndex(field);
+                const matcherId = getMatcherIndex(this.troupe, field);
                 const matcherProperty = matcherId !== null ? this.troupe.fieldMatchers[matcherId].memberProperty : null;
                 const property = event.fieldToPropertyMap[i]?.property || matcherProperty;
 

@@ -425,7 +425,7 @@ export const scheduleController = newUtilController(async (body) => {
     console.log(`Performing scheduled task (${parsedBody.taskType})...`);
     if(parsedBody.taskType == "sync") {
         const db = await BaseDbService.create();
-        const syncRequests: SyncRequest[] = await db.troupeColl.find({}).toArray()
+        const syncRequests: SyncRequest[] = await db.troupeColl.find().toArray()
             .then(troupes => troupes.map(t => ({ troupeId: t._id.toHexString() })));
 
         // Sync all the troupes currently in the collection

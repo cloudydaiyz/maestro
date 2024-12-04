@@ -1,13 +1,11 @@
-import type { BaseMemberPoints, BaseMemberProperties, BaseMemberPropertyTypes, BasePointTypes, EventSchema, EventTypeSchema, EventsAttendedBucketSchema, FieldToPropertyMap, LimitSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeSchema, VariableMemberPoints, VariableMemberProperties, VariableMemberPropertyTypes, VariablePointTypes } from "../../types/core-types";
-import type { Attendee, ConsoleData, EventType, PublicEvent } from "../../types/api-types";
-import type { Id } from "../../types/util-types";
-
-import { randomElement, verifyMemberPropertyType, getDefaultMemberPropertyValue, generatePseudoObjectId } from "../helper";
-import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, DEFAULT_MATCHERS, INVITED_TROUPE_LIMIT, MAX_PAGE_SIZE, MEMBER_PROPERTY_TYPES } from "../constants";
-import { toAttendee, toEventType, toPublicEvent, toTroupe, toTroupeDashboard, toTroupeLimits } from "../api-transform";
-
-import { assert } from "../helper";
+import type { Attendee, ConsoleData, EventType, PublicEvent } from "../../../types/api-types";
 import { WithId, ObjectId } from "mongodb";
+import assert from "assert";
+import { Id } from "../../../types/util-types";
+import { toTroupe, toTroupeDashboard, toTroupeLimits, toEventType, toPublicEvent, toAttendee } from "../../api-transform";
+import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, DEFAULT_MATCHERS, INVITED_TROUPE_LIMIT, MAX_PAGE_SIZE } from "../../constants";
+import { randomElement, verifyMemberPropertyType, getDefaultMemberPropertyValue } from "../../helper";
+import { TroupeSchema, BaseMemberPropertyTypes, VariableMemberPropertyTypes, BasePointTypes, VariablePointTypes, TroupeDashboardSchema, LimitSchema, EventTypeSchema, EventSchema, MemberSchema, BaseMemberProperties, VariableMemberProperties, BaseMemberPoints, VariableMemberPoints, EventsAttendedBucketSchema, FieldToPropertyMap, MemberPropertyValue, EventDataSource, FieldMatcher } from "../../../types/core-types";
 
 /** Configuration for setting up the database with test data. This implementation doesn't use `ObjectId` */
 export interface SystemSetupConfig {
@@ -109,6 +107,8 @@ export function populateConfig(config: SystemSetupConfig, populateFieldToPropert
         request._id = new ObjectId();
         request.id = request._id.toHexString();
 
+        const fieldMatchers: FieldMatcher[] = DEFAULT_MATCHERS;
+
         const newTroupe: WithId<TroupeSchema> = {
             _id: request._id,
             lastUpdated: request.lastUpdated || new Date(),
@@ -120,7 +120,7 @@ export function populateConfig(config: SystemSetupConfig, populateFieldToPropert
             synchronizedMemberPropertyTypes: BASE_MEMBER_PROPERTY_TYPES,
             pointTypes: { ...BASE_POINT_TYPES_OBJ, ...request.pointTypes },
             synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
-            fieldMatchers: DEFAULT_MATCHERS,
+            fieldMatchers,
         };
 
         const newDashboard: WithId<TroupeDashboardSchema> = {
@@ -201,8 +201,8 @@ export function populateConfig(config: SystemSetupConfig, populateFieldToPropert
             troupeId: troupe._id.toHexString(),
             lastUpdated: request.lastUpdated || new Date(),
             title: request.title || "Test Event - " + customEventId,
-            source: request.source || "",
-            synchronizedSource: request.synchronizedSource || "",
+            source: request.source || "" as EventDataSource,
+            synchronizedSource: request.synchronizedSource || "" as EventDataSource,
             sourceUri: request.sourceUri || "https://example.com/" + customEventId,
             synchronizedSourceUri: request.synchronizedSourceUri || "https://example.com/" + customEventId,
             startDate: request.startDate || new Date(),

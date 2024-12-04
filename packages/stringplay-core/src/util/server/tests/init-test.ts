@@ -3,7 +3,7 @@ import { BaseDbService } from "../../../services/base";
 import { CoreService } from "../../../services/core";
 import { DB_NAME } from "../../constants";
 import { startDb, cleanDbConnections, cleanLogs, stopDb } from "../resources";
-import { SystemSetupConfig, populateConfig, defaultConfig } from "../test-config";
+import { SystemSetupConfig, populateConfig, defaultConfig } from "./config-test";
 
 /**
  * Setup the database with the given configuration, opting out of interaction with

@@ -7,7 +7,7 @@ import { forms_v1 } from "googleapis";
 import { getForms } from "../../../cloud/gcp";
 import { GaxiosResponse } from "gaxios";
 import assert from "assert";
-import { getDataSourceId } from "../../../util/helper";
+import { getEventDataSourceId, getMatcherIndex } from "../../../util/helper";
 import { DateParser } from "../../../util/server/date-parser";
 import { EventDataService } from "../base";
 
@@ -28,7 +28,7 @@ export class GoogleFormsEventDataService extends EventDataService {
     }
 
     async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
-        const formId = getDataSourceId("Google Forms", event.sourceUri)!;
+        const formId = getEventDataSourceId("Google Forms", event.sourceUri)!;
         const questionToTypeMap: GoogleFormsQuestionToTypeMap = {};
         const eventData = this.eventMap[event.sourceUri];
         assert(eventData, "Improperly structured event data");
@@ -76,7 +76,7 @@ export class GoogleFormsEventDataService extends EventDataService {
 
             // If there's no existing property, see if the troupe has a matcher that
             // matches with the field for this event
-            const matcherId = this.getMatcherIndex(field);
+            const matcherId = getMatcherIndex(this.troupe, field);
             const matcherProperty = matcherId !== null ? this.troupe.fieldMatchers[matcherId].memberProperty : null;
             let property = event.fieldToPropertyMap[fieldId]?.property || matcherProperty;
 

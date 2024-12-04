@@ -4,7 +4,7 @@ import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema,
 import { ApiRequestBuilder, DbWriteRequest } from "../base";
 import { TroupeLimitSpecifier } from "../../../types/service-types";
 import assert from "assert";
-import { AUDIENCE_COLL, DRIVE_FOLDER_REGEX, EVENT_COLL, EVENTS_ATTENDED_COLL, TROUPE_COLL } from "../../../util/constants";
+import { AUDIENCE_COLL, GDRIVE_FOLDER_REGEX, EVENT_COLL, EVENTS_ATTENDED_COLL, TROUPE_COLL } from "../../../util/constants";
 import { ClientError } from "../../../util/error";
 import { UpdateOperator } from "../../../types/util-types";
 
@@ -38,7 +38,7 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
 
             // Ensure given source folder URIs are valid Google Drive folders
             request.addSourceFolderUris?.forEach((uri) => assert(
-                DRIVE_FOLDER_REGEX.test(uri), 
+                GDRIVE_FOLDER_REGEX.test(uri), 
                 new ClientError("Invalid source URI in request")
             ));
 

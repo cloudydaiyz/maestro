@@ -1,9 +1,9 @@
-import { SystemSetupConfig, defaultConfig } from "../../util/server/test-config";
 import { ApiService } from "../api";
 import { CoreService } from "../core";
 import { test, describe } from "@jest/globals";
 import { ObjectId } from "mongodb";
 import init from "../../util/server/tests/init-test";
+import { SystemSetupConfig, defaultConfig } from "../../util/server/tests/config-test";
 
 const { dbSetup } = init();
 

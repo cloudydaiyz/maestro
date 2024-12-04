@@ -1,30 +1,39 @@
 // General helper functions
 
 import type { ApiType } from "../types/api-types";
-import type { EventDataSource, FieldMatcher, MemberPropertyType, MemberPropertyValue } from "../types/core-types";
-import { DRIVE_FOLDER_REGEX, FORMS_REGEX, FORMS_URL_TEMPL, SHEETS_REGEX, SHEETS_URL_TEMPL } from "./constants";
+import type { EventDataSource, EventFolderDataSource, FieldMatcher, MemberPropertyType, MemberPropertyValue, TroupeSchema } from "../types/core-types";
+import { GDRIVE_FOLDER_REGEX, GDRIVE_FOLDER_URL_TEMPL, GFORMS_REGEX, GFORMS_URL_TEMPL, GSHEETS_REGEX, GSHEETS_URL_TEMPL } from "./constants";
 
 /**
  * Replaces the `<id>` placeholder in the given URL with the provided ID based on the data source
  */
-export function getDataSourceUrl(dataSource: EventDataSource, id: string): string {
-    let url: string;
-    if(dataSource == "Google Sheets") url = SHEETS_URL_TEMPL;
-    else if(dataSource == "Google Forms") url = FORMS_URL_TEMPL;
-    else return "";
+export function parseEventDataSourceUrl(dataSource: EventDataSource, id: string): string {
+    let url: string = "";
+    if(dataSource == "Google Sheets") url = GSHEETS_URL_TEMPL;
+    else if(dataSource == "Google Forms") url = GFORMS_URL_TEMPL;
+    return url.replace(/<id>/, id);
+}
+
+export function parseEventFolderDataSourceUrl(dataSource: EventFolderDataSource, id: string): string {
+    let url: string = "";
+    if(dataSource == "Google Drive Folder") url = GDRIVE_FOLDER_URL_TEMPL;
     return url.replace(/<id>/, id);
 }
 
 /**
  * Retrieves the ID from the given URL based on the data source
  */
-export function getDataSourceId(dataSource: EventDataSource, url: string): string | undefined {
-    let regex: RegExp;
-    if(dataSource == "Google Sheets") regex = SHEETS_REGEX;
-    else if(dataSource == "Google Forms") regex = FORMS_REGEX;
-    else if(dataSource == "Google Drive Folder") regex = DRIVE_FOLDER_REGEX;
-    else return undefined;
-    return regex.exec(url)?.groups?.["id"];
+export function getEventDataSourceId(dataSource: EventDataSource, url: string): string | undefined {
+    let regex: RegExp | undefined = undefined;
+    if(dataSource == "Google Sheets") regex = GSHEETS_REGEX;
+    else if(dataSource == "Google Forms") regex = GFORMS_REGEX;
+    return regex?.exec(url)?.groups?.["id"];
+}
+
+export function getEventFolderDataSourceId(dataSource: EventFolderDataSource, url: string): string | undefined {
+    let regex: RegExp | undefined = undefined;
+    if(dataSource == "Google Drive Folder") regex = GDRIVE_FOLDER_REGEX;
+    return regex?.exec(url)?.groups?.["id"];
 }
 
 /** Returns true if the given member property value is valid with the given member property type */
@@ -188,4 +197,18 @@ export function getMatcherRegex(matcher: FieldMatcher) {
         if(!regex.endsWith("$")) regex = regex + "$";
     }
     return new RegExp(regex, matcher.filters.includes("nocase") ? "i" : undefined);
+}
+
+/** 
+ * Returns the property associated with the field for the event based on the troupe's field
+ * matchers, if any.
+ */
+export function getMatcherIndex(troupe: TroupeSchema, field: string): number | null {
+    for(let i = 0; i < troupe.fieldMatchers.length; i++) {
+        const matcher = troupe.fieldMatchers[i];
+        const regex = getMatcherRegex(matcher);
+        const test = regex.test(field);
+        if(test) return i;
+    }
+    return null;
 }

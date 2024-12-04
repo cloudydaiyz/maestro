@@ -1,11 +1,10 @@
-import { defaultConfig, noMembersConfig } from "../../../../util/server/test-config";
-
 import { describe } from "@jest/globals";
 import { objectToArray } from "../../../../util/helper";
 import { GoogleSheetsLogService } from "../gsheets-log";
 import type { WithId } from "mongodb";
 import { AttendeeSchema, EventSchema } from "../../../../types/core-types";
 import init from "../../../../util/server/tests/init-test";
+import { defaultConfig, noMembersConfig } from "../../../../util/server/tests/config-test";
 
 const { dbSetup } = init();
 

@@ -65,12 +65,13 @@ export interface EventDataMap {
 export interface AttendeeDataMap { 
     [memberId: string]: {
         member: WithId<MemberSchema>,
-        eventsAttended: (EventsAttendedBucketSchema["events"][string] & { eventId: string })[],
+        eventsAttended: EventsAttendedList,
         eventsAttendedDocs: WithId<EventsAttendedBucketSchema>[],
         delete: boolean,
         fromColl: boolean
     }
 }
+export type EventsAttendedList = (EventsAttendedBucketSchema["events"][string] & { eventId: string })[];
 
 export type GlobalLimitSpecifier = Partial<Record<keyof GlobalLimit, number>>;
 export type TroupeLimitSpecifier = Partial<Record<keyof TroupeLimit, number>>;

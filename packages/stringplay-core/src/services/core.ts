@@ -20,7 +20,7 @@ export class CoreService extends BaseDbService {
         this.inviteCodeColl = this.client.db(DB_NAME).collection("inviteCodes");
     }
 
-    async initSystem() {
+    async initSystem(): Promise<void> {
         const limitService = await LimitService.create();
         await this.inviteCodeColl.insertOne({
             inviteCodes: INVITE_CODES?.split(",") || [],
@@ -29,7 +29,7 @@ export class CoreService extends BaseDbService {
         await limitService.initGlobalLimits();
     }
 
-    async toggleSystemLock(lockEnabled: boolean) {
+    async toggleSystemLock(lockEnabled: boolean): Promise<void> {
 
     }
 
@@ -125,14 +125,14 @@ export class CoreService extends BaseDbService {
 
     /** Places all troupes into the sync queue with sync locks disabled */
     async syncTroupes(): Promise<void> {
-        const requests: SyncRequest[] = await this.troupeColl.find({}).toArray()
+        const requests: SyncRequest[] = await this.troupeColl.find().toArray()
             .then(troupes => troupes.filter(t => !t.syncLock).map(t => ({ troupeId: t._id.toHexString()})));
         await bulkAddToGcpSyncQueue(requests);
     }
 
     async refreshLimits(): Promise<void> {
         const limitService = await LimitService.create();
-        const refreshAllTroupes = this.troupeColl.find({}).map(async (troupe) => {
+        const refreshAllTroupes = this.troupeColl.find().map(async (troupe) => {
             const troupeId = troupe._id.toHexString();
             const hasInviteCode = await this.inviteCodeColl.findOne({ 
                 [`usedInviteCodes.${troupeId}`]: { $exists: true } 
