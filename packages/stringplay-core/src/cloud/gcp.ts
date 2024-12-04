@@ -50,13 +50,8 @@ export async function getForms(): Promise<forms_v1.Forms> {
     return forms;
 }
 
-/** Adds request to the sync queue */ 
-export async function addToSyncQueue(request: SyncRequest): Promise<void> {
-    return bulkAddToSyncQueue([request]);
-}
-
 /** Adds requests to the sync queue */ 
-export async function bulkAddToSyncQueue(requests: SyncRequest[]): Promise<void> {
+export async function bulkAddToGcpSyncQueue(requests: SyncRequest[]): Promise<void> {
     assert(GCP_PROJECT_ID && GCP_REGION && SYNC_QUEUE_NAME && SCHEDULE_FUNCTION_URL && GCP_SERVICE_ACCOUNT_EMAIL, "ENV: Missing GCP environment variables");
     console.log("Adding sync requests to the queue...");
     const client = new tasks.v2.CloudTasksClient();

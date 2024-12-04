@@ -6,7 +6,7 @@ import { Collection, ObjectId, WithId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, DB_NAME, DEFAULT_MATCHERS } from "../util/constants";
 import { BaseDbService } from "./base";
 import { GoogleSheetsLogService } from "./sync/logs/gsheets-log";
-import { bulkAddToSyncQueue } from "../cloud/gcp";
+import { bulkAddToGcpSyncQueue } from "../cloud/gcp";
 import { InviteCodeSchema, TroupeSchema } from "../types/core-types";
 import { INVITE_CODES } from "../util/env";
 import { LimitService } from "./limits";
@@ -127,7 +127,7 @@ export class CoreService extends BaseDbService {
     async syncTroupes(): Promise<void> {
         const requests: SyncRequest[] = await this.troupeColl.find({}).toArray()
             .then(troupes => troupes.filter(t => !t.syncLock).map(t => ({ troupeId: t._id.toHexString()})));
-        await bulkAddToSyncQueue(requests);
+        await bulkAddToGcpSyncQueue(requests);
     }
 
     async refreshLimits(): Promise<void> {

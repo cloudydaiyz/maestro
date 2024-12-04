@@ -1,16 +1,16 @@
-import init from "../lifecycle/init";
 import { defaultConfig, noMembersConfig, onlyEventTypesConfig } from "../../util/server/test-config";
 
 import { describe } from "@jest/globals";
 import { arrayToObject, deleteFromArray, objectToArray, shuffleArray } from "../../util/helper";
-import { GoogleSheetsLogService } from "../../services/sync/logs/gsheets-log";
+import { GoogleSheetsLogService } from "../sync/logs/gsheets-log";
 import { ObjectId, WithId } from "mongodb";
 import { AttendeeSchema, EventSchema, EventsAttendedBucketSchema } from "../../types/core-types";
-import { SyncService } from "../../services/sync";
-import { ApiService } from "../../services/api";
+import { SyncService } from "../sync";
+import { ApiService } from "../api";
 import { PublicEvent, UpdateEventRequest } from "../../types/api-types";
-import { CoreService } from "../../services/core";
+import { CoreService } from "../core";
 import { DEFAULT_MATCHERS } from "../../util/constants";
+import init from "../../util/server/tests/init-test";
 
 const { dbSetup } = init();
 

@@ -4,7 +4,7 @@ import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBu
 import { DRIVE_FOLDER_MIME, DRIVE_FOLDER_REGEX, DRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, FORMS_REGEX, FORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, EVENT_DATA_SOURCE_MIME_QUERIES, SHEETS_URL_TEMPL } from "../util/constants";
 import { AggregationCursor, AnyBulkWriteOperation, BulkWriteResult, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getDataSourceId, getDataSourceUrl, getDefaultMemberPropertyValue } from "../util/helper";
-import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap, TroupeLimitSpecifier } from "../types/service-types";
+import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap, TroupeLimitSpecifier, SyncRequest } from "../types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "../types/util-types";
 import { GoogleFormsEventDataService } from "./sync/events/gforms-event";
@@ -19,7 +19,16 @@ export class SyncService extends BaseDbService {
     constructor() { super() }
 
     async sync(troupeId: string, skipLogPublish?: true): Promise<void> {
-        await SyncTroupe.create().then(handler => handler.sync(troupeId, skipLogPublish));
+        await TroupeSyncHandler.create().then(handler => handler.sync(troupeId, skipLogPublish));
+    }
+
+    async addToSyncQueue(request: SyncRequest): Promise<void> {
+        return this.bulkAddToSyncQueue([ request ]);
+    }
+
+    async bulkAddToSyncQueue(requests: SyncRequest[]): Promise<void> {
+        const { bulkAddToGcpSyncQueue } = await import("../cloud/gcp");
+        bulkAddToGcpSyncQueue(requests);
     }
 }
 
@@ -31,7 +40,7 @@ export class SyncService extends BaseDbService {
  * - Delete members that are no longer in the source folder & have no overridden properties
  * - NOTE: Populate local variables with synchronized information to update the database
  */
-export class SyncTroupe extends BaseDbService {
+export class TroupeSyncHandler extends BaseDbService {
     drive!: drive_v3.Drive;
     limitService!: LimitService;
     currentLimits!: TroupeLimit;
@@ -355,7 +364,7 @@ export class SyncTroupe extends BaseDbService {
     }
 
     /**
-     * Helper for {@link SyncTroupe.discoverAndRefreshAudience}. Discovers
+     * Helper for {@link TroupeSyncHandler.discoverAndRefreshAudience}. Discovers
      * audience information from a single event. 
      * 
      * Invariant: All events must have one field for the Member ID defined or else

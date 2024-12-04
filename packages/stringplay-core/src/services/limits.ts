@@ -139,7 +139,6 @@ export class LimitService extends BaseDbService {
     }
 
     async withinTroupeLimits(troupeId: string, limitsToInc: TroupeLimitSpecifier): Promise<boolean> {
-
         if(this.ignoreTroupeLimits[troupeId] < 0) {
             // console.warn("Ignoring limits check for troupe " + troupeId);
             return true;

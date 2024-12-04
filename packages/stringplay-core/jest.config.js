@@ -1,5 +1,5 @@
 module.exports = {
     testEnvironment: "node",
-    rootDir: "dist/tests",
+    rootDir: "dist",
     testTimeout: 100000,
 }

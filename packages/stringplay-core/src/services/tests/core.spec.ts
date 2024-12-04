@@ -1,10 +1,9 @@
-import init from "./lifecycle/init";
-
-import { ApiService } from "../services/api";
-import { CoreService } from "../services/core";
+import { ApiService } from "../api";
+import { CoreService } from "../core";
 import { test, describe } from "@jest/globals";
+import init from "../../util/server/tests/init-test";
 
-const { dbSetup } = init();
+init();
 
 describe("basic core operations", () => {
     test("create and delete troupe", async () => {

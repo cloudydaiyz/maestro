@@ -1,9 +1,9 @@
-import { BaseDbService } from "../../services/base";
-import { ApiService } from "../../services/api";
-import { SystemSetupConfig, defaultConfig, populateConfig } from "../../util/server/test-config";
-import { cleanDbConnections, cleanLogs, startDb, stopDb } from "../../util/server/resources";
-import { DB_NAME } from "../../util/constants";
-import { CoreService } from "../../services/core";
+import { ApiService } from "../../../services/api";
+import { BaseDbService } from "../../../services/base";
+import { CoreService } from "../../../services/core";
+import { DB_NAME } from "../../constants";
+import { startDb, cleanDbConnections, cleanLogs, stopDb } from "../resources";
+import { SystemSetupConfig, populateConfig, defaultConfig } from "../test-config";
 
 /**
  * Setup the database with the given configuration, opting out of interaction with

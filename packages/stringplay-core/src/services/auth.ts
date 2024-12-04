@@ -1,3 +1,5 @@
+// Implementation for client-facing authentication controller methods
+
 import { BaseDbService } from "./base";
 import { Collection, ObjectId, WithId } from "mongodb";
 import { InviteCodeSchema, UserSchema } from "../types/core-types";
@@ -11,7 +13,7 @@ import zxcvbn from "zxcvbn";
 import bcrypt from "bcrypt";
 import assert from "assert";
 import jwt from "jsonwebtoken";
-import { AccessTokenPayload, RefreshTokenPayload, Credentials, AuthorizationHeader, SpringplayAuthApi } from "../types/api-types";
+import { AccessTokenPayload, RefreshTokenPayload, Credentials, AuthorizationHeader, AuthenticationEndpoints } from "../types/api-types";
 import { LimitService } from "./limits";
 
 /**
@@ -22,7 +24,7 @@ import { LimitService } from "./limits";
  * - Recycle keys to encrypt / decrypt passwords weekly
  * - Convert JWTs to session tokens with refresh token families to allow for revocation
  */
-export class AuthService extends BaseDbService implements SpringplayAuthApi {
+export class AuthService extends BaseDbService implements AuthenticationEndpoints {
     readonly userColl: Collection<UserSchema>;
     readonly inviteCodeColl: Collection<InviteCodeSchema>;
 

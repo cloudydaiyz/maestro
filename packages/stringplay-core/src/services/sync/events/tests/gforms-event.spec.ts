@@ -1,10 +1,10 @@
-import init from "../lifecycle/init";
-import { noMembersConfig } from "../../util/server/test-config";
+import { noMembersConfig } from "../../../../util/server/test-config";
 
 import { describe } from "@jest/globals";
-import { GoogleFormsEventDataService } from "../../services/sync/events/gforms-event";
-import { EventDataMap, AttendeeDataMap } from "../../types/service-types";
-import { objectMap, objectToArray, verifyMemberPropertyType } from "../../util/helper";
+import { GoogleFormsEventDataService } from "../gforms-event";
+import { EventDataMap, AttendeeDataMap } from "../../../../types/service-types";
+import { objectMap, objectToArray, verifyMemberPropertyType } from "../../../../util/helper";
+import init from "../../../../util/server/tests/init-test";
 
 const { dbSetup } = init();
 

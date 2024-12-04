@@ -1,11 +1,9 @@
-import init from "./lifecycle/init";
-import { SystemSetupConfig, defaultConfig } from "../util/server/test-config";
-
-import { ApiService } from "../services/api";
-import { CoreService } from "../services/core";
+import { ApiService } from "../api";
+import { CoreService } from "../core";
 import { test, describe } from "@jest/globals";
-import { AuthService } from "../services/auth";
-import { INVITE_CODES } from "../util/env";
+import { AuthService } from "../auth";
+import { INVITE_CODES } from "../../util/env";
+import init from "../../util/server/tests/init-test";
 
 init();
 

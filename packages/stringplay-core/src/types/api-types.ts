@@ -11,7 +11,7 @@ export const apiobj = {};
 export type ApiType<T> = NullOptional<Replace<T, string|boolean|number|null|undefined, string>>;
 
 /** Defines the set of core functions used to interact with the API. */
-export interface SpringplayApi {
+export interface ApiEndpoints {
 
     /** Retrieves data for a user's console */
     getConsoleData(troupeId: string): Promise<ConsoleData | AxiosResponse<ConsoleData>>;
@@ -143,7 +143,7 @@ export interface SpringplayApi {
 }
 
 /** Defines the set of functions used to authenticate with the API. */
-export interface SpringplayAuthApi {
+export interface AuthenticationEndpoints {
 
     /** Creates a new account with an associated troupe */
     register(username: string, email: string, password: string, troupeName: string): Promise<void | AxiosResponse<void>>;
