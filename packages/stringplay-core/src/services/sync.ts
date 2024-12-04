@@ -129,7 +129,13 @@ export class SyncTroupeRequest extends BaseDbService {
             event.synchronizedSource = event.source;
             event.synchronizedSourceUri = event.sourceUri;
             event.synchronizedFieldToPropertyMap = event.fieldToPropertyMap;
-            this.eventMap[event.sourceUri] = { event, fromColl: true };
+            if(event.sourceUri in this.eventMap) {
+                console.warn("Two events in the same troupe with same source URI detected. This is unintended behavior.");
+                console.warn(`Troupe ID: ${troupeId}, Source URI: ${event.sourceUri}`);
+                console.warn("Skipping...");
+            } else {
+                this.eventMap[event.sourceUri] = { event, fromColl: true };
+            }
         }
 
         /**
@@ -247,31 +253,32 @@ export class SyncTroupeRequest extends BaseDbService {
                         eventData.event.eventTypeTitle = currentEventType.title;
                         eventData.event.value = currentEventType.value;
                     }
-                } else {
-                    if(this.currentLimits.eventsLeft === this.incrementLimits.eventsLeft) {
-                        continue;
-                    }
-
-                    // Add the new event to the collection of events
-                    const event: WithId<EventSchema> = {
-                        _id: new ObjectId(),
-                        troupeId,
-                        lastUpdated: new Date(),
-                        title: file.name!,
-                        source,
-                        synchronizedSource: source,
-                        sourceUri,
-                        synchronizedSourceUri: sourceUri,
-                        startDate: file.createdTime ? new Date(file.createdTime) : new Date(),
-                        eventTypeId: currentEventType._id.toHexString(),
-                        eventTypeTitle: currentEventType.title,
-                        value: currentEventType.value,
-                        fieldToPropertyMap: {},
-                        synchronizedFieldToPropertyMap: {},
-                    };
-                    this.eventMap[sourceUri] = { event, fromColl: false };
-                    this.incrementLimits.eventsLeft! -= 1;
+                    continue;
                 }
+
+                if(this.currentLimits.eventsLeft === this.incrementLimits.eventsLeft) {
+                    continue;
+                }
+
+                // Add the new event to the collection of events
+                const event: WithId<EventSchema> = {
+                    _id: new ObjectId(),
+                    troupeId,
+                    lastUpdated: new Date(),
+                    title: file.name!,
+                    source,
+                    synchronizedSource: source,
+                    sourceUri,
+                    synchronizedSourceUri: sourceUri,
+                    startDate: file.createdTime ? new Date(file.createdTime) : new Date(),
+                    eventTypeId: currentEventType._id.toHexString(),
+                    eventTypeTitle: currentEventType.title,
+                    value: currentEventType.value,
+                    fieldToPropertyMap: {},
+                    synchronizedFieldToPropertyMap: {},
+                };
+                this.eventMap[sourceUri] = { event, fromColl: false };
+                this.incrementLimits.eventsLeft! -= 1;
             }
         }
     }

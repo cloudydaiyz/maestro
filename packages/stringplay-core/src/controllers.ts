@@ -329,14 +329,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
     if(syncPath) {
         if(method == "POST") {
             assert(authService.validate(accessToken, troupeId, 0), new AuthenticationError("Invalid credentials"));
-            console.log("Sending sync event for troupe " + troupeId);
-
-            // Send the sync event to the (dev/actual) sync service
-            if(DEV_MODE) {
-                syncServer.emit("sync", { troupeId });
-            } else {
-                await apiService.initiateSync(troupeId);
-            }
+            await apiService.initiateSync(troupeId);
 
             return {
                 status: 204,

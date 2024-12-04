@@ -1,13 +1,13 @@
 // Implementation for client-facing controller methods
 
 import { AnyBulkWriteOperation, ObjectId, UpdateFilter, WithId } from "mongodb";
-import { GDRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES, DEFAULT_MATCHERS } from "../util/constants";
+import { GDRIVE_FOLDER_REGEX, EVENT_DATA_SOURCES, EVENT_DATA_SOURCE_REGEX, MAX_EVENT_TYPES, MAX_POINT_TYPES, BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, MAX_MEMBER_PROPERTIES, DEFAULT_MATCHERS, EVENT_FOLDER_DATA_SOURCE_REGEX, EVENT_FOLDER_DATA_SOURCES } from "../util/constants";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, VariableMemberProperties, MemberSchema, TroupeSchema, BaseMemberProperties, VariableMemberPoints, BaseMemberPoints, AttendeeSchema, FieldMatcher, TroupeLimit } from "../types/core-types";
 import { Attendee, BulkUpdateEventRequest, BulkUpdateEventResponse, BulkUpdateEventTypeRequest, BulkUpdateEventTypeResponse, BulkUpdateMemberRequest, BulkUpdateMemberResponse, ConsoleData, CreateEventRequest, CreateEventTypeRequest, CreateMemberRequest, EventType, Member, PublicEvent, ApiEndpoints, Troupe, TroupeDashboard, UpdateEventRequest, UpdateEventTypeRequest, UpdateMemberRequest, UpdateTroupeRequest } from "../types/api-types";
 import { Mutable, SetOperator, UnsetOperator, UpdateOperator } from "../types/util-types";
 import { BaseDbService } from "./base";
 import { ClientError } from "../util/error";
-import { arrayToObject, asyncArrayToObject, asyncObjectMap, objectMap, objectToArray, verifyApiMemberPropertyType } from "../util/helper";
+import { arrayToObject, asyncArrayToObject, asyncObjectMap, getEventDataSourceId, getEventFolderDataSourceId, objectMap, objectToArray, parseEventDataSourceUrl, parseEventFolderDataSourceUrl, verifyApiMemberPropertyType } from "../util/helper";
 import { toAttendee, toEventType, toMember, toPublicEvent, toTroupe, toTroupeDashboard, toTroupeLimits } from "../util/api-transform";
 import assert from "assert";
 import { LimitService } from "./limits";
@@ -95,8 +95,8 @@ export class ApiService extends BaseDbService implements ApiEndpoints {
 
         const eventType = troupe.eventTypes.find((et) => et._id.toHexString() == request.eventTypeId);
         const startDate = new Date(request.startDate);
-        const eventDataSource = EVENT_DATA_SOURCE_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
-        assert(eventDataSource > -1, new ClientError("Invalid source URI"));
+        const eventDataSourceIndex = EVENT_DATA_SOURCE_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
+        assert(eventDataSourceIndex > -1, new ClientError("Invalid source URI"));
         assert(startDate.toString() != "Invalid Date", new ClientError("Invalid date"));
         assert(
             request.eventTypeId == undefined || request.value == undefined, 
@@ -107,6 +107,16 @@ export class ApiService extends BaseDbService implements ApiEndpoints {
             new ClientError("One of event type and value must be defined for event.")
         );
         assert(request.eventTypeId == undefined || eventType, new ClientError("Invalid event type ID"));
+
+        // Parse the source URI and ensure that it's unique
+        const eventDataSource = EVENT_DATA_SOURCES[eventDataSourceIndex];
+        const sourceId = getEventDataSourceId(eventDataSource, request.sourceUri);
+        assert(sourceId, new ClientError("Invalid source URI"));
+
+        const sourceUri = parseEventDataSourceUrl(eventDataSource, sourceId);
+        const events = await this.eventColl.find({ troupeId }).toArray();
+        const sourceUriExists = events.find(e => e.sourceUri == sourceUri) !== undefined;
+        assert(!sourceUriExists, new ClientError("Source URI already exists for event."));
         
         // Populate new event
         const event: WithId<EventSchema> = {
@@ -114,10 +124,10 @@ export class ApiService extends BaseDbService implements ApiEndpoints {
             troupeId,
             lastUpdated: new Date(),
             title: request.title,
-            source: EVENT_DATA_SOURCES[eventDataSource],
-            synchronizedSource: EVENT_DATA_SOURCES[eventDataSource],
-            sourceUri: request.sourceUri,
-            synchronizedSourceUri: "",
+            source: EVENT_DATA_SOURCES[eventDataSourceIndex],
+            synchronizedSource: EVENT_DATA_SOURCES[eventDataSourceIndex],
+            sourceUri,
+            synchronizedSourceUri: sourceUri,
             startDate,
             eventTypeId: request.eventTypeId || undefined,
             eventTypeTitle: eventType?.title,
@@ -287,12 +297,28 @@ export class ApiService extends BaseDbService implements ApiEndpoints {
     }
 
     async createEventType(troupeId: string, request: CreateEventTypeRequest, atomic = true): Promise<EventType> {
+        const troupe = await this.getTroupeSchema(troupeId, true);
+        const existingSourceUris: string[] = [];
+        troupe.eventTypes.forEach(et => existingSourceUris.push(...et.sourceFolderUris));
 
-        // Ensure given source folder URIs are valid Google Drive folders
-        request.sourceFolderUris.forEach((uri) => assert(
-            GDRIVE_FOLDER_REGEX.test(uri), 
-            new ClientError("Invalid source URI in request")
-        ));
+        // Ensure given source folder URIs are valid folders
+        const sourceFolderUris: string[] = [];
+        for(const uri of request.sourceFolderUris) {
+            const eventFolderIndex = EVENT_FOLDER_DATA_SOURCE_REGEX.findIndex(r => r.test(uri));
+            assert(eventFolderIndex > -1, new ClientError("Invalid source URI"));
+
+            const eventFolder = EVENT_FOLDER_DATA_SOURCES[eventFolderIndex];
+            const sourceId = getEventFolderDataSourceId(eventFolder, uri);
+            assert(sourceId, new ClientError("Invalid source URI"));
+
+            const sourceUri = parseEventFolderDataSourceUrl(eventFolder, sourceId);
+            assert(
+                !existingSourceUris.includes(sourceUri), 
+                new ClientError("Source URI already exists for event type.")
+            );
+            existingSourceUris.push(sourceUri);
+            sourceFolderUris.push(sourceUri);
+        }
 
         // Populate new event type
         const type: WithId<EventTypeSchema> = {
@@ -300,8 +326,8 @@ export class ApiService extends BaseDbService implements ApiEndpoints {
             lastUpdated: new Date(),
             title: request.title,
             value: request.value,
-            sourceFolderUris: request.sourceFolderUris,
-            synchronizedSourceFolderUris: [],
+            sourceFolderUris,
+            synchronizedSourceFolderUris: sourceFolderUris,
         };
 
         // Perform database update
@@ -670,10 +696,12 @@ export class ApiService extends BaseDbService implements ApiEndpoints {
     async initiateSync(troupeId: string): Promise<void> {
         await this.client.withSession(s => s.withTransaction(
             async () => {
+                const prevLimits = await this.limitService.getTroupeLimits(troupeId);
                 const limitsUpdated = await this.limitService.incrementTroupeLimits(
                     troupeId, { manualSyncsLeft: -1 }
                 );
                 assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+                const newLimits = await this.limitService.getTroupeLimits(troupeId);
 
                 const troupe = await this.getTroupeSchema(troupeId, true);
                 assert(!troupe.syncLock, new ClientError("Sync is already in progress"));

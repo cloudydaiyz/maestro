@@ -8,6 +8,7 @@ import { EventsAttendedBucketSchema, EventSchema, MemberSchema, TroupeSchema } f
 import { request } from "http";
 import { UpdateOperator } from "../../../types/util-types";
 import { AUDIENCE_COLL, EVENT_COLL, EVENT_DATA_SOURCE_REGEX, EVENT_DATA_SOURCES, EVENTS_ATTENDED_COLL } from "../../../util/constants";
+import { getEventDataSourceId, parseEventDataSourceUrl } from "../../../util/helper";
 
 type EventRequestDbTypes = EventSchema | EventsAttendedBucketSchema | MemberSchema;
 type EventDbUpdate = { 
@@ -32,11 +33,31 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         // Ensure each request is valid
+        const events = await this.eventColl.find({ troupeId: this.troupeId }).toArray();
+        const existingSourceUris: string[] = events.map(e => e.sourceUri);
         for(const request of this.requests) {
             assert(
                 !request.value || !request.eventTypeId, 
                 new ClientError("Cannot define event type and value at same time for event")
             );
+
+            // Parse the source URI and ensure that it's unique
+            if(request.sourceUri) {
+                const eventDataSourceIndex = EVENT_DATA_SOURCE_REGEX.findIndex((regex) => regex.test(request.sourceUri!));
+                assert(eventDataSourceIndex > -1, new ClientError("Invalid source URI"));
+
+                const eventDataSource = EVENT_DATA_SOURCES[eventDataSourceIndex];
+                const sourceId = getEventDataSourceId(eventDataSource, request.sourceUri);
+                assert(sourceId, new ClientError("Invalid source URI"));
+
+                const sourceUri = parseEventDataSourceUrl(eventDataSource, sourceId);
+                const sourceUriExists = events.find(e => e.sourceUri == sourceUri) !== undefined || 
+                    existingSourceUris.find(uri => uri == sourceUri);
+                assert(!sourceUriExists, new ClientError("Source URI already exists for event."));
+
+                existingSourceUris.push(sourceUri);
+                request.sourceUri = sourceUri;
+            }
         }
 
         // Obtain troupe and event information

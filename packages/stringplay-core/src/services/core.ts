@@ -126,7 +126,10 @@ export class CoreService extends BaseDbService {
     /** Places all troupes into the sync queue with sync locks disabled */
     async syncTroupes(): Promise<void> {
         const requests: SyncRequest[] = await this.troupeColl.find().toArray()
-            .then(troupes => troupes.filter(t => !t.syncLock).map(t => ({ troupeId: t._id.toHexString()})));
+            .then(troupes => troupes
+                .filter(t => !t.syncLock)
+                .map(t => ({ troupeId: t._id.toHexString() })) 
+            );
         await bulkAddToGcpSyncQueue(requests);
     }
 

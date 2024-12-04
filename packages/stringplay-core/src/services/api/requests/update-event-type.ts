@@ -4,20 +4,12 @@ import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema,
 import { ApiRequestBuilder, DbWriteRequest } from "../base";
 import { TroupeLimitSpecifier } from "../../../types/service-types";
 import assert from "assert";
-import { AUDIENCE_COLL, GDRIVE_FOLDER_REGEX, EVENT_COLL, EVENTS_ATTENDED_COLL, TROUPE_COLL } from "../../../util/constants";
+import { AUDIENCE_COLL, GDRIVE_FOLDER_REGEX, EVENT_COLL, EVENTS_ATTENDED_COLL, TROUPE_COLL, EVENT_FOLDER_DATA_SOURCE_REGEX, EVENT_FOLDER_DATA_SOURCES } from "../../../util/constants";
 import { ClientError } from "../../../util/error";
 import { UpdateOperator } from "../../../types/util-types";
+import { getEventFolderDataSourceId, parseEventFolderDataSourceUrl } from "../../../util/helper";
 
 type EventTypeRequestDbTypes = TroupeSchema | EventSchema | EventsAttendedBucketSchema | MemberSchema;
-type EventTypeDbUpdate = { 
-    $set: UpdateOperator<TroupeSchema, "$set">, 
-    $unset: UpdateOperator<TroupeSchema, "$unset">,
-    $push: UpdateOperator<TroupeSchema, "$push">,
-    $pull: UpdateOperator<TroupeSchema, "$pull">
-};
-type EventDbUpdate = { 
-    $set: UpdateOperator<EventSchema, "$set">, 
-};
 
 export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEventTypeRequest & { eventTypeId: string }, WithId<EventTypeSchema>> {
     troupe?: WithId<TroupeSchema>;
@@ -33,21 +25,56 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
         this.troupe = await this.getTroupeSchema(troupeId, true);
         this.eventTypes = [];
 
+        // Retrieve all the existing source URI
+        const existingSourceUris: string[] = [];
+        this.troupe.eventTypes.forEach(et => existingSourceUris.push(...et.sourceFolderUris));
+
         let valueUpdate = false;
         for(const request of this.requests) {
-
-            // Ensure given source folder URIs are valid Google Drive folders
-            request.addSourceFolderUris?.forEach((uri) => assert(
-                GDRIVE_FOLDER_REGEX.test(uri), 
-                new ClientError("Invalid source URI in request")
-            ));
-
             const eventType = this.troupe.eventTypes.find((et) => et._id.toHexString() == request.eventTypeId);
             assert(!this.troupe.syncLock, new ClientError("Cannot update event type while sync is in progress"));
             assert(eventType, new ClientError("Unable to find event type"));
-
             this.eventTypes.push(eventType);
             eventTypeIds.push(request.eventTypeId);
+
+            // Ensure given source folder URIs are valid folders
+            if(request.addSourceFolderUris) {
+                const sourceFolderUrisToAdd: string[] = [];
+                for(const uri of request.addSourceFolderUris) {
+                    const eventFolderIndex = EVENT_FOLDER_DATA_SOURCE_REGEX.findIndex(r => r.test(uri));
+                    assert(eventFolderIndex > -1, new ClientError("Invalid source URI"));
+    
+                    const eventFolder = EVENT_FOLDER_DATA_SOURCES[eventFolderIndex];
+                    const sourceId = getEventFolderDataSourceId(eventFolder, uri);
+                    assert(sourceId, new ClientError("Invalid source URI"));
+    
+                    const sourceUri = parseEventFolderDataSourceUrl(eventFolder, sourceId);
+                    assert(
+                        !existingSourceUris.includes(sourceUri), 
+                        new ClientError("Source URI already exists for event type.")
+                    );
+                    existingSourceUris.push(sourceUri);
+                    sourceFolderUrisToAdd.push(sourceUri);
+                }
+                request.addSourceFolderUris = sourceFolderUrisToAdd;
+            }
+
+            if(request.removeSourceFolderUris) {
+                const sourceFolderUrisToRemove: string[] = [];
+                for(const uri of request.removeSourceFolderUris) {
+                    const eventFolderIndex = EVENT_FOLDER_DATA_SOURCE_REGEX.findIndex(r => r.test(uri));
+                    assert(eventFolderIndex > -1, new ClientError("Invalid source URI"));
+    
+                    const eventFolder = EVENT_FOLDER_DATA_SOURCES[eventFolderIndex];
+                    const sourceId = getEventFolderDataSourceId(eventFolder, uri);
+                    assert(sourceId, new ClientError("Invalid source URI"));
+    
+                    const sourceUri = parseEventFolderDataSourceUrl(eventFolder, sourceId);
+                    sourceFolderUrisToRemove.push(sourceUri);
+                }
+                request.removeSourceFolderUris = sourceFolderUrisToRemove;
+            }
+
             if(request.value) valueUpdate = true;
         }
 
