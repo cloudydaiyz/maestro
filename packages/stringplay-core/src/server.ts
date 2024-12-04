@@ -25,20 +25,21 @@ export async function init(): Promise<ControllerModule> {
 
     // Set up the event emitters
     if(DEV_MODE) {
-        controllers.syncServer.on("sync", async (arg): Promise<void> => {
+        const emitters = await import("./util/server/emitters");
+        emitters.syncServer.on("sync", async (arg): Promise<void> => {
             console.log("Sync event received");
             await controllers.syncController(arg);
         });
 
-        controllers.scheduleServer.on("task", async (arg): Promise<void> => {
+        emitters.scheduleServer.on("task", async (arg): Promise<void> => {
             console.log("Scheduled task received");
             await controllers.scheduleController(arg);
         });
 
         // Set up scheduled tasks
         setInterval(() => {
-            controllers.scheduleServer.emit("task", { taskType: "sync" });
-        }, 120000);
+            emitters.scheduleServer.emit("task", { taskType: "sync" });
+        }, 30000);
     }
     return controllers;
 }

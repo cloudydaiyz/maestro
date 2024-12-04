@@ -120,7 +120,7 @@ export class LimitService extends BaseDbService {
 
         const modification = await limitsColl.updateOne(filters, { $inc });
         assert(
-            modification.matchedCount == 0 || modification.modifiedCount > 0, 
+            modification.acknowledged, 
             "Increment troupe limits operation failed"
         );
 

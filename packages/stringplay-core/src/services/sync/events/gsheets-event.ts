@@ -182,16 +182,14 @@ export class GoogleSheetsEventDataService extends EventDataService {
             });
 
             // Eliminate duplicate updates
-            if(!eventsAttended.find(e => e.eventId == eventId)) return;
+            if(eventsAttended.find(e => e.eventId == eventId)) return;
 
             // Only update points if the member hasn't attended this event BEFORE this sync
-            if(!eventsAttendedDocs.find(d => eventId in d.events)) {
-                for(const pointType in this.troupe.pointTypes) {
-                    const range = this.troupe.pointTypes[pointType];
-                    if(!member.points[pointType]) member.points[pointType] = 0;
-                    if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
-                        member.points[pointType] += event.value;
-                    }
+            for(const pointType in this.troupe.pointTypes) {
+                const range = this.troupe.pointTypes[pointType];
+                if(!member.points[pointType]) member.points[pointType] = 0;
+                if(lastUpdated >= range.startDate && lastUpdated <= range.endDate) {
+                    member.points[pointType] += event.value;
                 }
             }
 
