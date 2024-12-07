@@ -3,16 +3,16 @@ import { getDrive, getForms, getSheets } from "../cloud/gcp";
 import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeLimit, TroupeSchema, VariableMemberProperties } from "../types/core-types";
 import { GDRIVE_FOLDER_MIME, GDRIVE_FOLDER_REGEX, GDRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, GFORMS_REGEX, GFORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, EVENT_DATA_SOURCE_MIME_QUERIES, GSHEETS_URL_TEMPL } from "../util/constants";
 import { AggregationCursor, AnyBulkWriteOperation, BulkWriteResult, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
-import { getEventDataSourceId, parseEventDataSourceUrl, getDefaultMemberPropertyValue, getEventFolderDataSourceId } from "../util/helper";
+import { getEventDataSourceId, parseEventDataSourceUrl, getDefaultMemberPropertyValue, getEventFolderDataSourceId, delay } from "../util/helper";
 import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap, TroupeLimitSpecifier, SyncRequest } from "../types/service-types";
 import { GaxiosResponse, GaxiosError } from "gaxios";
 import { Mutable, SetOperator } from "../types/util-types";
-import { GoogleFormsEventDataService } from "./sync/events/gforms-event";
-import { GoogleSheetsEventDataService } from "./sync/events/gsheets-event";
+import { GoogleFormsEventExplorer } from "./sync/events/gforms-event";
+import { GoogleSheetsEventExplorer } from "./sync/events/gsheets-event";
 import assert from "assert";
 import { GoogleSheetsLogService } from "./sync/logs/gsheets-log";
 import { LimitService } from "./limits";
-import { EventDataService } from "./sync/base";
+import { EventFileExplorer } from "./sync/base";
 import { BaseDbService } from "./base";
 import { calculateDashboardData } from "../util/server/dashboard";
 
@@ -83,17 +83,20 @@ export class SyncTroupeRequest extends BaseDbService {
      * - NOTE: Populate local variables with synchronized information to update the database
      */
     async sync(troupeId: string, skipLogPublish?: true): Promise<void> {
-        assert(!(await this.getTroupeSchema(troupeId)).syncLock, "Troupe is already being synced");
-
-        // Lock the troupe
-        this.troupe = await this.troupeColl.findOneAndUpdate(
-            { _id: new ObjectId(troupeId) },
-            { $set: { syncLock: true } },
-            { returnDocument: "after" },
+        assert(
+            !(await this.getTroupeSchema(troupeId)).syncLock, 
+            "Troupe is already being synced"
         );
-        assert(this.troupe, "Failed to lock troupe for sync");
 
         try {
+            // Lock the troupe
+            this.troupe = await this.troupeColl.findOneAndUpdate(
+                { _id: new ObjectId(troupeId) },
+                { $set: { syncLock: true } },
+                { returnDocument: "after" },
+            );
+            assert(this.troupe, "Failed to lock troupe for sync");
+            
             this.dashboard = await this.dashboardColl.findOne({ troupeId });
             assert(this.dashboard, "Failed to get dashboard for sync");
     
@@ -110,13 +113,31 @@ export class SyncTroupeRequest extends BaseDbService {
             console.error('Unable to complete troupe sync.');
             console.error('Reason:', e);
         }
+
+        // Retry 3 times max to unlock the troupe
+        let unlockedTroupe = false;
+        for(let i = 0; !unlockedTroupe && i < 3; i++) {
+            try {
+                const unlockResult = await this.troupeColl.updateOne(
+                    { _id: new ObjectId(troupeId) },
+                    { $set: { syncLock: false } },
+                );
+                assert(unlockResult.modifiedCount === 1, "Failed to unlock troupe after sync");
+
+                unlockedTroupe = true;
+            } catch(e) {
+                console.warn(
+                    "Failed to unlock troupe after sync. Retrying...", 
+                    "(TIMES: " + (i+1) + " / 3)",
+                );
+                await delay(3000);
+            }
+        }
         
-        // Unlock the troupe
-        const unlockResult = await this.troupeColl.updateOne(
-            { _id: new ObjectId(troupeId) },
-            { $set: { syncLock: false } },
-        );
-        assert(unlockResult.modifiedCount === 1, "Failed to unlock troupe after sync");
+        if(!unlockedTroupe) {
+            throw new Error("FATAL ERROR: Unable to unlock troupe after sync. Must retry later.");
+        }
+        console.log("Sync successful for troupe " + troupeId);
     }
 
     /** Discovers events found from the given event types in the troupe */
@@ -134,7 +155,7 @@ export class SyncTroupeRequest extends BaseDbService {
                 console.warn(`Troupe ID: ${troupeId}, Source URI: ${event.sourceUri}`);
                 console.warn("Skipping...");
             } else {
-                this.eventMap[event.sourceUri] = { event, fromColl: true };
+                this.eventMap[event.sourceUri] = { event, delete: false, fromColl: true };
             }
         }
 
@@ -248,7 +269,7 @@ export class SyncTroupeRequest extends BaseDbService {
                 
                 if(sourceUri in this.eventMap) {
                     const eventData = this.eventMap[sourceUri];
-                    if(!eventData.event.eventTypeId) {
+                    if(!eventData.event.eventTypeId&& !eventData.fromColl) {
                         eventData.event.eventTypeId = currentEventType._id.toHexString();
                         eventData.event.eventTypeTitle = currentEventType.title;
                         eventData.event.value = currentEventType.value;
@@ -256,7 +277,7 @@ export class SyncTroupeRequest extends BaseDbService {
                     continue;
                 }
 
-                if(this.currentLimits.eventsLeft === this.incrementLimits.eventsLeft) {
+                if(this.currentLimits.eventsLeft + this.incrementLimits.eventsLeft! === 0) {
                     continue;
                 }
 
@@ -277,7 +298,7 @@ export class SyncTroupeRequest extends BaseDbService {
                     fieldToPropertyMap: {},
                     synchronizedFieldToPropertyMap: {},
                 };
-                this.eventMap[sourceUri] = { event, fromColl: false };
+                this.eventMap[sourceUri] = { event, delete: false, fromColl: false };
                 this.incrementLimits.eventsLeft! -= 1;
             }
         }
@@ -381,20 +402,20 @@ export class SyncTroupeRequest extends BaseDbService {
         assert(this.troupe);
 
         // Select a data service to collect event data from, and discover audience using the service
-        let dataService: EventDataService;
+        let eventExplorer: EventFileExplorer;
         if(event.source === "Google Forms") {
-            dataService = new GoogleFormsEventDataService(
+            eventExplorer = new GoogleFormsEventExplorer(
                 this.troupe, this.eventMap, this.attendeeMap, this.currentLimits, this.incrementLimits,
             );
         } else if(event.source == "Google Sheets") {
-            dataService = new GoogleSheetsEventDataService(
+            eventExplorer = new GoogleSheetsEventExplorer(
                 this.troupe, this.eventMap, this.attendeeMap, this.currentLimits, this.incrementLimits,
             );
         } else {
             console.warn("Invalid event (ID: " + event._id.toHexString() + "), no audience to discover. Skipping...");
             return;
         }
-        await dataService.ready.then(() => dataService.discoverAudience(event, lastUpdated));
+        await eventExplorer.ready.then(() => eventExplorer.discoverAudience(event, lastUpdated));
     }
 
     /** Persist new information retrieved from events to the database */
@@ -404,6 +425,7 @@ export class SyncTroupeRequest extends BaseDbService {
 
         const {
             updateEvents,
+            eventsToDelete,
             updateAudience,
             membersToDelete,
             updateEventsAttended,
@@ -418,44 +440,73 @@ export class SyncTroupeRequest extends BaseDbService {
             this.dashboard
         );
 
-        await this.client.withSession(s => s.withTransaction(
-            async () => {
-                await this.dashboardColl.updateOne({ troupeId }, { $set: dashboardUpdate }, { upsert: true });
+        await this.client.withSession(session => session.withTransaction(
+            async (session) => {
+                await this.dashboardColl.updateOne(
+                    { troupeId }, { $set: dashboardUpdate }, { upsert: true, session }
+                );
 
                 if(updateEvents.length > 0) {
-                    await this.eventColl.bulkWrite(updateEvents.map(event => ({
-                        updateOne: {
-                            filter: { _id: event._id },
-                            update: { $set: event },
-                            upsert: true,
-                        }
-                    } as AnyBulkWriteOperation<EventSchema>)));
+                    await this.eventColl.bulkWrite(
+                        updateEvents.map(event => ({
+                            updateOne: {
+                                filter: { _id: event._id },
+                                update: { $set: event },
+                                upsert: true,
+                            }
+                        } as AnyBulkWriteOperation<EventSchema>)),
+                        { session },
+                    );
+                }
+
+                if(eventsToDelete.length > 0) {
+                    await this.eventColl.deleteMany(
+                        { _id: { $in: eventsToDelete } }, { session },
+                    );
                 }
 
                 if(updateAudience.length > 0) {
-                    await this.audienceColl.bulkWrite(updateAudience.map(member => ({
-                        updateOne: {
-                            filter: { _id: member._id },
-                            update: { $set: member },
-                            upsert: true,
-                        }
-                    })));
+                    await this.audienceColl.bulkWrite(
+                        updateAudience.map(member => ({
+                            updateOne: {
+                                filter: { _id: member._id },
+                                update: { $set: member },
+                                upsert: true,
+                            }
+                        })),
+                        { session },
+                    );
                 }
-                await this.audienceColl.deleteMany({ _id: { $in: membersToDelete } });
+
+                if(membersToDelete.length > 0) {
+                    await this.audienceColl.deleteMany(
+                        { _id: { $in: membersToDelete } }, { session },
+                    );
+                }
 
                 if(updateEventsAttended.length > 0) {
-                    await this.eventsAttendedColl.bulkWrite(updateEventsAttended.map(bucket => ({
-                        updateOne: {
-                            filter: { _id: bucket._id },
-                            update: { $set: bucket },
-                            upsert: true,
-                        }
-                    })));
+                    await this.eventsAttendedColl.bulkWrite(
+                        updateEventsAttended.map(bucket => ({
+                            updateOne: {
+                                filter: { _id: bucket._id },
+                                update: { $set: bucket },
+                                upsert: true,
+                            }
+                        })),
+                        { session },
+                    );
                 }
-                await this.eventsAttendedColl.deleteMany({ _id: { $in: eventsAttendedToDelete } });
 
-                const updateLimits = await this.limitService.incrementTroupeLimits(troupeId, this.incrementLimits);
-                assert(updateLimits, "Invalid state -- limits exceeded for sync operation. This is unintended behavior.");
+                if(eventsAttendedToDelete.length > 0) {
+                    await this.eventsAttendedColl.deleteMany(
+                        { _id: { $in: eventsAttendedToDelete } }, { session },
+                    );
+                }
+
+                const updateLimits = await this.limitService.incrementTroupeLimits(
+                    undefined, troupeId, this.incrementLimits, session
+                );
+                assert(updateLimits, "Invalid state: limits exceeded for sync operation. This is unintended behavior.");
             }
         ));
     }
@@ -470,8 +521,16 @@ export class SyncTroupeRequest extends BaseDbService {
 
         // Populate the events to update
         let updateEvents: WithId<EventSchema>[] = [];
+        let eventsToDelete: ObjectId[] = [];
         for(const sourceUri in this.eventMap) {
             const eventData = this.eventMap[sourceUri];
+
+            if(eventData.delete) {
+                if(eventData.fromColl) {
+                    eventsToDelete.push(eventData.event._id);
+                }
+                continue;
+            }
             updateEvents.push(eventData.event);
         }
 
@@ -486,11 +545,13 @@ export class SyncTroupeRequest extends BaseDbService {
             const memberId = memberData.member._id.toHexString();
 
             // Delete the member and the events they've attended if they're marked for deletion
-            if(memberData.delete && memberData.fromColl) {
-                membersToDelete.push(memberData.member._id);
-                eventsAttendedToDelete = eventsAttendedToDelete.concat(
-                    memberData.eventsAttendedDocs.map(doc => doc._id)
-                );
+            if(memberData.delete) {
+                if(memberData.fromColl) {
+                    membersToDelete.push(memberData.member._id);
+                    eventsAttendedToDelete = eventsAttendedToDelete.concat(
+                        memberData.eventsAttendedDocs.map(doc => doc._id)
+                    );
+                }
                 continue;
             }
             updateAudience.push(memberData.member);
@@ -540,6 +601,7 @@ export class SyncTroupeRequest extends BaseDbService {
 
         return {
             updateEvents,
+            eventsToDelete,
             updateAudience,
             membersToDelete,
             updateEventsAttended,

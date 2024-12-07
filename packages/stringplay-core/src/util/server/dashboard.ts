@@ -74,37 +74,75 @@ export function calculateDashboardData(
             });
         }
         dashboardUpdate.totalMembers! += 1;
+    }
 
-        for(const bucket of eventsAttended) {
-            for(const eventId in bucket.events) {
-                const event = bucket.events[eventId];
-                const eventTypeId = event.typeId;
-                if(eventTypeId) {
-                    dashboardUpdate.totalAttendeesByEventType![eventTypeId].value += 1;
-                    dashboardUpdate.avgAttendeesByEventType![eventTypeId].value += 1;
-                    dashboardUpdate.attendeePercentageByEventType![eventTypeId].value += 1;
-                }
-                dashboardUpdate.totalAttendees! += 1;
+    for(const bucket of eventsAttended) {
+        for(const eventId in bucket.events) {
+            const event = bucket.events[eventId];
+            const eventTypeId = event.typeId;
+            if(eventTypeId) {
+                dashboardUpdate.totalAttendeesByEventType![eventTypeId].value += 1;
+                dashboardUpdate.attendeePercentageByEventType![eventTypeId].value += 1;
             }
+            dashboardUpdate.totalAttendees! += 1;
         }
     }
 
+    // Overall dashboard statistics
     const totalAttendees = dashboardUpdate.totalAttendees!;
     const totalEvents = dashboardUpdate.totalEvents!;
-    dashboardUpdate.avgAttendeesPerEvent = totalEvents > 0 ? Math.round(totalEvents / totalAttendees) : 0;
+    dashboardUpdate.avgAttendeesPerEvent = totalEvents > 0 ? Math.round(totalAttendees / totalEvents) : 0;
+
+    // Event type specific dashboard statistics
+    let remainingAttendees = totalAttendees;
+    let remainingAttendeePercentage = 1;
+    let remainingEvents = totalEvents;
+    let remainingEventPercentage = 1;
 
     for(const eventType of eventTypes) {
         const eventTypeId = eventType._id.toHexString();
-        const totalEventsByEventType = dashboardUpdate.totalEventsByEventType![eventTypeId].value;
-        const totalAttendeesByEventType = dashboardUpdate.totalAttendeesByEventType![eventTypeId].value;
+        const eventTypeTitle = eventType.title;
 
-        dashboardUpdate.avgAttendeesByEventType![eventTypeId].value = totalEventsByEventType > 0
-            ? Math.round(dashboardUpdate.avgAttendeesByEventType![eventTypeId].value / totalEventsByEventType) : 0;
-        dashboardUpdate.attendeePercentageByEventType![eventTypeId].value = totalAttendees > 0 
-            ? totalAttendeesByEventType / totalAttendees : 0;
-        dashboardUpdate.eventPercentageByEventType![eventTypeId].value = totalEvents > 0 
-            ? totalEventsByEventType / totalEvents : 0;
+        const totalAttendeesByEventType = dashboardUpdate.totalAttendeesByEventType![eventTypeId].value;
+        const totalAttendeesPercentByEventType = totalAttendees > 0 ? totalAttendeesByEventType / totalAttendees : totalAttendees;
+        const totalEventsByEventType = dashboardUpdate.totalEventsByEventType![eventTypeId].value;
+        const totalEventsPercentByEventType = totalEvents > 0 ? totalEventsByEventType / totalEvents : 0;
+        const avgAttendeesByEventType = totalEventsByEventType > 0
+            ? Math.round(totalAttendeesByEventType / totalEventsByEventType) : 0;
+        
+        dashboardUpdate.attendeePercentageByEventType![eventTypeId].title = eventTypeTitle;
+        dashboardUpdate.attendeePercentageByEventType![eventTypeId].value = totalAttendeesByEventType;
+        dashboardUpdate.attendeePercentageByEventType![eventTypeId].percent = totalAttendeesPercentByEventType;
+        
+        dashboardUpdate.eventPercentageByEventType![eventTypeId].title = eventTypeTitle;
+        dashboardUpdate.eventPercentageByEventType![eventTypeId].value = totalEventsByEventType;
+        dashboardUpdate.eventPercentageByEventType![eventTypeId].percent = totalEventsPercentByEventType;
+
+        dashboardUpdate.avgAttendeesByEventType![eventTypeId].value = avgAttendeesByEventType;
+
+        remainingAttendees -= totalAttendeesByEventType;
+        remainingAttendeePercentage -= totalAttendeesPercentByEventType;
+        remainingEvents -= totalEventsByEventType;
+        remainingEventPercentage -= totalEventsPercentByEventType;
     }
+
+    // Statistics for events without an event type
+    dashboardUpdate.attendeePercentageByEventType["etc"] = {
+        title: "Other",
+        value: remainingAttendees,
+        percent: remainingAttendeePercentage,
+    };
+
+    dashboardUpdate.eventPercentageByEventType["etc"] = {
+        title: "Other",
+        value: remainingEvents,
+        percent: remainingEventPercentage,
+    };
+
+    dashboardUpdate.avgAttendeesByEventType["etc"] = {
+        title: "Other",
+        value: remainingEvents > 0 ? Math.round(remainingAttendees / remainingEvents) : 0,
+    };
 
     return dashboardUpdate;
 }

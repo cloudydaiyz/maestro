@@ -2,8 +2,8 @@ import assert from "assert";
 import { BaseDbService } from "../base";
 import { LimitService } from "../limits";
 import { LimitSchema } from "../../types/core-types";
-import { DeleteManyModel, DeleteOneModel, Document, InsertOneModel, UpdateManyModel, UpdateOneModel } from "mongodb";
-import { TroupeLimitSpecifier } from "../../types/service-types";
+import { ClientSession, DeleteManyModel, DeleteOneModel, Document, InsertOneModel, UpdateManyModel, UpdateOneModel } from "mongodb";
+import { LimitContext, TroupeLimitSpecifier } from "../../types/service-types";
 import { ClientError } from "../../util/error";
 
 export type DbWriteRequest<T extends Document> = {
@@ -16,7 +16,8 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
     troupeId: string | null;
     requests: ApiRequestType[];
     limits: boolean;
-    atomic: boolean;
+    limitContext?: LimitContext;
+    session?: ClientSession;
 
     constructor() { 
         super();
@@ -24,7 +25,6 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
         this.troupeId = null;
         this.requests = [];
         this.limits = true;
-        this.atomic = true;
         this.ready = this.init();
     }
 
@@ -47,45 +47,45 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
         this.limits = limits;
     }
 
-    /** Sets whether or not this request will perform a transaction on execute */
-    setAtomic(atomic: boolean): void {
-        this.atomic = atomic;
+    setLimitContext(limitContext?: LimitContext): void {
+        this.limitContext = limitContext;
     }
 
-    /** 
-     * Prepares for execution by obtaining data from the DB and processing the requests. 
-     * This gives flexibility on when & how to perform the rest of the execution. 
-     */
-    async beginExecute(): Promise<[TroupeLimitSpecifier, DbWriteRequest<any>[]]> {
-        assert(this.troupeId, "Invalid state; no troupe ID specified");
-        assert(this.requests.length > 0, "Invalid state; must have more than one request defined.");
-
-        await this.readData();
-        return this.processRequests();
+    setSession(session: ClientSession): void {
+        this.session = session;
     }
 
     /** Executes the request */
     async execute(): Promise<ApiResponseType[]> {
         await this.ready;
-        const [updateLimits, writeRequests] = await this.beginExecute();
 
         let responses: ApiResponseType[];
-        if(this.atomic) {
-            await this.client.withSession(s => s.withTransaction(
-                async () => {
-                    if(this.limits) {
-                        const limitsUpdated = await this.limitService.incrementTroupeLimits(this.troupeId!, updateLimits);
-                        assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
-                    }
-                    responses = await this.writeProcessedRequests(writeRequests);
-                }
-            ));
-        } else {
+        if(this.session) {
+            await this.readData(this.session);
+            const [updateLimits, writeRequests] = this.processRequests();
+
             if(this.limits) {
-                const limitsUpdated = await this.limitService.incrementTroupeLimits(this.troupeId!, updateLimits);
+                const limitsUpdated = await this.limitService.incrementTroupeLimits(
+                    this.limitContext, this.troupeId!, updateLimits, this.session
+                );
                 assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
             }
-            responses = await this.writeProcessedRequests(writeRequests);
+            responses = await this.writeProcessedRequests(writeRequests, this.session);
+        } else {
+            await this.client.withSession(session => session.withTransaction(
+                async (session) => {
+                    await this.readData(session);
+                    const [updateLimits, writeRequests] = this.processRequests();
+
+                    if(this.limits) {
+                        const limitsUpdated = await this.limitService.incrementTroupeLimits(
+                            this.limitContext, this.troupeId!, updateLimits, session
+                        );
+                        assert(limitsUpdated, new ClientError("Operation not within limits for this troupe"));
+                    }
+                    responses = await this.writeProcessedRequests(writeRequests, session);
+                }
+            ));
         }
 
         return responses!;
@@ -97,13 +97,16 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
         troupeId: string, 
         request: Request, 
         limits?: boolean,
-        atomic?: boolean,
+        limitContext?: LimitContext,
     ): Promise<Response[]> {
         const builder = new this();
         builder.addTroupeId(troupeId);
         builder.addRequest(request);
         if(limits !== undefined) builder.setLimits(limits);
-        if(atomic !== undefined) builder.setAtomic(atomic);
+        if(limitContext !== undefined) {
+            builder.setLimits(true);
+            builder.setLimitContext(limitContext);
+        }
 
         return builder.execute();
     }
@@ -113,19 +116,22 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
         troupeId: string, 
         requests: Request[], 
         limits?: boolean,
-        atomic?: boolean,
+        limitContext?: LimitContext,
     ): Promise<Response[]> {
         const builder = new this();
         builder.addTroupeId(troupeId);
         requests.forEach(request => builder.addRequest(request));
         if(limits !== undefined) builder.setLimits(limits);
-        if(atomic !== undefined) builder.setAtomic(atomic);
+        if(limitContext !== undefined) {
+            builder.setLimits(true);
+            builder.setLimitContext(limitContext);
+        }
 
         return builder.execute();
     }
 
     /** Obtains data from the DB necessary for the request */
-    abstract readData(): Promise<void>;
+    abstract readData(session: ClientSession): Promise<void>;
 
     /** 
      * Processes the data and returns the resulting update to the troupe 
@@ -137,5 +143,5 @@ export abstract class ApiRequestBuilder<ApiRequestType, ApiResponseType> extends
      * Processes the data to write to the DB (limits increment included) in order 
      * to perform the specified request. Returns responses to each request.
      */
-    abstract writeProcessedRequests(writeRequests: DbWriteRequest<any>[]): Promise<ApiResponseType[]>;
+    abstract writeProcessedRequests(writeRequests: DbWriteRequest<any>[], session: ClientSession): Promise<ApiResponseType[]>;
 }

@@ -15,7 +15,7 @@ function sendResponse(httpRes: functions.Response, apiRes: ApiResponse) {
 }
 
 // Initialize the controllers with lazy import
-init().then(c => controllers = c);
+const ready = init().then(c => controllers = c);
 
 // Graceful shutdown on SIGINT (Ctrl+C) and SIGTERM
 process.on('SIGINT', async () => { console.log('SIGINT signal received.'); await exit() });
@@ -23,18 +23,21 @@ process.on('SIGTERM', async () => { console.log('SIGTERM signal received.'); awa
 
 // API HTTP function
 functions.http('api', async (req, res) => {
+    await ready;
     assert(req.method == "GET" || req.method == "POST" || req.method == "PUT" || req.method == "DELETE" || req.method == "OPTIONS", "Invalid HTTP method");
     await controllers.apiController(req.path, req.method, req.headers, req.body).then((response) => sendResponse(res, response));
 });
 
 // Cloud Task triggered HTTP function
 functions.http('sync', async (req, res) => {
+    await ready;
     assert(req.method == "POST", "Invalid HTTP method");
     await controllers.syncController(req.body).then((response) => sendResponse(res, response));
 });
 
 // Scheduled HTTP function
 functions.http('schedule', async (req, res) => {
+    await ready;
     assert(req.method == "POST", "Invalid HTTP method");
     await controllers.scheduleController(req.body).then((response) => sendResponse(res, response));
 });

@@ -3,7 +3,7 @@ import { PublicEvent, UpdateEventRequest } from "../../../types/api-types";
 import { TroupeLimitSpecifier } from "../../../types/service-types";
 import { ApiRequestBuilder, DbWriteRequest } from "../base";
 import { ClientError } from "../../../util/error";
-import { AnyBulkWriteOperation, ObjectId, UpdateManyModel, UpdateOneModel, WithId } from "mongodb";
+import { AnyBulkWriteOperation, ClientSession, ObjectId, UpdateManyModel, UpdateOneModel, WithId } from "mongodb";
 import { EventsAttendedBucketSchema, EventSchema, MemberSchema, TroupeSchema } from "../../../types/core-types";
 import { request } from "http";
 import { UpdateOperator } from "../../../types/util-types";
@@ -23,17 +23,17 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
     /** Event IDs mapped to a list of attendee IDs for that event */
     oldEventAttendees?: { [eventId: string]: ObjectId[] };
     
-    async readData(): Promise<void> {
+    async readData(session: ClientSession): Promise<void> {
         assert(this.troupeId, "Invalid state; no troupe ID specified");
 
         // Optimization: Check if this operation is within the troupe's limits
         const withinLimits = await this.limitService.withinTroupeLimits(
-            this.troupeId, { modifyOperationsLeft: -1 }
+            this.limitContext, this.troupeId, { modifyOperationsLeft: -1 }, session
         );
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
         // Ensure each request is valid
-        const events = await this.eventColl.find({ troupeId: this.troupeId }).toArray();
+        const events = await this.eventColl.find({ troupeId: this.troupeId }, { session }).toArray();
         const existingSourceUris: string[] = events.map(e => e.sourceUri);
         for(const request of this.requests) {
             assert(
@@ -62,8 +62,8 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
 
         // Obtain troupe and event information
         const eventIds = this.requests.map(r => new ObjectId(r.eventId));
-        this.troupe = await this.getTroupeSchema(this.troupeId, true);
-        this.oldEvents = await this.eventColl.find({ _id: { $in: eventIds } }).toArray();
+        this.troupe = await this.getTroupeSchema(this.troupeId, true, session);
+        this.oldEvents = await this.eventColl.find({ _id: { $in: eventIds } }, { session }).toArray();
         assert(this.oldEvents.length == this.requests.length, new ClientError("One or more invalid event IDs"));
         assert(!this.troupe.syncLock, new ClientError("Cannot update event while sync is in progress"));
 
@@ -72,7 +72,7 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
         for(const event of this.oldEvents) {
             const eventId = event._id.toHexString();
             const membersToUpdate = await this.eventsAttendedColl
-                .find({ [`events.${eventId}`]: { $exists: true } }).toArray()
+                .find({ [`events.${eventId}`]: { $exists: true } }, { session }).toArray()
                 .then(ea => ea.map(e => new ObjectId(e.memberId)));
             this.oldEventAttendees[eventId] = membersToUpdate;
         }
@@ -157,6 +157,7 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
             if(request.value) {
                 eventUpdate.$set.value = request.value;
                 eventUpdate.$unset.eventTypeId = "";
+                eventUpdate.$unset.eventTypeTitle = "";
                 eventsAttendedUpdate.$unset[`events.${eventId}.typeId`] = "";
                 updateMemberPoints = true;
             }
@@ -223,7 +224,7 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
         return [limitSpecifier, writeRequests];
     }
 
-    async writeProcessedRequests(writeRequests: DbWriteRequest<EventRequestDbTypes>[]): Promise<WithId<EventSchema>[]> {
+    async writeProcessedRequests(writeRequests: DbWriteRequest<EventRequestDbTypes>[], session?: ClientSession): Promise<WithId<EventSchema>[]> {
         const eventUpdates: AnyBulkWriteOperation<EventSchema>[] = [];
         const eventsAttendedUpdates: AnyBulkWriteOperation<EventsAttendedBucketSchema>[] = [];
         const audienceUpdates: AnyBulkWriteOperation<MemberSchema>[] = [];
@@ -238,7 +239,7 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
             }
         };
 
-        const res1 = await this.eventColl.bulkWrite(eventUpdates);
+        const res1 = await this.eventColl.bulkWrite(eventUpdates, { session });
         assert(
             res1.isOk(), 
             "Unable to perform bulk write request. Errors: " + 
@@ -246,7 +247,7 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
         );
         
         if(eventsAttendedUpdates.length > 0) {
-            const res2 = await this.eventsAttendedColl.bulkWrite(eventsAttendedUpdates);
+            const res2 = await this.eventsAttendedColl.bulkWrite(eventsAttendedUpdates, { session });
             assert(
                 res2.isOk(), 
                 "Unable to perform bulk write request. Errors: " + 
@@ -255,7 +256,7 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
         }
         
         if(audienceUpdates.length > 0) {
-            const res3 = await this.audienceColl.bulkWrite(audienceUpdates);
+            const res3 = await this.audienceColl.bulkWrite(audienceUpdates, { session });
             assert(
                 res3.isOk(), 
                 "Unable to perform bulk write request. Errors: " + 
@@ -265,7 +266,7 @@ export class UpdateEventRequestBuilder extends ApiRequestBuilder<UpdateEventRequ
 
         // Retrieve the new events, and sort them in order of their appearance in the event updates
         const eventIds = this.requests.map(r => new ObjectId(r.eventId));
-        const newEvents = await this.eventColl.find({ _id: { $in: eventIds } }).toArray();
+        const newEvents = await this.eventColl.find({ _id: { $in: eventIds } }, { session }).toArray();
         const newEventsSortIndicies: { [eventId: string]: number } = {}
         for(const e of newEvents) {
             let eventId = e._id.toHexString();

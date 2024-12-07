@@ -1,4 +1,4 @@
-import { Document, ObjectId, UpdateOneModel, WithId } from "mongodb";
+import { ClientSession, Document, ObjectId, UpdateOneModel, WithId } from "mongodb";
 import { Troupe, UpdateTroupeRequest } from "../../../types/api-types";
 import { TroupeLimitSpecifier } from "../../../types/service-types";
 import { ApiRequestBuilder, DbWriteRequest } from "../base";
@@ -17,15 +17,17 @@ export class UpdateTroupeRequestBuilder extends ApiRequestBuilder<UpdateTroupeRe
     troupe?: WithId<TroupeSchema>;
     originEvents?: WithId<EventSchema>[];
 
-    async readData(): Promise<void> {
+    async readData(session: ClientSession): Promise<void> {
         assert(this.troupeId, new ClientError("Invalid state; no troupe ID specified"));
-        this.troupe = await this.getTroupeSchema(this.troupeId, true);
+        this.troupe = await this.getTroupeSchema(this.troupeId, true, session);
 
         // Ensures specified origin events exists before setting it
         this.originEvents = [];
         this.requests.forEach(async (request, i) => {
             if(request.originEventId) {
-                const event = await this.eventColl.findOne({ _id: new ObjectId(request.originEventId) });
+                const event = await this.eventColl.findOne(
+                    { _id: new ObjectId(request.originEventId) }, { session }
+                );
                 assert(event, new ClientError("Unable to find specified origin event"));
                 this.originEvents![i] = event;
             }
@@ -89,12 +91,15 @@ export class UpdateTroupeRequestBuilder extends ApiRequestBuilder<UpdateTroupeRe
         return [limitSpecifier, writeRequests];
     }
 
-    async writeProcessedRequests(writeRequests: DbWriteRequest<TroupeSchema>[]): Promise<WithId<TroupeSchema>[]> {
+    async writeProcessedRequests(writeRequests: DbWriteRequest<TroupeSchema>[], session?: ClientSession): Promise<WithId<TroupeSchema>[]> {
         assert(this.troupeId, "Invalid state; no troupe ID specified");
 
-        const res = await this.troupeColl.bulkWrite(writeRequests.map(r => (
-            { updateOne: r.request as UpdateOneModel<TroupeSchema> }
-        )));
+        const res = await this.troupeColl.bulkWrite(
+            writeRequests.map(r => (
+                { updateOne: r.request as UpdateOneModel<TroupeSchema> }
+            )),
+            { session },
+        );
         
         assert(
             res.isOk(), 
@@ -103,7 +108,7 @@ export class UpdateTroupeRequestBuilder extends ApiRequestBuilder<UpdateTroupeRe
         );
 
         // NOTE: Add functionality for bulk update in the future when necessary
-        const newTroupe = await this.getTroupeSchema(this.troupeId, true);
+        const newTroupe = await this.getTroupeSchema(this.troupeId, true, session);
         return [ newTroupe ];
     }
 }

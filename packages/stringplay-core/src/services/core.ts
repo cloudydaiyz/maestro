@@ -2,7 +2,7 @@
 
 import assert from "assert";
 import { CreateTroupeRequest, SyncRequest } from "../types/service-types";
-import { Collection, ObjectId, WithId } from "mongodb";
+import { ClientSession, Collection, ObjectId, WithId } from "mongodb";
 import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, DB_NAME, DEFAULT_MATCHERS } from "../util/constants";
 import { BaseDbService } from "./base";
 import { GoogleSheetsLogService } from "./sync/logs/gsheets-log";
@@ -29,14 +29,10 @@ export class CoreService extends BaseDbService {
         await limitService.initGlobalLimits();
     }
 
-    async toggleSystemLock(lockEnabled: boolean): Promise<void> {
-
-    }
-
     /** Initializes a new troupe with a dashboard and log sheet */
     async createTroupe(request: CreateTroupeRequest, createLog?: true): Promise<string> {
         return this.client.withSession(s => s.withTransaction(
-            async () => {
+            async (session) => {
                 const lastUpdated = new Date();
                 const insertTroupe = await this.troupeColl.insertOne({
                     ...request,
@@ -49,7 +45,7 @@ export class CoreService extends BaseDbService {
                     synchronizedPointTypes: BASE_POINT_TYPES_OBJ,
                     syncLock: false,
                     fieldMatchers: DEFAULT_MATCHERS,
-                });
+                }, { session });
                 assert(insertTroupe.insertedId, "Failed to create troupe");
         
                 const insertDashboard = await this.dashboardColl.insertOne({
@@ -70,11 +66,11 @@ export class CoreService extends BaseDbService {
                     eventPercentageByEventType: {},
                     totalAttendeesByEventType: {},
                     totalEventsByEventType: {},
-                });
+                }, { session });
                 assert(insertDashboard.insertedId, "Failed to create dashboard");
 
                 if(createLog) {
-                    await this.newTroupeLog(insertTroupe.insertedId.toHexString());
+                    await this.newTroupeLog(insertTroupe.insertedId.toHexString(), session);
                 }
                 return insertTroupe.insertedId.toHexString();
             }
@@ -82,15 +78,19 @@ export class CoreService extends BaseDbService {
     }
 
     /** Creates the log sheet for a troupe */
-    async newTroupeLog(troupeId: string): Promise<string> {
-        const troupe = await this.getTroupeSchema(troupeId, true);
-        const events = await this.eventColl.find({ troupeId }).toArray();
-        const audience = await this.audienceColl.find({ troupeId }).toArray();
+    async newTroupeLog(troupeId: string, session?: ClientSession): Promise<string> {
+        const troupe = session ? await this.troupeColl.findOne({ _id: new ObjectId(troupeId) }, { session })
+            : await this.getTroupeSchema(troupeId, true);
+        const events = await this.eventColl.find({ troupeId }, { session }).toArray();
+        const audience = await this.audienceColl.find({ troupeId }, { session }).toArray();
+        assert(troupe, "Troupe not found");
 
         const logService: LogSheetService = new GoogleSheetsLogService();
         const logSheetUri = await logService.createLog(troupe, events, audience.map( m => ({...m, eventsAttended: {} }) ));
 
-        const updateTroupe = await this.troupeColl.updateOne({ _id: new ObjectId(troupeId) }, { $set: { logSheetUri } });
+        const updateTroupe = await this.troupeColl.updateOne(
+            { _id: new ObjectId(troupeId) }, { $set: { logSheetUri } }, { session }
+        );
         assert(updateTroupe.modifiedCount == 1, "Failed to update troupe");
         return logSheetUri;
     }
@@ -99,16 +99,16 @@ export class CoreService extends BaseDbService {
     async deleteTroupe(troupeId: string): Promise<void> {
         let logSheetUri: string;
         await this.client.withSession(s => s.withTransaction(
-            async () => {
-                const troupe = await this.getTroupeSchema(troupeId, true);
+            async (session) => {
+                const troupe = await this.getTroupeSchema(troupeId, true, session);
                 const limitService = await LimitService.create();
                 logSheetUri = troupe.logSheetUri;
                 
-                await this.troupeColl.deleteOne({ _id: new ObjectId(troupeId) });
-                await this.dashboardColl.deleteOne({ troupeId });
-                await this.audienceColl.deleteMany({ troupeId });
-                await this.eventColl.deleteMany({ troupeId });
-                await limitService.removeTroupeLimits(troupeId);
+                await this.troupeColl.deleteOne({ _id: new ObjectId(troupeId) }, { session });
+                await this.dashboardColl.deleteOne({ troupeId }, { session });
+                await this.audienceColl.deleteMany({ troupeId }, { session });
+                await this.eventColl.deleteMany({ troupeId }, { session });
+                await limitService.removeTroupeLimits(troupeId, session);
             }
         ));
 
@@ -119,7 +119,6 @@ export class CoreService extends BaseDbService {
     /** Retrieves a troupe schema with the given name */
     async getTroupeByName(name: string): Promise<WithId<TroupeSchema> | null> {
         const troupe = this.troupeColl.findOne({ name });
-        assert(troupe, "Troupe not found");
         return troupe;
     }
 

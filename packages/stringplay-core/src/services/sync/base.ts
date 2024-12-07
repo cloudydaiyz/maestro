@@ -4,7 +4,7 @@ import { EventDataMap, AttendeeDataMap } from "../../types/service-types";
 import { getMatcherRegex } from "../../util/helper";
 
 /** Handles event/member data retrieval and synchronization from a data source */
-export abstract class EventDataService {
+export abstract class EventFileExplorer {
     ready: Promise<void>;
     troupe: WithId<TroupeSchema>;
     eventMap: EventDataMap;

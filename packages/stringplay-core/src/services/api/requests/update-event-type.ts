@@ -1,4 +1,4 @@
-import { AnyBulkWriteOperation, ObjectId, UpdateManyModel, UpdateOneModel, WithId } from "mongodb";
+import { AnyBulkWriteOperation, ClientSession, ObjectId, UpdateManyModel, UpdateOneModel, WithId } from "mongodb";
 import { UpdateEventTypeRequest } from "../../../types/api-types";
 import { EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberSchema, TroupeSchema } from "../../../types/core-types";
 import { ApiRequestBuilder, DbWriteRequest } from "../base";
@@ -18,11 +18,11 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
     members?: WithId<MemberSchema>[];
     eventsAttended?: WithId<EventsAttendedBucketSchema>[];
     
-    async readData(): Promise<void> {
+    async readData(session: ClientSession): Promise<void> {
         assert(this.troupeId, "Invalid state; no troupe ID specified");
         const troupeId = this.troupeId;
         const eventTypeIds: string[] = [];
-        this.troupe = await this.getTroupeSchema(troupeId, true);
+        this.troupe = await this.getTroupeSchema(troupeId, true, session);
         this.eventTypes = [];
 
         // Retrieve all the existing source URI
@@ -82,10 +82,11 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
         // value is updated for at least one request
         if(valueUpdate) {
             this.events = await this.eventColl.find(
-                { troupeId, eventTypeId: { $in: eventTypeIds } }
+                { troupeId, eventTypeId: { $in: eventTypeIds } },
+                { session }
             ).toArray();
-            this.members = await this.audienceColl.find({ troupeId }).toArray();
-            this.eventsAttended = await this.eventsAttendedColl.find({ troupeId }).toArray();
+            this.members = await this.audienceColl.find({ troupeId }, { session }).toArray();
+            this.eventsAttended = await this.eventsAttendedColl.find({ troupeId }, { session }).toArray();
         }
     }
 
@@ -198,7 +199,7 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
         return [limitSpecifier, writeRequests];
     }
 
-    async writeProcessedRequests(writeRequests: DbWriteRequest<EventTypeRequestDbTypes>[]): Promise<WithId<EventTypeSchema>[]> {
+    async writeProcessedRequests(writeRequests: DbWriteRequest<EventTypeRequestDbTypes>[], session: ClientSession): Promise<WithId<EventTypeSchema>[]> {
         const troupeUpdates: AnyBulkWriteOperation<TroupeSchema>[] = [];
         const eventUpdates: AnyBulkWriteOperation<EventSchema>[] = [];
         const eventsAttendedUpdates: AnyBulkWriteOperation<EventsAttendedBucketSchema>[] = [];
@@ -216,7 +217,7 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
             }
         }
 
-        const res1 = await this.troupeColl.bulkWrite(troupeUpdates);
+        const res1 = await this.troupeColl.bulkWrite(troupeUpdates, { session });
         assert(
             res1.isOk(), 
             "Unable to perform bulk write request. Errors: " + 
@@ -224,7 +225,7 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
         );
 
         if(eventUpdates.length > 0) {
-            const res2 = await this.eventColl.bulkWrite(eventUpdates);
+            const res2 = await this.eventColl.bulkWrite(eventUpdates, { session });
             assert(
                 res2.isOk(), 
                 "Unable to perform bulk write request. Errors: " + 
@@ -233,7 +234,7 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
         }
         
         if(eventsAttendedUpdates.length > 0) {
-            const res3 = await this.eventsAttendedColl.bulkWrite(eventsAttendedUpdates);
+            const res3 = await this.eventsAttendedColl.bulkWrite(eventsAttendedUpdates, { session });
             assert(
                 res3.isOk(), 
                 "Unable to perform bulk write request. Errors: " + 
@@ -242,7 +243,7 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
         }
         
         if(audienceUpdates.length > 0) {
-            const res4 = await this.audienceColl.bulkWrite(audienceUpdates);
+            const res4 = await this.audienceColl.bulkWrite(audienceUpdates, { session });
             assert(
                 res4.isOk(), 
                 "Unable to perform bulk write request. Errors: " + 
@@ -250,7 +251,7 @@ export class UpdateEventTypeRequestBuilder extends ApiRequestBuilder<UpdateEvent
             );
         }
 
-        const troupe = await this.getTroupeSchema(this.troupeId!, true);
+        const troupe = await this.getTroupeSchema(this.troupeId!, true, session);
         const eventTypeIds = this.requests.map(r => r.eventTypeId);
         const newEventTypes: WithId<EventTypeSchema>[] = [];
         for(const eventTypeId of eventTypeIds) {
@@ -304,7 +305,6 @@ function updateValue(
 
                 // Update the member's points for each point type
                 for(const pt of eventToPointTypesMap[eventId]) {
-                    const prev = member.points[pt];
                     member.points[pt] += request.value! - eventType.value;
                 }
             }

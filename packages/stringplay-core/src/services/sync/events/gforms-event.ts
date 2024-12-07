@@ -9,11 +9,10 @@ import { GaxiosResponse } from "gaxios";
 import assert from "assert";
 import { getEventDataSourceId, getMatcherIndex } from "../../../util/helper";
 import { DateParser } from "../../../util/server/date-parser";
-import { EventDataService } from "../base";
+import { EventFileExplorer } from "../base";
 
-export class GoogleFormsEventDataService extends EventDataService {
+export class GoogleFormsEventExplorer extends EventFileExplorer {
     forms!: forms_v1.Forms;
-
     questionData?: GaxiosResponse<forms_v1.Schema$Form>;
     responseData?: GaxiosResponse<forms_v1.Schema$ListFormResponsesResponse>;
     containsMemberId?: true;
@@ -40,12 +39,17 @@ export class GoogleFormsEventDataService extends EventDataService {
         } catch(e) {
             console.log("Error getting form data for Google Form " + formId + 
                 " (Event ID: " + eventData.event._id.toHexString() + "). Skipping...");
-            console.log(e);
+            console.log("Problem:", e);
+            
+            if(!eventData.fromColl) {
+                eventData.delete = true;
+                this.incrementLimits.eventsLeft! += 1;
+            }
             return;
         }
 
         // Retrieve the event and responses responses if the event isn't flagged for deletion
-        await this.synchronizeEvent(event, this.questionData.data.items, questionToTypeMap);
+        this.synchronizeEvent(event, this.questionData.data.items, questionToTypeMap);
 
         if(this.containsMemberId) {
             try {
@@ -55,15 +59,20 @@ export class GoogleFormsEventDataService extends EventDataService {
                 console.log("Error getting form data for Google Form " + formId + 
                     " (Event ID: " + eventData.event._id.toHexString() + "). Skipping...");
                 console.log("Problem:", e);
+
+                if(!eventData.fromColl) {
+                    eventData.delete = true;
+                    this.incrementLimits.eventsLeft! += 1;
+                }
                 return;
             }
-            await this.synchronizeAudience(event, lastUpdated, this.responseData.data.responses, questionToTypeMap);
+            this.synchronizeAudience(event, lastUpdated, this.responseData.data.responses, questionToTypeMap);
         }
     }
 
     // Synchronize the event's field to property map with the form data
-    protected async synchronizeEvent(event: WithId<EventSchema>, items: forms_v1.Schema$Item[], 
-        questionToTypeMap: GoogleFormsQuestionToTypeMap): Promise<void> {
+    protected synchronizeEvent(event: WithId<EventSchema>, items: forms_v1.Schema$Item[], 
+        questionToTypeMap: GoogleFormsQuestionToTypeMap): void {
         const allFields = Object.keys(event.fieldToPropertyMap);
         const includedFields: string[] = [];
 
@@ -78,10 +87,11 @@ export class GoogleFormsEventDataService extends EventDataService {
             // matches with the field for this event
             const matcherId = getMatcherIndex(this.troupe, field);
             const matcherProperty = matcherId !== null ? this.troupe.fieldMatchers[matcherId].memberProperty : null;
-            let property = event.fieldToPropertyMap[fieldId]?.property || matcherProperty;
 
             // Init the updated field to property map
             let override = event.fieldToPropertyMap[fieldId]?.override;
+            let property = override ? event.fieldToPropertyMap[fieldId]?.property || matcherProperty
+                : matcherProperty;
             event.fieldToPropertyMap[fieldId] = { field, override, matcherId, property: null };
             includedFields.push(fieldId);
             if(!property) continue;
@@ -201,8 +211,8 @@ export class GoogleFormsEventDataService extends EventDataService {
     }
 
     // Synchronize member information with form response data
-    protected async synchronizeAudience(event: WithId<EventSchema>, lastUpdated: Date, 
-        responses: forms_v1.Schema$FormResponse[], questionToTypeMap: GoogleFormsQuestionToTypeMap): Promise<void> {
+    protected synchronizeAudience(event: WithId<EventSchema>, lastUpdated: Date, 
+        responses: forms_v1.Schema$FormResponse[], questionToTypeMap: GoogleFormsQuestionToTypeMap): void {
         const troupeId = this.troupe._id.toHexString();
         const eventId = event._id.toHexString();
 
@@ -294,7 +304,7 @@ export class GoogleFormsEventDataService extends EventDataService {
             });
             
             if(isNewMember) {
-                if(this.currentLimits.membersLeft === this.incrementLimits.membersLeft) {
+                if(this.currentLimits.membersLeft + this.incrementLimits.membersLeft! === 0) {
                     continue;
                 }
                 this.incrementLimits.membersLeft! -= 1;

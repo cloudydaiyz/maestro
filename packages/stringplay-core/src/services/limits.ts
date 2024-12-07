@@ -1,43 +1,41 @@
 // Places limits on the system to prevent overuse
 
-import { Collection, Filter, UpdateFilter, WithId } from "mongodb";
-import { GlobalLimit, GlobalLimitSchema, LimitCollectionSchema, LimitSchema, TroupeLimit } from "../types/core-types";
+import { ClientSession, Collection, Filter, UpdateFilter, WithId } from "mongodb";
+import { GlobalLimitSchema, LimitCollectionSchema, LimitSchema } from "../types/core-types";
 import { BaseDbService } from "./base";
 import { DB_NAME, INVITED_TROUPE_LIMIT, UNINVITED_TROUPE_LIMIT } from "../util/constants";
 import assert from "assert";
 import { ClientError } from "../util/error";
 import { UpdateOperator } from "../types/util-types";
-import { GlobalLimitSpecifier, TroupeLimitSpecifier } from "../types/service-types";
+import { GlobalLimitSpecifier, LimitContext, TroupeLimitSpecifier } from "../types/service-types";
 
 export class LimitService extends BaseDbService {
-    ignoreTroupeLimits: { [troupeId: string]: number };
     readonly limitsColl: Collection<LimitCollectionSchema>;
     
     constructor() { 
         super();
-        this.ignoreTroupeLimits = {};
         this.limitsColl = this.client.db(DB_NAME).collection("limits");
     }
 
-    async initGlobalLimits(): Promise<void> {
+    async initGlobalLimits(session?: ClientSession): Promise<void> {
         const limitsColl = this.limitsColl as Collection<GlobalLimitSchema>;
         const insertion = await limitsColl.insertOne(
-            { docType: "globalLimit", uninvitedUsersLeft: 5 },
+            { docType: "globalLimit", uninvitedUsersLeft: 5 }, { session }
         );
         assert(insertion.acknowledged, "Insert global limits operation failed");
     }
 
-    async refreshGlobalLimits(): Promise<void> {
+    async refreshGlobalLimits(session?: ClientSession): Promise<void> {
         const limitsColl = this.limitsColl as Collection<GlobalLimitSchema>;
         const modification = await limitsColl.updateOne(
             { docType: "globalLimit" }, 
             { $set: { uninvitedUsersLeft: 5 } },
-            { upsert: true },
+            { upsert: true, session },
         );
         assert(modification.modifiedCount == 1, "Update global limits operation failed");
     }
 
-    async incrementGlobalLimit(limits: GlobalLimitSpecifier): Promise<boolean> {
+    async incrementGlobalLimit(limits: GlobalLimitSpecifier, session?: ClientSession): Promise<boolean> {
         const limitsColl = this.limitsColl as Collection<GlobalLimitSchema>;
         const filters: Filter<GlobalLimitSchema> = {};
         const $inc: UpdateOperator<GlobalLimitSchema, "$inc"> = {};
@@ -51,7 +49,7 @@ export class LimitService extends BaseDbService {
             }
         }
 
-        const modification = await limitsColl.updateOne(filters, { $inc });
+        const modification = await limitsColl.updateOne(filters, { $inc }, { session });
         assert(
             modification.matchedCount == 0 || modification.modifiedCount > 0, 
             "Decrement global limits operation failed"
@@ -60,7 +58,7 @@ export class LimitService extends BaseDbService {
         return modification.matchedCount > 0;
     }
 
-    async initTroupeLimits(troupeId: string, hasInviteCode: boolean): Promise<void> {
+    async initTroupeLimits(troupeId: string, hasInviteCode: boolean, session?: ClientSession): Promise<void> {
         const limitsColl = this.limitsColl as Collection<LimitSchema>;
         let initDoc: LimitSchema;
         if(hasInviteCode) {
@@ -76,11 +74,11 @@ export class LimitService extends BaseDbService {
                 ...UNINVITED_TROUPE_LIMIT,
             }
         }
-        const insertion = await limitsColl.insertOne(initDoc);
+        const insertion = await limitsColl.insertOne(initDoc, { session });
         assert(insertion.acknowledged, `Insert limit operation failed for troupe ID ${troupeId}`)
     }
 
-    async refreshTroupeLimits(troupeId: string, hasInviteCode: boolean): Promise<void> {
+    async refreshTroupeLimits(troupeId: string, hasInviteCode: boolean, session?: ClientSession): Promise<void> {
         const limitsColl = this.limitsColl as Collection<LimitSchema>;
         const refreshDoc: UpdateFilter<LimitSchema> = {};
         if(hasInviteCode) {
@@ -94,13 +92,18 @@ export class LimitService extends BaseDbService {
                 manualSyncsLeft: UNINVITED_TROUPE_LIMIT.manualSyncsLeft,
             }
         }
-        const modification = await limitsColl.updateOne({ troupeId }, refreshDoc);
+        const modification = await limitsColl.updateOne({ troupeId }, refreshDoc, { session });
         assert(modification.matchedCount == 1, new ClientError(`Invalid troupe ID ${troupeId}`));
         assert(modification.modifiedCount == 1, `Update limit operation failed for troupe ID ${troupeId}`);
     }
 
-    async incrementTroupeLimits(troupeId: string, limitsToInc: TroupeLimitSpecifier): Promise<boolean> {
-        if(this.ignoreTroupeLimits[troupeId] < 0) {
+    async incrementTroupeLimits(
+        limitContext: LimitContext | undefined, 
+        troupeId: string, 
+        limitsToInc: TroupeLimitSpecifier, 
+        session?: ClientSession
+    ) : Promise<boolean> {
+        if(limitContext && limitContext[troupeId] < 0) {
             // console.warn("Ignoring limits increment for troupe " + troupeId);
             return true;
         }
@@ -118,7 +121,7 @@ export class LimitService extends BaseDbService {
             }
         }
 
-        const modification = await limitsColl.updateOne(filters, { $inc });
+        const modification = await limitsColl.updateOne(filters, { $inc }, { session });
         assert(
             modification.acknowledged, 
             "Increment troupe limits operation failed"
@@ -127,24 +130,29 @@ export class LimitService extends BaseDbService {
         return modification.matchedCount > 0;
     }
 
-    async removeTroupeLimits(troupeId: string): Promise<void> {
+    async removeTroupeLimits(troupeId: string, session?: ClientSession): Promise<void> {
         const limitsColl = this.limitsColl as Collection<LimitSchema>;
-        const deletion = await limitsColl.deleteOne({ troupeId });
-        assert(deletion.acknowledged, `Delete limit operation failed for troupe ID ${troupeId}`)
+        const deletion = await limitsColl.deleteOne({ troupeId }, { session });
+        assert(deletion.acknowledged, `Delete limit operation failed for troupe ID ${troupeId}`);
     }
 
-    async getTroupeLimits(troupeId: string): Promise<WithId<LimitSchema> | null> {
+    async getTroupeLimits(troupeId: string, session?: ClientSession): Promise<WithId<LimitSchema> | null> {
         const limitsColl = this.limitsColl as Collection<LimitSchema>;
-        return limitsColl.findOne({ docType: "troupeLimit", troupeId });
+        return limitsColl.findOne({ docType: "troupeLimit", troupeId }, { session });
     }
 
-    async withinTroupeLimits(troupeId: string, limitsToInc: TroupeLimitSpecifier): Promise<boolean> {
-        if(this.ignoreTroupeLimits[troupeId] < 0) {
+    async withinTroupeLimits(
+        limitContext: LimitContext | undefined, 
+        troupeId: string, 
+        limitsToInc: TroupeLimitSpecifier, 
+        session?: ClientSession
+    ) : Promise<boolean> {
+        if(limitContext && limitContext[troupeId] < 0) {
             // console.warn("Ignoring limits check for troupe " + troupeId);
             return true;
         }
 
-        const troupeLimits = await this.getTroupeLimits(troupeId);
+        const troupeLimits = await this.getTroupeLimits(troupeId, session);
         if(!troupeLimits) return false;
 
         for(const limit in limitsToInc) {
@@ -162,17 +170,22 @@ export class LimitService extends BaseDbService {
      * actually perform the modification.
      * 
      * Troupe IDs set to true will have their limit and all limit modifying operations 
-     * ignored during the limit-modifying method. Could lead to bugs if you're not careful.
+     * ignored during the limit-modifying method.
+     * 
+     * A limit context enables limits to be updated independent of other requests on 
+     * the same troupe. If a limit context is not provided, a new one is created and 
+     * returned. Otherwise, the existing one is returned.
      */
-    toggleIgnoreTroupeLimits(troupeId: string, ignore: boolean) {
-        if(!this.ignoreTroupeLimits[troupeId]) {
-            this.ignoreTroupeLimits[troupeId] = 0;
+    toggleIgnoreTroupeLimits(
+        limitContext: LimitContext | undefined, 
+        troupeId: string, 
+        ignore: boolean
+    ) : LimitContext {
+        if(!limitContext) limitContext = {};
+        if(!limitContext[troupeId]) {
+            limitContext[troupeId] = 0;
         }
-        this.ignoreTroupeLimits[troupeId] += ignore ? -1 : 1;
-    }
-
-    withIgnoreTroupeLimits(troupeId: string, callback: () => Promise<void>): void {
-        this.toggleIgnoreTroupeLimits(troupeId, true);
-        callback().finally(() => this.toggleIgnoreTroupeLimits(troupeId, false));
+        limitContext[troupeId] += ignore ? -1 : 1;
+        return limitContext;
     }
 }

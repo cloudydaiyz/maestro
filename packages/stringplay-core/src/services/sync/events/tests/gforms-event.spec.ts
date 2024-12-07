@@ -1,5 +1,5 @@
 import { describe } from "@jest/globals";
-import { GoogleFormsEventDataService } from "../gforms-event";
+import { GoogleFormsEventExplorer } from "../gforms-event";
 import { EventDataMap, AttendeeDataMap } from "../../../../types/service-types";
 import { objectMap, objectToArray, verifyMemberPropertyType } from "../../../../util/helper";
 import init from "../../../../util/server/tests/init-test";
@@ -7,7 +7,7 @@ import { noMembersConfig } from "../../../../util/server/tests/config-test";
 
 const { dbSetup } = init();
 
-describe("google forms event service", () => {
+describe("google forms event explorer", () => {
     it("should get event data from non-initialized event & no preexisting members", async () => {
         const config = await dbSetup(noMembersConfig);
         const troupe = config.troupes!["A"].troupe!;
@@ -27,7 +27,7 @@ describe("google forms event service", () => {
         const memberMap: AttendeeDataMap = {};
 
         // Populates the field to property map of the observed event
-        const service = new GoogleFormsEventDataService(
+        const service = new GoogleFormsEventExplorer(
             troupe, eventMap, memberMap, 
             config.troupes!["A"].limits!, 
             {

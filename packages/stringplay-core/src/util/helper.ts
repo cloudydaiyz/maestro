@@ -212,3 +212,7 @@ export function getMatcherIndex(troupe: TroupeSchema, field: string): number | n
     }
     return null;
 }
+
+export function delay(timeout: number) {
+    return new Promise<void>((resolve) => setTimeout(() => resolve(), timeout));
+}

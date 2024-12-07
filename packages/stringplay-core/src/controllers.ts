@@ -22,7 +22,7 @@ const initSyncService = SyncService.create();
 
 /** All paths in the API with a prefix of `/t/:troupeId` will be handled by this controller to simplify authentication. */ 
 const apiTroupePathsHandler: ApiController = async (path, method, headers, body) => {
-    const [authService, apiService, coreService] = await Promise.all([initAuthService, initApiService, initCoreService]);
+    const [authService, apiService] = await Promise.all([initAuthService, initApiService]);
     const accessToken = "_accessToken" in headers ? headers["_accessToken"] as AccessTokenPayload | null : null;
 
     let troupeId = PathParsers.Troupe.partialTest(path)?.troupeId;

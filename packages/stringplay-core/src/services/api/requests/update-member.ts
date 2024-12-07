@@ -1,4 +1,4 @@
-import { ObjectId, UpdateOneModel, WithId } from "mongodb";
+import { ClientSession, ObjectId, UpdateOneModel, WithId } from "mongodb";
 import { UpdateMemberRequest } from "../../../types/api-types";
 import { MemberSchema, TroupeSchema } from "../../../types/core-types";
 import { ApiRequestBuilder, DbWriteRequest } from "../base";
@@ -16,16 +16,14 @@ type MemberDbUpdate = {
 export class UpdateMemberRequestBuilder  extends ApiRequestBuilder<UpdateMemberRequest & { memberId: string }, WithId<MemberSchema>> {
     troupe?: WithId<TroupeSchema>;
     
-    async readData(): Promise<void> {
+    async readData(session: ClientSession): Promise<void> {
         const withinLimits = await this.limitService.withinTroupeLimits(
-            this.troupeId!, { modifyOperationsLeft: -1 }
+            this.limitContext, this.troupeId!, { modifyOperationsLeft: -1 }, session
         );
         assert(withinLimits, new ClientError("Operation not within limits for this troupe"));
 
-        const [troupe, /* member */] = await Promise.all([
-            this.getTroupeSchema(this.troupeId!, true),
-            // this.getMemberSchema(troupeId, memberId, true)
-        ]);
+        const troupe = await this.getTroupeSchema(this.troupeId!, true, session);
+        // const member = await this.getMemberSchema(this.troupeId!, memberId, true);
         assert(!troupe.syncLock, new ClientError("Cannot update member while sync is in progress"));
         
         this.troupe = troupe;
@@ -74,9 +72,9 @@ export class UpdateMemberRequestBuilder  extends ApiRequestBuilder<UpdateMemberR
         return [limitSpecifier, writeRequests];
     }
 
-    async writeProcessedRequests(writeRequests: DbWriteRequest<MemberSchema>[]): Promise<WithId<MemberSchema>[]> {
+    async writeProcessedRequests(writeRequests: DbWriteRequest<MemberSchema>[], session?: ClientSession): Promise<WithId<MemberSchema>[]> {
         const audienceUpdates = writeRequests.map(wr => ({ updateOne: wr.request as UpdateOneModel<MemberSchema> }));
-        const res1 = await this.audienceColl.bulkWrite(audienceUpdates);
+        const res1 = await this.audienceColl.bulkWrite(audienceUpdates, { session });
         assert(
             res1.isOk(), 
             "Unable to perform bulk write request. Errors: " + 
@@ -86,7 +84,7 @@ export class UpdateMemberRequestBuilder  extends ApiRequestBuilder<UpdateMemberR
         const memberIds = this.requests.map(r => r.memberId);
         const newMembers: WithId<MemberSchema>[] = [];
         for(const memberId of memberIds) {
-            const member = await this.audienceColl.findOne({ _id: new ObjectId(memberId)});
+            const member = await this.audienceColl.findOne({ _id: new ObjectId(memberId)}, { session });
             if(member) newMembers.push(member);
         }
         return newMembers;

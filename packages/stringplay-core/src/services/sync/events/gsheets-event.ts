@@ -9,9 +9,9 @@ import { Readable } from "stream";
 import assert from "assert";
 import { getEventDataSourceId, getMatcherIndex } from "../../../util/helper";
 import { DateParser } from "../../../util/server/date-parser";
-import { EventDataService } from "../base";
+import { EventFileExplorer } from "../base";
 
-export class GoogleSheetsEventDataService extends EventDataService {
+export class GoogleSheetsEventExplorer extends EventFileExplorer {
     results?: string[][];
     columnToTypeMap?: GoogleSheetsQuestionToTypeMap;
     containsMemberId?: boolean;
@@ -28,6 +28,8 @@ export class GoogleSheetsEventDataService extends EventDataService {
     async discoverAudience(event: WithId<EventSchema>, lastUpdated: Date): Promise<void> {
         const spreadsheetId = getEventDataSourceId("Google Sheets", event.sourceUri)!;
         const url = `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?tqx=out:csv`;
+        const eventData = this.eventMap[event.sourceUri];
+        assert(eventData, "Improperly structured event data");
         
         try {
             // Fetch CSV content
@@ -52,6 +54,11 @@ export class GoogleSheetsEventDataService extends EventDataService {
             console.log("Error getting response data for Google Sheet " + spreadsheetId + 
                 " (Event ID: " + event._id.toHexString() + "). Skipping...");
             console.log("Problem:", e);
+
+            if(!eventData.fromColl) {
+                eventData.delete = true;
+                this.incrementLimits.eventsLeft! += 1;
+            }
         }
     };
 
@@ -68,10 +75,11 @@ export class GoogleSheetsEventDataService extends EventDataService {
                 // matches with the field for this event
                 const matcherId = getMatcherIndex(this.troupe, field);
                 const matcherProperty = matcherId !== null ? this.troupe.fieldMatchers[matcherId].memberProperty : null;
-                const property = event.fieldToPropertyMap[i]?.property || matcherProperty;
 
                 // Init the updated field to property map
                 const override = event.fieldToPropertyMap[i]?.override;
+                let property = override ? event.fieldToPropertyMap[i]?.property
+                    : event.fieldToPropertyMap[i]?.property || matcherProperty;
                 event.fieldToPropertyMap[i] = { field, override, matcherId, property: null };
 
                 if(!property) return;
@@ -201,7 +209,7 @@ export class GoogleSheetsEventDataService extends EventDataService {
             });
 
             if(isNewMember) {
-                if(this.currentLimits.membersLeft === this.incrementLimits.membersLeft) {
+                if(this.currentLimits.membersLeft + this.incrementLimits.membersLeft! === 0) {
                     return;
                 }
                 this.incrementLimits.membersLeft! -= 1;

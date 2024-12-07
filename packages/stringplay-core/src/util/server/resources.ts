@@ -6,7 +6,6 @@ import { MongoClient } from "mongodb";
 import assert from "assert";
 
 let mongod: MongoMemoryReplSet | null = null;
-const dbConn: MongoClient[] = [];
 
 export async function startDb(): Promise<void> {
     assert(MONGODB_USER && MONGODB_PASS, "ENV: Missing required environment variables");
@@ -35,30 +34,39 @@ export async function stopDb(): Promise<void> {
     mongod = null;
 }
 
+// == MONGO CLIENT MANAGEMENT == //
+let client: MongoClient | null;
+let numClientUsers: number;
+
 export function newDbConnection(): MongoClient {
     assert(process.env.MONGODB_URI && MONGODB_USER && MONGODB_PASS, "ENV: Missing required environment variables");
 
     // MongoDB URI could be changed from testing -- use the environment variable instead of MONGODB_URI const
-    const client = new MongoClient(process.env.MONGODB_URI, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
-    client.on("connecting", () => console.log("Connecting to MongoDB..."));
-    client.on("connected", () => console.log("Connected to MongoDB"));
-    client.on("error", (err) => console.error("Connection error:", err));
+    if(!client) {
+        client = new MongoClient(process.env.MONGODB_URI, { auth: { username: MONGODB_USER, password: MONGODB_PASS } });
+        client.on("connecting", () => console.log("Connecting to MongoDB..."));
+        client.on("connected", () => console.log("Connected to MongoDB"));
+        client.on("error", (err) => console.error("Connection error:", err));
+    }
 
-    dbConn.push(client);
+    numClientUsers++;
     return client;
 }
 
-export async function removeDbConnection(client: MongoClient) {
-    const i = dbConn.findIndex(c => c === client);
-    if(i >= 0) {
+export async function removeDbConnection() {
+    if(numClientUsers > 0) {
+        numClientUsers--;
+    }
+
+    if(client && numClientUsers === 0) {
         await client.close();
-        dbConn.splice(i, 1);
+        client = null;
     }
 }
 
 export async function cleanDbConnections() {
-    await Promise.all(dbConn.map(c => c.close()));
-    dbConn.splice(0, dbConn.length);
+    if(client) await client.close();
+    numClientUsers = 0;
 }
 
 export async function cleanLogs() {
