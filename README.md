@@ -7,7 +7,7 @@
 </h1>
 
 <p align="center">
-<strong>stringplay</strong> is an event analytics service that collects aggregate membership data from your events, allowing you to effectively track event and membership data. Based on <a href="https://github.com/cloudydaiyz/membership-logger">membership-logger</a>.
+<strong>stringplay</strong> is a data collection service that aggregates attendee information from your online spreadsheets and surveys, allowing you to effectively track event and membership data. Based on <a href="https://github.com/cloudydaiyz/membership-logger">membership-logger</a>.
 </p>
 
 ## Overview
@@ -37,6 +37,8 @@ Make sure that Node.js version 20.0.0 or higher is installed on your device.
 Environment variables are required to be set in order to run the code from the child packages. You can either define these environment variables globally, or create a `.env` file to define the variables specifically within this repository. Look at [`.env.temp`](./.env.temp) for information on each environment variable. 
 
 The `.env` file is injected into each command via [`dotenvx`](https://github.com/dotenvx/dotenvx).
+
+If using this repository for automation, the preferred environment variable name for the absolute path to the root of this repository is `STRINGPLAY_CORE_PATH`.
 
 ## Commands
 

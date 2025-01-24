@@ -8,7 +8,7 @@ export function calculateDashboardData(
     audience: WithId<MemberSchema>[],
     eventsAttended: EventsAttendedBucketSchema[],
     oldDashboard?: TroupeDashboardSchema,
-): Omit<TroupeDashboardSchema, "_id" | "troupeId"> {
+) : Omit<TroupeDashboardSchema, "_id" | "troupeId"> {
 
     // Initialize dashboard to update with statistics from event & audience update
     const dashboardUpdate: Omit<TroupeDashboardSchema, "_id" | "troupeId"> = {
@@ -51,7 +51,6 @@ export function calculateDashboardData(
 
         if(eventTypeId) {
             dashboardUpdate.totalEventsByEventType![eventTypeId].value += 1;
-            dashboardUpdate.eventPercentageByEventType![eventTypeId].value += 1;
         }
     }
 
@@ -82,7 +81,6 @@ export function calculateDashboardData(
             const eventTypeId = event.typeId;
             if(eventTypeId) {
                 dashboardUpdate.totalAttendeesByEventType![eventTypeId].value += 1;
-                dashboardUpdate.attendeePercentageByEventType![eventTypeId].value += 1;
             }
             dashboardUpdate.totalAttendees! += 1;
         }
@@ -127,6 +125,14 @@ export function calculateDashboardData(
     }
 
     // Statistics for events without an event type
+    dashboardUpdate.totalAttendeesByEventType["etc"] = {
+        title: "Other", value: remainingAttendees,
+    }
+
+    dashboardUpdate.totalEventsByEventType["etc"] = {
+        title: "Other", value: remainingEvents,
+    }
+
     dashboardUpdate.attendeePercentageByEventType["etc"] = {
         title: "Other",
         value: remainingAttendees,

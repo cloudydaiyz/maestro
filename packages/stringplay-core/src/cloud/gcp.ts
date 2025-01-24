@@ -1,7 +1,6 @@
 import { google, sheets_v4, forms_v1, drive_v3 } from "googleapis";
-import tasks from "@google-cloud/tasks";
 import { GoogleAuth } from "google-auth-library";
-import { DEV_MODE, GCP_CREDS, GCP_PROJECT_ID, GCP_REGION, GCP_SERVICE_ACCOUNT_EMAIL, SCHEDULE_FUNCTION_URL, SYNC_QUEUE_NAME } from "../util/env";
+import { DEV_MODE, GCP_CREDS, GCP_PROJECT_ID, GCP_REGION, GCP_SERVICE_ACCOUNT_EMAIL, GCP_SCHEDULE_FUNCTION_URL, GCP_SYNC_QUEUE_NAME } from "../util/env";
 import { SyncRequest } from "../types/service-types";
 import assert from "assert";
 import { syncServer } from "../util/server/emitters";
@@ -53,6 +52,7 @@ export async function getForms(): Promise<forms_v1.Forms> {
 
 /** Adds requests to the sync queue */ 
 export async function bulkAddToGcpSyncQueue(requests: SyncRequest[]): Promise<void> {
+    const tasks = await import("@google-cloud/tasks");
     if(DEV_MODE) {
         for(const request of requests) {
             syncServer.emit("sync", request);
@@ -61,7 +61,7 @@ export async function bulkAddToGcpSyncQueue(requests: SyncRequest[]): Promise<vo
     }
 
     assert(
-        GCP_PROJECT_ID && GCP_REGION && SYNC_QUEUE_NAME && SCHEDULE_FUNCTION_URL && GCP_SERVICE_ACCOUNT_EMAIL, 
+        GCP_PROJECT_ID && GCP_REGION && GCP_SYNC_QUEUE_NAME && GCP_SCHEDULE_FUNCTION_URL && GCP_SERVICE_ACCOUNT_EMAIL, 
         "Missing GCP environment variables"
     );
     console.log("Adding sync requests to the queue...");
@@ -70,19 +70,19 @@ export async function bulkAddToGcpSyncQueue(requests: SyncRequest[]): Promise<vo
     const createTaskRequests: Promise<any>[] = [];
     for(const request of requests) {
         const seconds = Date.now() + 1000;
-        const name = client.taskPath(GCP_PROJECT_ID, GCP_REGION, SYNC_QUEUE_NAME, `sync-${request.troupeId}-${seconds}`);
+        const name = client.taskPath(GCP_PROJECT_ID, GCP_REGION, GCP_SYNC_QUEUE_NAME, `sync-${request.troupeId}-${seconds}`);
 
         createTaskRequests.push(
             client.createTask({
-                parent: client.queuePath(GCP_PROJECT_ID, GCP_REGION, SYNC_QUEUE_NAME),
+                parent: client.queuePath(GCP_PROJECT_ID, GCP_REGION, GCP_SYNC_QUEUE_NAME),
                 task: {
                     name,
                     httpRequest: {
                         httpMethod: "POST",
-                        url: SCHEDULE_FUNCTION_URL,
+                        url: GCP_SCHEDULE_FUNCTION_URL,
                         oidcToken: {
                             serviceAccountEmail: GCP_SERVICE_ACCOUNT_EMAIL,
-                            audience: SCHEDULE_FUNCTION_URL,
+                            audience: GCP_SCHEDULE_FUNCTION_URL,
                         },
                         headers: { "Content-Type": "application/json" },
                         body: Buffer.from(JSON.stringify(request)).toString("base64"),

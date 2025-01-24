@@ -77,3 +77,7 @@ export type EventsAttendedList = (EventsAttendedBucketSchema["events"][string] &
 export type GlobalLimitSpecifier = Partial<Record<keyof GlobalLimit, number>>;
 export type TroupeLimitSpecifier = Partial<Record<keyof TroupeLimit, number>>;
 export type LimitContext = { [troupeId: string]: number };
+
+export type AddToSyncQueue = (requests: SyncRequest[]) => Promise<void>;
+
+export type CloudProvider = 'aws' | 'gcp';

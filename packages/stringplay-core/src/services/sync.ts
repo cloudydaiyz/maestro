@@ -1,12 +1,11 @@
 import { drive_v3, forms_v1, sheets_v4 } from "googleapis";
 import { getDrive, getForms, getSheets } from "../cloud/gcp";
 import { AttendeeSchema, BaseMemberProperties, EventDataSource, EventsAttendedBucketSchema, EventSchema, EventTypeSchema, MemberPropertyValue, MemberSchema, TroupeDashboardSchema, TroupeLimit, TroupeSchema, VariableMemberProperties } from "../types/core-types";
-import { GDRIVE_FOLDER_MIME, GDRIVE_FOLDER_REGEX, GDRIVE_FOLDER_URL_TEMPL, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, GFORMS_REGEX, GFORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, EVENT_DATA_SOURCE_MIME_QUERIES, GSHEETS_URL_TEMPL } from "../util/constants";
+import { GDRIVE_FOLDER_MIME, EVENT_DATA_SOURCE_MIME_TYPES, EVENT_DATA_SOURCE_URLS, EVENT_DATA_SOURCES, GFORMS_REGEX, GFORMS_URL_TEMPL, FULL_DAY, MAX_PAGE_SIZE, EVENT_DATA_SOURCE_MIME_QUERIES, GSHEETS_URL_TEMPL } from "../util/constants";
 import { AggregationCursor, AnyBulkWriteOperation, BulkWriteResult, DeleteResult, ObjectId, UpdateFilter, UpdateResult, WithId } from "mongodb";
 import { getEventDataSourceId, parseEventDataSourceUrl, getDefaultMemberPropertyValue, getEventFolderDataSourceId, delay } from "../util/helper";
-import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap, TroupeLimitSpecifier, SyncRequest } from "../types/service-types";
-import { GaxiosResponse, GaxiosError } from "gaxios";
-import { Mutable, SetOperator } from "../types/util-types";
+import { DiscoveryEventType, EventDataMap, FolderToEventTypeMap, GoogleFormsQuestionToTypeMap, AttendeeDataMap, TroupeLimitSpecifier, SyncRequest, AddToSyncQueue, CloudProvider } from "../types/service-types";
+import { GaxiosResponse } from "gaxios";
 import { GoogleFormsEventExplorer } from "./sync/events/gforms-event";
 import { GoogleSheetsEventExplorer } from "./sync/events/gsheets-event";
 import assert from "assert";
@@ -15,21 +14,25 @@ import { LimitService } from "./limits";
 import { EventFileExplorer } from "./sync/base";
 import { BaseDbService } from "./base";
 import { calculateDashboardData } from "../util/server/dashboard";
+import { CLOUD_PROVIDER } from "../util/env";
+import { addToSyncQueue, bulkAddToSyncQueue } from "../cloud/multi";
 
 export class SyncService extends BaseDbService {
-    constructor() { super() }
+    constructor() { 
+        super();
+        assert(!CLOUD_PROVIDER || CLOUD_PROVIDER == 'aws' || CLOUD_PROVIDER == 'gcp', "ENV: Invalid cloud provider specified.");
+    }
 
     async sync(troupeId: string, skipLogPublish?: true): Promise<void> {
         await SyncTroupeRequest.create().then(handler => handler.sync(troupeId, skipLogPublish));
     }
 
     async addToSyncQueue(request: SyncRequest): Promise<void> {
-        await this.bulkAddToSyncQueue([ request ]);
+        addToSyncQueue(request);
     }
 
     async bulkAddToSyncQueue(requests: SyncRequest[]): Promise<void> {
-        const { bulkAddToGcpSyncQueue } = await import("../cloud/gcp");
-        await bulkAddToGcpSyncQueue(requests);
+        bulkAddToSyncQueue(requests);
     }
 }
 

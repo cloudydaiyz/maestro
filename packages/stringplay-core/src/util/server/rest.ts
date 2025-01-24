@@ -24,7 +24,8 @@ export type ApiController = (path: string, method: keyof typeof Methods, headers
 const defaultHeaders = {
 //     "Access-Control-Allow-Origin": event.headers.origin == "http://localhost:5173" ?
 //         "http://localhost:5173" : "https://qa-pup.pages.dev",
-    "Access-Control-Allow-Origin": "http://localhost:5173",
+    // "Access-Control-Allow-Origin": "http://localhost:5173",
+    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Headers": "*",
     "Access-Control-Allow-Methods": Object.keys(Methods).join(','),
 };

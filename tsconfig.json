@@ -5,6 +5,7 @@
   "references": [
     { "path": "./packages/stringplay-core" }, 
     { "path": "./packages/stringplay-client" }, 
-    { "path": "./packages/stringplay-gcp" }
+    { "path": "./packages/stringplay-gcp" },
+    { "path": "./packages/stringplay-aws" }
   ]
 }
