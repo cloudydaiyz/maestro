@@ -14,10 +14,10 @@
   },
   "dependencies": {
     "@cloudydaiyz/stringplay-core": "file:../stringplay-core",
-    "@google-cloud/functions-framework": "^3.4.2",
-    "googleapis": "^144.0.0"
+    "@google-cloud/functions-framework": "^3.4.2"
   },
   "devDependencies": {
+    "@google-cloud/tasks": "^5.5.2",
     "mongodb-memory-server": "^10.1.2"
   }
 }

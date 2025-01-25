@@ -19,7 +19,7 @@ export type ApiResponse = {
     body?: Object,
 };
 
-export type ApiController = (path: string, method: keyof typeof Methods, headers: Object, body: Object) => Promise<ApiResponse>;
+export type ApiController = (path: string, method: keyof typeof Methods, headers: Object, body?: Object) => Promise<ApiResponse>;
 
 const defaultHeaders = {
 //     "Access-Control-Allow-Origin": event.headers.origin == "http://localhost:5173" ?
@@ -89,7 +89,7 @@ export function newController(handler: ApiController): ApiController {
     }
 }
 
-export type ApiMiddleware = (path: string, method: keyof typeof Methods, headers: Object, body: Object, next: ApiController) => Promise<ApiResponse>;
+export type ApiMiddleware = (path: string, method: keyof typeof Methods, headers: Object, body: Object | undefined, next: ApiController) => Promise<ApiResponse>;
 
 /** Creates a new API controller with middleware */
 export function newControllerWithMiddleware(handlers: ApiMiddleware[], last: ApiController): ApiController {
@@ -111,11 +111,11 @@ export function newControllerWithMiddleware(handlers: ApiMiddleware[], last: Api
     return newController(controllers[controllers.length - 1]);
 }
 
-export type UtilController = (body: Object) => Promise<ApiResponse>;
+export type UtilController = (body?: Object) => Promise<ApiResponse>;
 
 /** Creates a new controller for a utility service */
-export function newUtilController<T extends Object>(handler: (body: Object) => Promise<T | void>): UtilController {
-    return async (body: Object) => {
+export function newUtilController<T extends Object>(handler: (body?: Object) => Promise<T | void>): UtilController {
+    return async (body?: Object) => {
         try {
             const resBody = await handler(body);
             console.log('Utility action successful.');

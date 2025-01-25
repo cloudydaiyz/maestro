@@ -401,6 +401,11 @@ const authMiddleware: ApiMiddleware = async (path, method, headers: Authorizatio
     return next(path, method, headers, body);
 };
 
+export const initController = newUtilController(async () => {
+    const coreService = await initCoreService;
+    await coreService.initSystem();
+});
+
 export const apiController = newControllerWithMiddleware([authMiddleware], apiTroupePathsHandler);
 
 export const syncController = newUtilController(async (body) => {

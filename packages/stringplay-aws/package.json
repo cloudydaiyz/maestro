@@ -10,6 +10,11 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@types/aws-lambda": "^8.10.147"
+    "@cloudydaiyz/stringplay-core": "file:../stringplay-core"
+  },
+  "devDependencies": {
+    "@aws-sdk/client-sqs": "^3.734.0",
+    "@types/aws-lambda": "^8.10.147",
+    "mongodb-memory-server": "^10.1.3"
   }
 }
