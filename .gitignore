@@ -4,6 +4,7 @@ dist
 quick-test*.*
 .env
 service-key.json
+packages/stringplay-etc
 packages/stringplay-gcp/index.js
 packages/stringplay-gcp/index.d.ts
 *.tsbuildinfo

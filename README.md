@@ -38,7 +38,7 @@ Environment variables are required to be set in order to run the code from the c
 
 The `.env` file is injected into each command via [`dotenvx`](https://github.com/dotenvx/dotenvx).
 
-If using this repository for automation, the preferred environment variable name for the absolute path to the root of this repository is `STRINGPLAY_CORE_PATH`.
+The canonical environment variable name for the absolute path to the root of this repository is `STRINGPLAY_CORE_PATH`.
 
 ## Commands
 
