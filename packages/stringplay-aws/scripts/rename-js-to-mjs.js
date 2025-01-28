@@ -26,7 +26,7 @@ function renameFilesInDir(directory) {
 
 if(process.argv.length !== 3) {
     console.log("Must have exactly 1 command line argument: The directory of files to rename.");
-    console.log("Usage: rename-js-to-mjs.js [dirname]");
+    console.log("usage: rename-js-to-mjs.js [dirname]");
     process.exit(1);
 }
 
