@@ -5,11 +5,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "clean": "rm -rf dist && rm -rf node_modules && rm tsconfig.tsbuildinfo",
+    "clean": "rm -rf dist && rm -rf node_modules && rm -f tsconfig.tsbuildinfo",
     "build": "npm i && tsc && node scripts/rename-js-to-mjs.js dist"
   },
   "keywords": [],
-  "author": "",
+  "author": "Kylan Duncan",
   "license": "ISC",
   "description": "",
   "devDependencies": {

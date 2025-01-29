@@ -37,7 +37,8 @@
     }
   },
   "scripts": {
-    "clean": "rm -rf dist && rm -rf node_modules && rm tsconfig.tsbuildinfo",
+    "build": "npm i && tsc",
+    "clean": "rm -rf dist && rm -rf node_modules && rm -f tsconfig.tsbuildinfo",
     "start": "tsc && node dist/index.js",
     "test": "tsc && npx jest",
     "quick": "tsc && node dist/quick-test.js",
