@@ -1,16 +1,16 @@
 // Manages the resources created during app execution
 
-import { MongoMemoryReplSet } from "mongodb-memory-server";
 import { MONGODB_PASS, MONGODB_USER } from "../env";
 import { MongoClient } from "mongodb";
 import assert from "assert";
 
-let mongod: MongoMemoryReplSet | null = null;
+let mongod: any = null;
 
 export async function startDb(): Promise<void> {
     assert(MONGODB_USER && MONGODB_PASS, "ENV: Missing required environment variables");
     
     await stopDb();
+    const { MongoMemoryReplSet } = await import("mongodb-memory-server");
     mongod = await MongoMemoryReplSet.create({ replSet: { auth: { enable: true, customRootName: MONGODB_USER, customRootPwd: MONGODB_PASS } } });
     const uri = mongod.getUri();
     
@@ -28,8 +28,10 @@ export async function startDb(): Promise<void> {
 }
 
 export async function stopDb(): Promise<void> {
-    if(mongod) {
-        await cleanDbConnections().then(() => mongod!.stop());
+    const { MongoMemoryReplSet } = await import("mongodb-memory-server");
+    const mmrs = mongod as Awaited<ReturnType<typeof MongoMemoryReplSet.create>>;
+    if(mmrs) {
+        await cleanDbConnections().then(() => mmrs!.stop());
     }
     mongod = null;
 }
