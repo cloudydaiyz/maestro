@@ -7,7 +7,7 @@
   "scripts": {
     "clean": "rm -rf dist && rm -rf node_modules && rm -f tsconfig.tsbuildinfo",
     "build": "npm i && tsc && node scripts/rename-js-to-mjs.js dist",
-    "build-prod": "npm i --omit=dev && tsc && node scripts/rename-js-to-mjs.js dist"
+    "build-layer": "rm -rf node_modules && npm i --omit=dev"
   },
   "keywords": [],
   "author": "Kylan Duncan",
