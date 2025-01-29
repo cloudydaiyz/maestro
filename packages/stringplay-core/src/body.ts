@@ -148,6 +148,6 @@ export namespace BodySchema {
     });
 
     export const ScheduledTaskRequest: z.ZodType<ScheduledTaskRequest> = z.object({
-        taskType: z.literal("sync"),
+        taskType: z.enum(["sync", "refreshLimits", "unlockSync"]),
     });
 }

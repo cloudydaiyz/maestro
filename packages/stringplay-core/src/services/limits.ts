@@ -32,7 +32,7 @@ export class LimitService extends BaseDbService {
             { $set: { uninvitedUsersLeft: 5 } },
             { upsert: true, session },
         );
-        assert(modification.modifiedCount == 1, "Update global limits operation failed");
+        assert(modification.acknowledged, "Update global limits operation failed");
     }
 
     async incrementGlobalLimit(limits: GlobalLimitSpecifier, session?: ClientSession): Promise<boolean> {

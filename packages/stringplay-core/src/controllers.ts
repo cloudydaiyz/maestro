@@ -27,9 +27,9 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
 
     let troupeId = PathParsers.Troupe.partialTest(path)?.troupeId;
     if(!troupeId) {
-        throw new Error("Invalid path");
+        throw new ClientError("Invalid path");
     } else if(troupeId == "me") {
-        assert(accessToken, new ClientError("Missing access token"));
+        assert(accessToken, new ClientError("Missing or invalid access token"));
         troupeId = accessToken.troupeId;
     }
 
