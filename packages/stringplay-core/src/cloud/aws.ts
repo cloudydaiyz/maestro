@@ -1,11 +1,18 @@
 import { GetQueueUrlCommand, SendMessageCommand, SQSClient } from "@aws-sdk/client-sqs";
 import { SyncRequest } from "../types/service-types";
-import { AWS_SYNC_QUEUE_NAME } from "../util/env";
+import { AWS_SYNC_QUEUE_NAME, DEV_MODE } from "../util/env";
 import assert from "assert";
+import { syncServer } from "../util/server/emitters";
 
 /** Adds requests to the sync queue */ 
 type SyncQueueMetadata = SyncRequest & { attempts?: number };
 export async function bulkAddToAwsSyncQueue(requests: SyncRequest[]): Promise<void> {
+    if(DEV_MODE) {
+        for(const request of requests) {
+            syncServer.emit("sync", request);
+        }
+        return;
+    }
     assert(AWS_SYNC_QUEUE_NAME, "Missing AWS environment variables.");
     const requestsMeta: SyncQueueMetadata[] = structuredClone(requests);
     const client = new SQSClient();

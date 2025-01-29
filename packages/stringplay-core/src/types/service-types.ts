@@ -17,7 +17,7 @@ export type SyncRequest = {
 
 /** Used by the scheduled task service to perform a specific task on a regular interval */
 export type ScheduledTaskRequest = {
-    taskType: "sync"
+    taskType: "sync" | "refreshLimits" | "unlockSync"
 }
 
 // Other service types

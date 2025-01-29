@@ -40,6 +40,12 @@ export async function init(): Promise<ControllerModule> {
         setInterval(() => {
             emitters.scheduleServer.emit("task", { taskType: "sync" });
         }, 30000);
+        setInterval(() => {
+            emitters.scheduleServer.emit("task", { taskType: "refreshLimits" });
+        }, 30000);
+        setInterval(() => {
+            emitters.scheduleServer.emit("task", { taskType: "unlockSync" });
+        }, 60000);
     }
     return controllers;
 }

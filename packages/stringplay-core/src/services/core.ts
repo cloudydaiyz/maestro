@@ -7,7 +7,7 @@ import { BASE_MEMBER_PROPERTY_TYPES, BASE_POINT_TYPES_OBJ, DB_NAME, DEFAULT_MATC
 import { BaseDbService } from "./base";
 import { GoogleSheetsLogService } from "./sync/logs/gsheets-log";
 import { InviteCodeSchema, TroupeSchema } from "../types/core-types";
-import { INVITE_CODES } from "../util/env";
+import { INVITE_CODES, MAX_SYNC_DURATION } from "../util/env";
 import { LimitService } from "./limits";
 import { LogSheetService } from "./sync/base";
 import { bulkAddToSyncQueue } from "../cloud/multi";
@@ -146,5 +146,13 @@ export class CoreService extends BaseDbService {
             limitService.refreshGlobalLimits(),
             refreshAllTroupes,
         ]);
+    }
+    
+    // Undo the sync lock for troupes who have been locked for a long period of time
+    async unlockTroupes(): Promise<void> {
+        await this.troupeColl.updateMany(
+            { lastUpdated: { lt: new Date(Date.now() - MAX_SYNC_DURATION) } }, 
+            { $set: { syncLock: false } },
+        );
     }
 }

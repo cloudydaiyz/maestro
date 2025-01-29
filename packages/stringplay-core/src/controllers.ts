@@ -423,17 +423,20 @@ export const scheduleController = newUtilController(async (body) => {
 
     console.log(`Performing scheduled task (${parsedBody.taskType})...`);
     if(parsedBody.taskType == "sync") {
-        const db = await BaseDbService.create();
-        const syncRequests: SyncRequest[] = await db.troupeColl.find().toArray()
-            .then(troupes => troupes.map(t => ({ troupeId: t._id.toHexString() })));
-
         // Sync all the troupes currently in the collection
         if(DEV_MODE && syncServer.listenerCount("sync") > 0) {
+            const db = await BaseDbService.create();
+            const syncRequests: SyncRequest[] = await db.troupeColl.find().toArray()
+                .then(troupes => troupes.map(t => ({ troupeId: t._id.toHexString() })));
             for(const request of syncRequests) {
                 syncServer.emit("sync", request);
             }
         } else if(!DEV_MODE) {
             await coreService.syncTroupes();
         }
+    } else if(parsedBody.taskType == "refreshLimits") {
+        await coreService.refreshLimits();
+    } else if(parsedBody.taskType == "unlockSync") {
+        await coreService.unlockTroupes();
     }
 });
