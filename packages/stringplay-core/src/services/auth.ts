@@ -10,7 +10,7 @@ import { ACCESS_TOKEN_SECRET, REFRESH_TOKEN_SECRET } from "../util/env";
 import { arrayToObject } from "../util/helper";
 
 import zxcvbn from "zxcvbn";
-import bcrypt from "bcrypt";
+import bcrypt from "bcryptjs";
 import assert from "assert";
 import jwt from "jsonwebtoken";
 import { AccessTokenPayload, RefreshTokenPayload, Credentials, AuthorizationHeader, AuthenticationEndpoints } from "../types/api-types";
