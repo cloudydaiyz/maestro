@@ -332,6 +332,7 @@ const apiTroupePathsHandler: ApiController = async (path, method, headers, body)
             await apiService.initiateSync(troupeId);
 
             return {
+                // should be 202
                 status: 204,
                 headers: {},
             }

@@ -1,5 +1,5 @@
 // TODO: make an env converter / adapter that prefixes env names to VITE_ so that 
-// these can be pulled into @cloudydaiyz/springplay-shared
+// these can be pulled into @cloudydaiyz/stringplay-shared
 // https://vite.dev/guide/env-and-mode.html#env-files
 
 // export const STRINGPLAY_SERVER_PORT = process.env.STRINGPLAY_SERVER_PORT;
