@@ -6,7 +6,7 @@
   "keywords": [
     "stringplay"
   ],
-  "version": "1.0.3",
+  "version": "1.0.4",
   "repository": {
     "url": "https://github.com/cloudydaiyz/stringplay-core",
     "directory": "packages/stringplay-core"
