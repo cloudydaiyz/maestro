@@ -151,8 +151,8 @@ export class CoreService extends BaseDbService {
     // Undo the sync lock for troupes who have been locked for a long period of time
     async unlockTroupes(): Promise<void> {
         await this.troupeColl.updateMany(
-            { lastUpdated: { lt: new Date(Date.now() - MAX_SYNC_DURATION) } }, 
-            { $set: { syncLock: false } },
+            { lastUpdated: { $lt: new Date(Date.now() - MAX_SYNC_DURATION) } }, 
+            { $set: { syncLock: false, lastUpdated: new Date() } },
         );
     }
 }

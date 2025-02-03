@@ -20,4 +20,4 @@ export const AWS_SYNC_QUEUE_NAME = process.env.AWS_SYNC_QUEUE_NAME;
 export const ACCESS_TOKEN_SECRET = process.env.ACCESS_TOKEN_SECRET;
 export const REFRESH_TOKEN_SECRET = process.env.REFRESH_TOKEN_SECRET;
 export const INVITE_CODES = process.env.INVITE_CODES;
-export const MAX_SYNC_DURATION = process.env.MAX_SYNC_DURATION ? parseInt(process.env.MAX_SYNC_DURATION) : 1000 * 60 * 15;
+export const MAX_SYNC_DURATION = process.env.MAX_SYNC_DURATION ? parseInt(process.env.MAX_SYNC_DURATION) : 1000 * 60 * 10;
