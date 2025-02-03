@@ -6,7 +6,7 @@
   "keywords": [
     "stringplay"
   ],
-  "version": "1.0.2",
+  "version": "1.0.3",
   "repository": {
     "url": "https://github.com/cloudydaiyz/stringplay-core",
     "directory": "packages/stringplay-core"
@@ -72,5 +72,7 @@
     "mongodb-memory-server": "^10.1.2",
     "ts-node": "^10.9.2"
   },
-  "files": ["dist"]
+  "files": [
+    "dist"
+  ]
 }
