@@ -134,18 +134,35 @@ export class CoreService extends BaseDbService {
 
     async refreshLimits(): Promise<void> {
         const limitService = await LimitService.create();
-        const refreshAllTroupes = this.troupeColl.find().map(async (troupe) => {
+
+        try {
+            await limitService.refreshGlobalLimits();
+        } catch(e) {
+            console.error("ERROR: Unable to update global limits");
+        }
+
+        let allTroupes: WithId<TroupeSchema>[];
+        try {
+            allTroupes = await this.troupeColl.find().toArray();
+        } catch(e) {
+            console.error("ERROR: Unable to collect all troupes");
+            throw e;
+        }
+
+        const refreshTroupeOps: Promise<any>[] = [];
+        for(const troupe of allTroupes!) {
             const troupeId = troupe._id.toHexString();
             const hasInviteCode = await this.inviteCodeColl.findOne({ 
                 [`usedInviteCodes.${troupeId}`]: { $exists: true } 
             }) !== null;
-            limitService.refreshTroupeLimits(troupeId, hasInviteCode);
-        }).close();
 
-        await Promise.all([
-            limitService.refreshGlobalLimits(),
-            refreshAllTroupes,
-        ]);
+            const op = limitService.refreshTroupeLimits(troupeId, hasInviteCode)
+                .catch(err => {
+                    console.error(`Unable to refresh troupe ${troupeId}. Error:`, err);
+                });
+            refreshTroupeOps.push(op);
+        }
+        Promise.all(refreshTroupeOps);
     }
     
     // Undo the sync lock for troupes who have been locked for a long period of time
